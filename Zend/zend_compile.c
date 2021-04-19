@@ -3696,11 +3696,13 @@ static uint32_t zend_get_arg_num(zend_function *fn, zend_string *arg_name) {
 }
 
 static uint32_t zend_compile_args(
-		zend_ast *ast, zend_function *fbc, bool *may_have_extra_named_args) /* {{{ */
+		zend_ast *ast, zend_function *fbc, bool *may_have_extra_named_args,
+		bool *is_call_partial) /* {{{ */
 {
 	zend_ast_list *args = zend_ast_get_list(ast);
 	uint32_t i;
 	bool uses_arg_unpack = 0;
+	bool uses_variadic_placeholder = 0;
 	uint32_t arg_count = 0; /* number of arguments not including unpacks */
 
 	/* Whether named arguments are used syntactically, to enforce language level limitations.
@@ -3710,6 +3712,8 @@ static uint32_t zend_compile_args(
 	bool may_have_undef = 0;
 	/* Whether there may be any extra named arguments collected into a variadic. */
 	*may_have_extra_named_args = 0;
+	/* Whether this is a partial call */
+	*is_call_partial = false;
 
 	for (i = 0; i < args->children; ++i) {
 		zend_ast *arg = args->child[i];
@@ -3726,6 +3730,11 @@ static uint32_t zend_compile_args(
 					"Cannot use argument unpacking after named arguments");
 			}
 
+			if (*is_call_partial) {
+				zend_error_noreturn(E_COMPILE_ERROR,
+					"Cannot combine partial application and unpacking");
+			}
+
 			/* Unpack may contain named arguments. */
 			may_have_undef = 1;
 			if (!fbc || (fbc->common.fn_flags & ZEND_ACC_VARIADIC)) {
@@ -3740,6 +3749,47 @@ static uint32_t zend_compile_args(
 			opline->op2.num = arg_count;
 			opline->result.var = EX_NUM_TO_VAR(arg_count - 1);
 
+			continue;
+		}
+
+		if (arg->kind == ZEND_AST_PLACEHOLDER_ARG) {
+			if (uses_arg_unpack) {
+				zend_error_noreturn(E_COMPILE_ERROR,
+					"Cannot combine partial application and unpacking");
+			}
+
+			if (arg->attr == _IS_PLACEHOLDER_VARIADIC) {
+				if (uses_named_args) {
+					zend_error_noreturn(E_COMPILE_ERROR,
+						"Named arguments must come after all placeholders");
+				}
+
+				if (uses_variadic_placeholder) {
+					zend_error_noreturn(E_COMPILE_ERROR,
+						"Variadic placeholder may only appear once");
+				}
+
+				uses_variadic_placeholder = true;
+			} else if (arg->attr == _IS_PLACEHOLDER_ARG) {
+				if (uses_named_args) {
+					zend_error_noreturn(E_COMPILE_ERROR,
+						"Named arguments must come after all placeholders");
+				}
+
+				if (uses_variadic_placeholder) {
+					zend_error_noreturn(E_COMPILE_ERROR,
+						"Only named arguments may follow variadic placeholder");
+				}
+			}
+
+			fbc = NULL;
+
+			opline = zend_emit_op(NULL, ZEND_SEND_PLACEHOLDER, NULL, NULL);
+			opline->op1.num = arg->attr;
+			opline->op2.num = arg_num;
+
+			*is_call_partial = true;
+			arg_count++;
 			continue;
 		}
 
@@ -3775,6 +3825,11 @@ static uint32_t zend_compile_args(
 			if (uses_named_args) {
 				zend_error_noreturn(E_COMPILE_ERROR,
 					"Cannot use positional argument after named argument");
+			}
+
+			if (uses_variadic_placeholder) {
+				zend_error_noreturn(E_COMPILE_ERROR,
+					"Only named arguments may follow variadic placeholder");
 			}
 
 			arg_count++;
@@ -3890,8 +3945,12 @@ static uint32_t zend_compile_args(
 		}
 	}
 
-	if (may_have_undef) {
-		zend_emit_op(NULL, ZEND_CHECK_UNDEF_ARGS, NULL, NULL);
+	if (!*is_call_partial) {
+		if (may_have_undef) {
+			zend_emit_op(NULL, ZEND_CHECK_UNDEF_ARGS, NULL, NULL);
+		}
+	} else {
+		zend_emit_op(NULL, ZEND_CHECK_PARTIAL_ARGS, NULL, NULL);
 	}
 
 	return arg_count;
@@ -3931,6 +3990,26 @@ ZEND_API uint8_t zend_get_call_op(const zend_op *init_op, zend_function *fbc, bo
 }
 /* }}} */
 
+void zend_compile_call_partial(znode *result, uint32_t arg_count, bool may_have_extra_named_args, uint32_t opnum_init, zend_function *fbc) { /* {{{ */
+	zend_op *opline = &CG(active_op_array)->opcodes[opnum_init];
+	znode op1;
+
+	opline->extended_value = arg_count;
+
+	if (opline->opcode == ZEND_INIT_FCALL) {
+		opline->op1.num = zend_vm_calc_used_stack(arg_count, fbc);
+	} else if (opline->opcode == ZEND_NEW) {
+		GET_NODE(&op1, opline->result);
+	}
+
+	opline = zend_emit_op(result, ZEND_DO_FCALL_PARTIAL,
+				(opline->opcode == ZEND_NEW) ? &op1 : NULL, NULL);
+
+	if (may_have_extra_named_args) {
+		opline->extended_value = ZEND_FCALL_MAY_HAVE_EXTRA_NAMED_PARAMS;
+	}
+} /* }}} */
+
 static bool zend_compile_call_common(znode *result, zend_ast *args_ast, zend_function *fbc, uint32_t lineno) /* {{{ */
 {
 	zend_op *opline;
@@ -3953,7 +4032,14 @@ static bool zend_compile_call_common(znode *result, zend_ast *args_ast, zend_fun
 	}
 
 	bool may_have_extra_named_args;
-	uint32_t arg_count = zend_compile_args(args_ast, fbc, &may_have_extra_named_args);
+	bool is_partial_call;
+	uint32_t arg_count = zend_compile_args(args_ast, fbc,
+			&may_have_extra_named_args, &is_partial_call);
+
+	if (is_partial_call) {
+		zend_compile_call_partial(result, arg_count, may_have_extra_named_args, opnum_init, fbc);
+		return;
+	}
 
 	zend_do_extended_fcall_begin();
 
@@ -4030,12 +4116,14 @@ static void zend_compile_dynamic_call(znode *result, znode *name_node, zend_ast 
 }
 /* }}} */
 
-static inline bool zend_args_contain_unpack_or_named(zend_ast_list *args) /* {{{ */
+static inline bool zend_args_contain_unpack_or_named_or_partial(zend_ast_list *args) /* {{{ */
 {
 	uint32_t i;
 	for (i = 0; i < args->children; ++i) {
 		zend_ast *arg = args->child[i];
-		if (arg->kind == ZEND_AST_UNPACK || arg->kind == ZEND_AST_NAMED_ARG) {
+		if (arg->kind == ZEND_AST_UNPACK ||
+			arg->kind == ZEND_AST_NAMED_ARG ||
+			arg->kind == ZEND_AST_PLACEHOLDER_ARG) {
 			return 1;
 		}
 	}
@@ -4282,7 +4370,7 @@ static zend_result zend_compile_func_cufa(znode *result, zend_ast_list *args, ze
 		zend_string *name = zend_resolve_function_name(orig_name, args->child[1]->child[0]->attr, &is_fully_qualified);
 
 		if (zend_string_equals_literal_ci(name, "array_slice")
-	     && !zend_args_contain_unpack_or_named(list)
+	     && !zend_args_contain_unpack_or_named_or_partial(list)
 		 && list->children == 3
 		 && list->child[1]->kind == ZEND_AST_ZVAL) {
 			zval *zv = zend_ast_get_zval(list->child[1]);

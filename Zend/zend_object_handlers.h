@@ -344,7 +344,7 @@ ZEND_API bool ZEND_FASTCALL zend_asymmetric_property_has_set_access(const zend_p
 		if ((func) == &EG(trampoline)) { \
 			EG(trampoline).common.attributes = NULL; \
 			EG(trampoline).common.function_name = NULL; \
-		} else { \
+		} else if (!(func->common.fn_flags & ZEND_ACC_TRAMPOLINE_PERMANENT)) { \
 			efree(func); \
 		} \
 	} while (0)

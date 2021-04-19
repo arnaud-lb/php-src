@@ -403,6 +403,12 @@ typedef struct _zend_oparray_context {
 /* has #[\NoDiscard] attribute                            |     |     |     */
 #define ZEND_ACC_NODISCARD               (1 << 29) /*     |  X  |     |     */
 /*                                                        |     |     |     */
+/* flag used by partial application (int only)            |     |     |     */
+// TODO #define ZEND_ACC_PARTIAL                 (1 << 30) /*     |  X  |     |     */
+/*                                                        |     |     |     */
+/* trampoline is permanent                                |     |     |     */
+#define ZEND_ACC_TRAMPOLINE_PERMANENT    (1 << 28)  /*    |  X  |     |     */
+/*                                                        |     |     |     */
 /* op_array uses strict mode types                        |     |     |     */
 #define ZEND_ACC_STRICT_TYPES            (1U << 31) /*    |  X  |     |     */
 
@@ -654,6 +660,7 @@ struct _zend_execute_data {
                                                /* keep all local variables for "fcall_end" handler */
 #define ZEND_CALL_JIT_RESERVED       (1 << 29) /* reserved for tracing JIT */
 #define ZEND_CALL_NEEDS_REATTACH     (1 << 30)
+// TODO #define ZEND_CALL_VARIADIC_PLACEHOLDER (1<<29)
 #define ZEND_CALL_SEND_ARG_BY_REF    (1u << 31)
 
 #define ZEND_CALL_NESTED_FUNCTION    (ZEND_CALL_FUNCTION | ZEND_CALL_NESTED)
