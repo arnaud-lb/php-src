@@ -25,6 +25,7 @@
 #include "zend_interfaces.h"
 #include "zend_objects.h"
 #include "zend_objects_API.h"
+#include "zend_partial.h"
 #include "zend_globals.h"
 #include "zend_closures_arginfo.h"
 
@@ -39,6 +40,7 @@ typedef struct _zend_closure {
 /* non-static since it needs to be referenced */
 ZEND_API zend_class_entry *zend_ce_closure;
 static zend_object_handlers closure_handlers;
+static zval zend_closure_no_this;
 
 static zend_result zend_closure_get_closure(zend_object *obj, zend_class_entry **ce_ptr, zend_function **fptr_ptr, zend_object **obj_ptr, bool check_only);
 
@@ -79,6 +81,7 @@ static bool zend_valid_closure_binding(
 {
 	zend_function *func = &closure->func;
 	bool is_fake_closure = (func->common.fn_flags & ZEND_ACC_FAKE_CLOSURE) != 0;
+
 	if (newthis) {
 		if (func->common.fn_flags & ZEND_ACC_STATIC) {
 			zend_error(E_WARNING, "Cannot bind an instance to a static closure");
@@ -159,7 +162,13 @@ ZEND_METHOD(Closure, call)
 	ZVAL_UNDEF(&closure_result);
 	fci.retval = &closure_result;
 
-	if (closure->func.common.fn_flags & ZEND_ACC_GENERATOR) {
+	if (closure->func.common.fn_flags & ZEND_ACC_PARTIAL) {
+		zval new_closure;
+		zend_partial_bind(&new_closure, ZEND_THIS, newthis, newclass);
+		closure = (zend_closure *) Z_OBJ(new_closure);
+		fci_cache.function_handler = zend_partial_get_trampoline(Z_OBJ(new_closure));
+		newobj = Z_OBJ(new_closure);
+	} else if (closure->func.common.fn_flags & ZEND_ACC_GENERATOR) {
 		zval new_closure;
 		zend_create_closure(&new_closure, &closure->func, newclass, closure->called_scope, newthis);
 		closure = (zend_closure *) Z_OBJ(new_closure);
@@ -220,6 +229,18 @@ ZEND_METHOD(Closure, call)
 		}
 		ZVAL_COPY_VALUE(return_value, &closure_result);
 	}
+
+#if 0 /* ??? */
+	if (!fci_cache.function_handler) {
+		OBJ_RELEASE(newobj);
+	} else if (fci_cache.function_handler->common.fn_flags & ZEND_ACC_GENERATOR) {
+		/* copied upon generator creation */
+		GC_DELREF(&closure->std);
+	} else if (ZEND_USER_CODE(my_function.type)
+	 && (fci_cache.function_handler->common.fn_flags & ZEND_ACC_HEAP_RT_CACHE)) {
+		efree(ZEND_MAP_PTR(my_function.op_array.run_time_cache));
+	}
+#endif
 }
 /* }}} */
 
@@ -251,7 +272,11 @@ static void do_closure_bind(zval *return_value, zval *zclosure, zval *newthis, z
 		called_scope = ce;
 	}
 
-	zend_create_closure(return_value, &closure->func, ce, called_scope, newthis);
+	if (closure->func.common.fn_flags & ZEND_ACC_PARTIAL) {
+		zend_partial_bind(return_value, zclosure, newthis, called_scope);
+	} else {
+		zend_create_closure(return_value, &closure->func, ce, called_scope, newthis);
+	}
 }
 
 /* {{{ Create a closure from another one and bind to another object and scope */
@@ -503,6 +528,12 @@ ZEND_API const zend_function *zend_get_closure_method_def(zend_object *obj) /* {
 ZEND_API zval* zend_get_closure_this_ptr(zval *obj) /* {{{ */
 {
 	zend_closure *closure = (zend_closure *)Z_OBJ_P(obj);
+
+	if (UNEXPECTED(Z_TYPE(closure->this_ptr) != IS_OBJECT)) {
+		/* zend_partial This may refer to a type */
+		return &zend_closure_no_this;
+	}
+
 	return &closure->this_ptr;
 }
 /* }}} */
@@ -582,7 +613,7 @@ static zend_result zend_closure_get_closure(zend_object *obj, zend_class_entry *
 /* }}} */
 
 /* *is_temp is int due to Object Handler API */
-static HashTable *zend_closure_get_debug_info(zend_object *object, int *is_temp) /* {{{ */
+HashTable *zend_closure_get_debug_info(zend_object *object, int *is_temp) /* {{{ */
 {
 	zend_closure *closure = (zend_closure *)object;
 	zval val;
@@ -644,7 +675,7 @@ static HashTable *zend_closure_get_debug_info(zend_object *object, int *is_temp)
 		}
 	}
 
-	if (Z_TYPE(closure->this_ptr) != IS_UNDEF) {
+	if (Z_TYPE(closure->this_ptr) == IS_OBJECT) {
 		Z_ADDREF(closure->this_ptr);
 		zend_hash_update(debug_info, ZSTR_KNOWN(ZEND_STR_THIS), &closure->this_ptr);
 	}
@@ -720,6 +751,8 @@ void zend_register_closure_ce(void) /* {{{ */
 	closure_handlers.get_debug_info = zend_closure_get_debug_info;
 	closure_handlers.get_closure = zend_closure_get_closure;
 	closure_handlers.get_gc = zend_closure_get_gc;
+
+	ZVAL_UNDEF(&zend_closure_no_this);
 }
 /* }}} */
 

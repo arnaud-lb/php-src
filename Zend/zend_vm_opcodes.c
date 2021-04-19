@@ -22,7 +22,13 @@
 #include <zend.h>
 #include <zend_vm_opcodes.h>
 
+<<<<<<< HEAD
 static const char *zend_vm_opcodes_names[210] = {
+||||||| parent of ea31feae532 (partial application)
+static const char *zend_vm_opcodes_names[202] = {
+=======
+static const char *zend_vm_opcodes_names[205] = {
+>>>>>>> ea31feae532 (partial application)
 	"ZEND_NOP",
 	"ZEND_ADD",
 	"ZEND_SUB",
@@ -225,6 +231,7 @@ static const char *zend_vm_opcodes_names[210] = {
 	"ZEND_CHECK_UNDEF_ARGS",
 	"ZEND_FETCH_GLOBALS",
 	"ZEND_VERIFY_NEVER_TYPE",
+<<<<<<< HEAD
 	"ZEND_CALLABLE_CONVERT",
 	"ZEND_BIND_INIT_STATIC_OR_JMP",
 	"ZEND_FRAMELESS_ICALL_0",
@@ -233,9 +240,21 @@ static const char *zend_vm_opcodes_names[210] = {
 	"ZEND_FRAMELESS_ICALL_3",
 	"ZEND_JMP_FRAMELESS",
 	"ZEND_INIT_PARENT_PROPERTY_HOOK_CALL",
+||||||| parent of ea31feae532 (partial application)
+=======
+	"ZEND_SEND_PLACEHOLDER",
+	"ZEND_DO_FCALL_PARTIAL",
+	"ZEND_CHECK_PARTIAL_ARGS",
+>>>>>>> ea31feae532 (partial application)
 };
 
+<<<<<<< HEAD
 static uint32_t zend_vm_opcodes_flags[210] = {
+||||||| parent of ea31feae532 (partial application)
+static uint32_t zend_vm_opcodes_flags[202] = {
+=======
+static uint32_t zend_vm_opcodes_flags[205] = {
+>>>>>>> ea31feae532 (partial application)
 	0x00000000,
 	0x00000b0b,
 	0x00000b0b,
@@ -438,6 +457,7 @@ static uint32_t zend_vm_opcodes_flags[210] = {
 	0x00000101,
 	0x00000101,
 	0x00000101,
+<<<<<<< HEAD
 	0x00000101,
 	0x00002001,
 	0x00000101,
@@ -446,6 +466,12 @@ static uint32_t zend_vm_opcodes_flags[210] = {
 	0x00000000,
 	0x01042003,
 	0x01001103,
+||||||| parent of ea31feae532 (partial application)
+=======
+	0x00000101,
+	0x00000000,
+	0x00000101,
+>>>>>>> ea31feae532 (partial application)
 };
 
 ZEND_API const char* ZEND_FASTCALL zend_get_opcode_name(uint8_t opcode) {
