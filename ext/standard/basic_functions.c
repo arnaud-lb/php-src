@@ -1767,6 +1767,11 @@ static int user_tick_function_compare(user_tick_function_entry * tick_fe1, user_
 PHPAPI void php_call_shutdown_functions(void) /* {{{ */
 {
 	if (BG(user_shutdown_function_names)) {
+		if (EG(record_errors)) {
+			zend_free_recorded_errors();
+			EG(record_errors) = false;
+		}
+
 		zend_try {
 			zend_hash_apply(BG(user_shutdown_function_names), user_shutdown_function_call);
 		} zend_end_try();
