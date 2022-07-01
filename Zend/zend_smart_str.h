@@ -82,6 +82,16 @@ do_smart_str_realloc:
 
 static zend_always_inline void smart_str_trim_to_len_ex(smart_str *str, bool persistent)
 {
+	if (UNEXPECTED(!str->s || str->a == ZSTR_LEN(str->s))) {
+		return;
+	}
+
+	size_t cap_with_overhead = str->a + ZEND_MM_OVERHEAD + _ZSTR_HEADER_SIZE + 1;
+	size_t len_with_overhead = ZSTR_LEN(str->s) + ZEND_MM_OVERHEAD + _ZSTR_HEADER_SIZE + 1;
+	if (len_with_overhead > 4096 && cap_with_overhead - len_with_overhead < 4096) {
+		return;
+	}
+
 	if (str->s && str->a > ZSTR_LEN(str->s)) {
 		str->s = zend_string_realloc(str->s, ZSTR_LEN(str->s), persistent);
 		str->a = ZSTR_LEN(str->s);
