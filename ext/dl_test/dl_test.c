@@ -20,10 +20,13 @@
 
 #include "php.h"
 #include "ext/standard/info.h"
+#include "zend_enum.h"
 #include "php_dl_test.h"
 #include "dl_test_arginfo.h"
 
 ZEND_DECLARE_MODULE_GLOBALS(dl_test)
+
+static zend_class_entry *dl_test_string_enum;
 
 /* {{{ void dl_test_test1() */
 PHP_FUNCTION(dl_test_test1)
@@ -89,6 +92,8 @@ PHP_MINIT_FUNCTION(dl_test)
 	if (getenv("PHP_DL_TEST_USE_REGISTER_FUNCTIONS_DIRECTLY")) {
 		zend_register_functions(NULL, php_dl_test_use_register_functions_directly_functions, NULL, type);
 	}
+
+	dl_test_string_enum = register_class_DlTestStringEnum();
 
 	return SUCCESS;
 }
