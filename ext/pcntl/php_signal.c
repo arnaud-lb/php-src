@@ -17,7 +17,7 @@
 #include "TSRM.h"
 #include "php_signal.h"
 #include "Zend/zend.h"
-#include "Zend/zend_signal.h"
+#include "Zend/signal.h"
 
 /* php_signal using sigaction is derived from Advanced Programming
  * in the Unix Environment by W. Richard Stevens p 298. */
@@ -48,7 +48,7 @@ Sigfunc *php_signal4(int signo, Sigfunc *func, int restart, int mask_all)
 		act.sa_flags |= SA_RESTART; /* SVR4, 4.3+BSD */
 #endif
 	}
-	zend_sigaction(signo, &act, &oact);
+	sigaction(signo, &act, &oact);
 
 #ifdef HAVE_STRUCT_SIGINFO_T
 	return oact.sa_sigaction;

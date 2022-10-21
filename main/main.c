@@ -1731,10 +1731,6 @@ int php_request_startup(void)
 		zend_activate();
 		sapi_activate();
 
-#ifdef ZEND_SIGNALS
-		zend_signal_activate();
-#endif
-
 		if (PG(max_input_time) == -1) {
 			zend_set_timeout(EG(timeout_seconds), 1);
 		} else {
@@ -1879,11 +1875,6 @@ void php_request_shutdown(void *dummy)
 	/* Reset memory limit, as the reset during INI_STAGE_DEACTIVATE may have failed.
 	 * At this point, no memory beyond a single chunk should be in use. */
 	zend_set_memory_limit(PG(memory_limit));
-
-	/* 16. Deactivate Zend signals */
-#ifdef ZEND_SIGNALS
-	zend_signal_deactivate();
-#endif
 
 #ifdef PHP_WIN32
 	if (PG(com_initialized)) {
@@ -2694,9 +2685,6 @@ PHPAPI void php_reserve_tsrm_memory(void)
 		TSRM_ALIGNED_SIZE(sizeof(zend_php_scanner_globals)) +
 		TSRM_ALIGNED_SIZE(sizeof(zend_ini_scanner_globals)) +
 		TSRM_ALIGNED_SIZE(sizeof(virtual_cwd_globals)) +
-#ifdef ZEND_SIGNALS
-		TSRM_ALIGNED_SIZE(sizeof(zend_signal_globals_t)) +
-#endif
 		TSRM_ALIGNED_SIZE(zend_mm_globals_size()) +
 		TSRM_ALIGNED_SIZE(zend_gc_globals_size()) +
 		TSRM_ALIGNED_SIZE(sizeof(php_core_globals)) +

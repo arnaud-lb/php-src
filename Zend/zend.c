@@ -71,6 +71,32 @@ static uint32_t zend_version_info_length;
 #define ZEND_CORE_VERSION_INFO	"Zend Engine v" ZEND_VERSION ", Copyright (c) Zend Technologies\n"
 #define PRINT_ZVAL_INDENT 4
 
+#ifdef HAVE_SIGPROCMASK
+ZEND_API sigset_t mask_all_signals; /* For blocking/unblocking signals */
+ZEND_API sigset_t zend_signal_oldmask;
+
+# if ZEND_DEBUG
+/* Ensure that signal blocking macros in signal.h are used correctly */
+ZEND_TLS int _signals_masked = 0;
+ZEND_API void zend_debug_mask_signals(void)
+{
+	_signals_masked++;
+}
+ZEND_API void zend_debug_unmask_signals(void)
+{
+	if (--_signals_masked) {
+	  zend_error_noreturn(E_ERROR, "Cannot nest HANDLE_BLOCK_INTERRUPTIONS; it is not re-entrant");
+	}
+}
+ZEND_API void zend_debug_ensure_signals_masked(void)
+{
+	if (!_signals_masked) {
+		zend_error_noreturn(E_ERROR, "Must block signals using HANDLE_BLOCK_INTERRUPTIONS");
+	}
+}
+# endif
+#endif
+
 /* true multithread-shared globals */
 ZEND_API zend_class_entry *zend_standard_class_def = NULL;
 ZEND_API size_t (*zend_printf)(const char *format, ...);
@@ -197,9 +223,6 @@ ZEND_INI_BEGIN()
 	STD_ZEND_INI_BOOLEAN("zend.multibyte", "0", ZEND_INI_PERDIR, OnUpdateBool, multibyte,      zend_compiler_globals, compiler_globals)
 	ZEND_INI_ENTRY("zend.script_encoding",			NULL,		ZEND_INI_ALL,		OnUpdateScriptEncoding)
 	STD_ZEND_INI_BOOLEAN("zend.detect_unicode",			"1",	ZEND_INI_ALL,		OnUpdateBool, detect_unicode, zend_compiler_globals, compiler_globals)
-#ifdef ZEND_SIGNALS
-	STD_ZEND_INI_BOOLEAN("zend.signal_check", SIGNAL_CHECK_DEFAULT, ZEND_INI_SYSTEM, OnUpdateBool, check, zend_signal_globals_t, zend_signal_globals)
-#endif
 	STD_ZEND_INI_BOOLEAN("zend.exception_ignore_args",	"0",	ZEND_INI_ALL,		OnUpdateBool, exception_ignore_args, zend_executor_globals, executor_globals)
 	STD_ZEND_INI_ENTRY("zend.exception_string_param_max_len",	"15",	ZEND_INI_ALL,	OnSetExceptionStringParamMaxLen,	exception_string_param_max_len,		zend_executor_globals,	executor_globals)
 	STD_ZEND_INI_ENTRY("fiber.stack_size",		NULL,			ZEND_INI_ALL,		OnUpdateFiberStackSize,		fiber_stack_size,	zend_executor_globals, 		executor_globals)
@@ -884,6 +907,10 @@ void zend_startup(zend_utility_functions *utility_functions) /* {{{ */
 #if defined(__FreeBSD__) || defined(__DragonFly__)
 	/* FreeBSD and DragonFly floating point precision fix */
 	fpsetmask(0);
+#endif
+
+#ifdef HAVE_SIGPROCMASK
+	sigfillset(&mask_all_signals);
 #endif
 
 	zend_startup_strtod();

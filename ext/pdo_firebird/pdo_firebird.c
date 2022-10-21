@@ -62,11 +62,6 @@ PHP_MINIT_FUNCTION(pdo_firebird) /* {{{ */
 		return FAILURE;
 	}
 
-#ifdef ZEND_SIGNALS
-	/* firebird replaces some signals at runtime, suppress warnings. */
-	SIGG(check) = 0;
-#endif
-
 	return SUCCESS;
 }
 /* }}} */
