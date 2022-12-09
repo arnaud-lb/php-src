@@ -40,7 +40,7 @@ runs:
           --show-out \
           --show-slow 1000 \
           --set-timeout 120 \
-          Zend\tests\stack_limit
+          Zend/tests/stack_limit
     - uses: actions/upload-artifact@v3
       if: always() && inputs.testArtifacts != null
       with:
