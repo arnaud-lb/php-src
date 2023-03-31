@@ -1947,6 +1947,10 @@ ZEND_API void zend_initialize_class_data(zend_class_entry *ce, bool nullify_hand
 	ce->enum_backing_type = IS_UNDEF;
 	ce->backed_enum_table = NULL;
 
+	memset(ce->display, 0, sizeof(ce->display));
+	ce->display[0] = ce;
+	ce->displayDepth = 0;
+
 	if (nullify_handlers) {
 		ce->constructor = NULL;
 		ce->destructor = NULL;
@@ -7976,6 +7980,10 @@ static void zend_compile_class_decl(znode *result, zend_ast *ast, bool toplevel)
 	if (extends_ast) {
 		ce->parent_name =
 			zend_resolve_const_class_name_reference(extends_ast, "class name");
+	} else {
+		memset(ce->display, 0, sizeof(ce->display));
+		ce->display[0] = ce;
+		ce->displayDepth = 0;
 	}
 
 	CG(active_class_entry) = ce;

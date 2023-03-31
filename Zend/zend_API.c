@@ -3199,6 +3199,9 @@ static zend_class_entry *do_register_internal_class(zend_class_entry *orig_class
 	zend_class_entry *class_entry = malloc(sizeof(zend_class_entry));
 	zend_string *lowercase_name;
 	*class_entry = *orig_class_entry;
+	if (class_entry->displayDepth < 6) {
+		class_entry->display[class_entry->displayDepth] = class_entry;
+	}
 
 	class_entry->type = ZEND_INTERNAL_CLASS;
 	zend_initialize_class_data(class_entry, 0);

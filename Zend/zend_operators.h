@@ -71,7 +71,13 @@ ZEND_API bool ZEND_FASTCALL instanceof_function_slow(const zend_class_entry *ins
 
 static zend_always_inline bool instanceof_function(
 		const zend_class_entry *instance_ce, const zend_class_entry *ce) {
-	return instance_ce == ce || instanceof_function_slow(instance_ce, ce);
+	if (instance_ce == ce) {
+		return true;
+	}
+	if (!(ce->ce_flags & 1 /* ZEND_ACC_INTERFACE */) && ce->displayDepth < 6) {
+		return ce == instance_ce->display[ce->displayDepth];
+	}
+	return instanceof_function_slow(instance_ce, ce);
 }
 
 /**

@@ -1476,6 +1476,12 @@ ZEND_API void zend_do_inheritance_ex(zend_class_entry *ce, zend_class_entry *par
 	ce->default_object_handlers = parent_ce->default_object_handlers;
 	ce->ce_flags |= ZEND_ACC_RESOLVED_PARENT;
 
+	memcpy(ce->display, parent_ce->display, sizeof(ce->display));
+	ce->displayDepth = parent_ce->displayDepth + 1;
+	if (ce->displayDepth < 6) {
+		ce->display[ce->displayDepth] = ce;
+	}
+
 	/* Inherit properties */
 	if (parent_ce->default_properties_count) {
 		zval *src, *dst, *end;

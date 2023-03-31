@@ -220,6 +220,9 @@ struct _zend_class_entry {
 	uint32_t enum_backing_type;
 	HashTable *backed_enum_table;
 
+	zend_class_entry *display[6];
+	int displayDepth;
+
 	union {
 		struct {
 			zend_string *filename;
