@@ -621,11 +621,7 @@ static inline HashTable *spl_filesystem_object_get_debug_info(zend_object *objec
 	zend_string *path;
 	char stmp[2];
 
-	if (!intern->std.properties) {
-		rebuild_object_properties(&intern->std);
-	}
-
-	rv = zend_array_dup(intern->std.properties);
+	rv = zend_array_dup(zend_std_get_properties(&intern->std));
 
 	pnstr = spl_gen_private_prop_name(spl_ce_SplFileInfo, "pathName", sizeof("pathName")-1);
 	path = spl_filesystem_object_get_pathname(intern);

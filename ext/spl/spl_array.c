@@ -68,10 +68,7 @@ static inline spl_array_object *spl_array_from_obj(zend_object *obj) /* {{{ */ {
 static inline HashTable **spl_array_get_hash_table_ptr(spl_array_object* intern) { /* {{{ */
 	//??? TODO: Delay duplication for arrays; only duplicate for write operations
 	if (intern->ar_flags & SPL_ARRAY_IS_SELF) {
-		if (!intern->std.properties) {
-			rebuild_object_properties(&intern->std);
-		}
-		return &intern->std.properties;
+		return zend_std_get_properties_ptr(&intern->std);
 	} else if (intern->ar_flags & SPL_ARRAY_USE_OTHER) {
 		spl_array_object *other = Z_SPLARRAY_P(&intern->array);
 		return spl_array_get_hash_table_ptr(other);
@@ -80,8 +77,9 @@ static inline HashTable **spl_array_get_hash_table_ptr(spl_array_object* intern)
 	} else {
 		zend_object *obj = Z_OBJ(intern->array);
 		if (!obj->properties) {
-			rebuild_object_properties(obj);
-		} else if (GC_REFCOUNT(obj->properties) > 1) {
+			return zend_std_get_properties_ptr(obj);
+		}
+		if (GC_REFCOUNT(obj->properties) > 1) {
 			if (EXPECTED(!(GC_FLAGS(obj->properties) & IS_ARRAY_IMMUTABLE))) {
 				GC_DELREF(obj->properties);
 			}
@@ -771,17 +769,13 @@ static inline HashTable* spl_array_get_debug_info(zend_object *obj) /* {{{ */
 	zend_class_entry *base;
 	spl_array_object *intern = spl_array_from_obj(obj);
 
-	if (!intern->std.properties) {
-		rebuild_object_properties(&intern->std);
-	}
-
 	if (intern->ar_flags & SPL_ARRAY_IS_SELF) {
-		return zend_array_dup(intern->std.properties);
+		return zend_array_dup(zend_std_get_properties(&intern->std));
 	} else {
 		HashTable *debug_info;
 
-		debug_info = zend_new_array(zend_hash_num_elements(intern->std.properties) + 1);
-		zend_hash_copy(debug_info, intern->std.properties, (copy_ctor_func_t) zval_add_ref);
+		debug_info = zend_new_array(zend_hash_num_elements(zend_std_get_properties(&intern->std)) + 1);
+		zend_hash_copy(debug_info, zend_std_get_properties(&intern->std), (copy_ctor_func_t) zval_add_ref);
 
 		storage = &intern->array;
 		Z_TRY_ADDREF_P(storage);
@@ -1267,11 +1261,8 @@ PHP_METHOD(ArrayObject, serialize)
 
 	/* members */
 	smart_str_appendl(&buf, "m:", 2);
-	if (!intern->std.properties) {
-		rebuild_object_properties(&intern->std);
-	}
 
-	ZVAL_ARR(&members, intern->std.properties);
+	ZVAL_ARR(&members, zend_std_get_properties(&intern->std));
 
 	php_var_serialize(&buf, &members, &var_hash); /* finishes the string */
 

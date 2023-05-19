@@ -433,12 +433,8 @@ static inline HashTable* spl_dllist_object_get_debug_info(zend_object *obj) /* {
 	int  i = 0;
 	HashTable *debug_info;
 
-	if (!intern->std.properties) {
-		rebuild_object_properties(&intern->std);
-	}
-
 	debug_info = zend_new_array(1);
-	zend_hash_copy(debug_info, intern->std.properties, (copy_ctor_func_t) zval_add_ref);
+	zend_hash_copy(debug_info, zend_std_get_properties(&intern->std), (copy_ctor_func_t) zval_add_ref);
 
 	pnstr = spl_gen_private_prop_name(spl_ce_SplDoublyLinkedList, "flags", sizeof("flags")-1);
 	ZVAL_LONG(&tmp, intern->flags);

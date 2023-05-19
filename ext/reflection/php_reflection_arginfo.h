@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 7c06977668d1e3fbaf29a2649c65377562b1599d */
+ * Stub hash: bd4f9ce534ad20e9a2c0a9c42d9e31670fe4df9e */
 
 ZEND_BEGIN_ARG_WITH_TENTATIVE_RETURN_TYPE_INFO_EX(arginfo_class_Reflection_getModifierNames, 0, 1, IS_ARRAY, 0)
 	ZEND_ARG_TYPE_INFO(0, modifiers, IS_LONG, 0)
@@ -329,6 +329,39 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_ReflectionObject___construct, 0, 0, 1)
 	ZEND_ARG_TYPE_INFO(0, object, IS_OBJECT, 0)
 ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_class_ReflectionLazyObject_makeLazy, 0, 2, ReflectionLazyObject, 0)
+	ZEND_ARG_TYPE_INFO(0, instance, IS_OBJECT, 0)
+	ZEND_ARG_TYPE_INFO(0, initializer, IS_CALLABLE, 0)
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, flags, IS_LONG, 0, "0")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_ReflectionLazyObject_isLazyObject, 0, 1, _IS_BOOL, 0)
+	ZEND_ARG_TYPE_INFO(0, instance, IS_OBJECT, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_class_ReflectionLazyObject_fromInstance, 0, 1, ReflectionLazyObject, 1)
+	ZEND_ARG_TYPE_INFO(0, instance, IS_OBJECT, 0)
+ZEND_END_ARG_INFO()
+
+#define arginfo_class_ReflectionLazyObject_isInitialized arginfo_class_ReflectionFunctionAbstract_hasTentativeReturnType
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_ReflectionLazyObject_initialize, 0, 0, IS_OBJECT, 1)
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, initializer, IS_CALLABLE, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_ReflectionLazyObject_setProperty, 0, 2, IS_VOID, 0)
+	ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO(0, value, IS_MIXED, 0)
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, class, IS_STRING, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_ReflectionLazyObject_skipProperty, 0, 1, IS_VOID, 0)
+	ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, class, IS_STRING, 1, "null")
+ZEND_END_ARG_INFO()
+
+#define arginfo_class_ReflectionLazyObject___construct arginfo_class_ReflectionObject___construct
 
 #define arginfo_class_ReflectionProperty___clone arginfo_class_ReflectionFunctionAbstract___clone
 
@@ -771,6 +804,14 @@ ZEND_METHOD(ReflectionClass, getNamespaceName);
 ZEND_METHOD(ReflectionClass, getShortName);
 ZEND_METHOD(ReflectionClass, getAttributes);
 ZEND_METHOD(ReflectionObject, __construct);
+ZEND_METHOD(ReflectionLazyObject, makeLazy);
+ZEND_METHOD(ReflectionLazyObject, isLazyObject);
+ZEND_METHOD(ReflectionLazyObject, fromInstance);
+ZEND_METHOD(ReflectionLazyObject, isInitialized);
+ZEND_METHOD(ReflectionLazyObject, initialize);
+ZEND_METHOD(ReflectionLazyObject, setProperty);
+ZEND_METHOD(ReflectionLazyObject, skipProperty);
+ZEND_METHOD(ReflectionLazyObject, __construct);
 ZEND_METHOD(ReflectionProperty, __construct);
 ZEND_METHOD(ReflectionProperty, __toString);
 ZEND_METHOD(ReflectionProperty, getName);
@@ -1054,6 +1095,18 @@ static const zend_function_entry class_ReflectionClass_methods[] = {
 
 static const zend_function_entry class_ReflectionObject_methods[] = {
 	ZEND_ME(ReflectionObject, __construct, arginfo_class_ReflectionObject___construct, ZEND_ACC_PUBLIC)
+	ZEND_FE_END
+};
+
+static const zend_function_entry class_ReflectionLazyObject_methods[] = {
+	ZEND_ME(ReflectionLazyObject, makeLazy, arginfo_class_ReflectionLazyObject_makeLazy, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(ReflectionLazyObject, isLazyObject, arginfo_class_ReflectionLazyObject_isLazyObject, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(ReflectionLazyObject, fromInstance, arginfo_class_ReflectionLazyObject_fromInstance, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(ReflectionLazyObject, isInitialized, arginfo_class_ReflectionLazyObject_isInitialized, ZEND_ACC_PUBLIC)
+	ZEND_ME(ReflectionLazyObject, initialize, arginfo_class_ReflectionLazyObject_initialize, ZEND_ACC_PUBLIC)
+	ZEND_ME(ReflectionLazyObject, setProperty, arginfo_class_ReflectionLazyObject_setProperty, ZEND_ACC_PUBLIC)
+	ZEND_ME(ReflectionLazyObject, skipProperty, arginfo_class_ReflectionLazyObject_skipProperty, ZEND_ACC_PUBLIC)
+	ZEND_ME(ReflectionLazyObject, __construct, arginfo_class_ReflectionLazyObject___construct, ZEND_ACC_PRIVATE)
 	ZEND_FE_END
 };
 
@@ -1436,6 +1489,34 @@ static zend_class_entry *register_class_ReflectionObject(zend_class_entry *class
 
 	INIT_CLASS_ENTRY(ce, "ReflectionObject", class_ReflectionObject_methods);
 	class_entry = zend_register_internal_class_ex(&ce, class_entry_ReflectionClass);
+
+	return class_entry;
+}
+
+static zend_class_entry *register_class_ReflectionLazyObject(zend_class_entry *class_entry_ReflectionObject)
+{
+	zend_class_entry ce, *class_entry;
+
+	INIT_CLASS_ENTRY(ce, "ReflectionLazyObject", class_ReflectionLazyObject_methods);
+	class_entry = zend_register_internal_class_ex(&ce, class_entry_ReflectionObject);
+
+	zval const_SKIP_INITIALIZATION_ON_SERIALIZE_value;
+	ZVAL_LONG(&const_SKIP_INITIALIZATION_ON_SERIALIZE_value, ZEND_LAZY_OBJECT_SKIP_INITIALIZATION_ON_SERIALIZE);
+	zend_string *const_SKIP_INITIALIZATION_ON_SERIALIZE_name = zend_string_init_interned("SKIP_INITIALIZATION_ON_SERIALIZE", sizeof("SKIP_INITIALIZATION_ON_SERIALIZE") - 1, 1);
+	zend_declare_class_constant_ex(class_entry, const_SKIP_INITIALIZATION_ON_SERIALIZE_name, &const_SKIP_INITIALIZATION_ON_SERIALIZE_value, ZEND_ACC_PUBLIC, NULL);
+	zend_string_release(const_SKIP_INITIALIZATION_ON_SERIALIZE_name);
+
+	zval const_STRATEGY_GHOST_value;
+	ZVAL_LONG(&const_STRATEGY_GHOST_value, ZEND_LAZY_OBJECT_STRATEGY_GHOST;);
+	zend_string *const_STRATEGY_GHOST_name = zend_string_init_interned("STRATEGY_GHOST", sizeof("STRATEGY_GHOST") - 1, 1);
+	zend_declare_class_constant_ex(class_entry, const_STRATEGY_GHOST_name, &const_STRATEGY_GHOST_value, ZEND_ACC_PUBLIC, NULL);
+	zend_string_release(const_STRATEGY_GHOST_name);
+
+	zval const_STRATEGY_VIRTUAL_value;
+	ZVAL_LONG(&const_STRATEGY_VIRTUAL_value, ZEND_LAZY_OBJECT_STRATEGY_VIRTUAL;);
+	zend_string *const_STRATEGY_VIRTUAL_name = zend_string_init_interned("STRATEGY_VIRTUAL", sizeof("STRATEGY_VIRTUAL") - 1, 1);
+	zend_declare_class_constant_ex(class_entry, const_STRATEGY_VIRTUAL_name, &const_STRATEGY_VIRTUAL_value, ZEND_ACC_PUBLIC, NULL);
+	zend_string_release(const_STRATEGY_VIRTUAL_name);
 
 	return class_entry;
 }

@@ -128,6 +128,14 @@ static zend_result php_json_encode_array(smart_str *buf, zval *val, int options,
 	 && Z_OBJ_P(val)->ce->num_hooked_props == 0) {
 		/* Optimized version without rebuilding properties HashTable */
 		zend_object *obj = Z_OBJ_P(val);
+
+		if (zend_object_is_lazy(Z_OBJ_P(val))) {
+			obj = zend_lazy_object_init(Z_OBJ_P(val));
+			if (!obj) {
+				return FAILURE;
+			}
+		}
+
 		zend_class_entry *ce = obj->ce;
 		zend_property_info *prop_info;
 		zval *prop;
