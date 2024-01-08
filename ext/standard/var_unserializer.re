@@ -270,9 +270,9 @@ PHPAPI void var_destroy(php_unserialize_data_t *var_hashx)
 					ZVAL_UNDEF(&fci.function_name);
 
 					fci_cache.function_handler = zend_hash_find_ptr(
-						&fci.object->ce->function_table, ZSTR_KNOWN(ZEND_STR_WAKEUP));
+						&OBJ_CE(fci.object)->function_table, ZSTR_KNOWN(ZEND_STR_WAKEUP));
 					fci_cache.object = fci.object;
-					fci_cache.called_scope = fci.object->ce;
+					fci_cache.called_scope = OBJ_CE(fci.object);
 
 					BG(serialize_lock)++;
 					if (zend_call_function(&fci, &fci_cache) == FAILURE || Z_ISUNDEF(retval)) {
@@ -626,7 +626,7 @@ declared_property:
 					ZVAL_NULL(data);
 				} else {
 					/* Unusual override of dynamic property */
-					int ret = is_property_visibility_changed(obj->ce, &key);
+					int ret = is_property_visibility_changed(OBJ_CE(obj), &key);
 
 					if (ret > 0) {
 						goto second_try;
@@ -638,17 +638,17 @@ declared_property:
 					}
 				}
 			} else {
-				int ret = is_property_visibility_changed(obj->ce, &key);
+				int ret = is_property_visibility_changed(OBJ_CE(obj), &key);
 
 				if (EXPECTED(!ret)) {
-					if (UNEXPECTED(obj->ce->ce_flags & ZEND_ACC_NO_DYNAMIC_PROPERTIES)) {
+					if (UNEXPECTED(OBJ_CE(obj)->ce_flags & ZEND_ACC_NO_DYNAMIC_PROPERTIES)) {
 						zend_throw_error(NULL, "Cannot create dynamic property %s::$%s",
-							ZSTR_VAL(obj->ce->name), zend_get_unmangled_property_name(Z_STR_P(&key)));
+							ZSTR_VAL(OBJ_NAME(obj)), zend_get_unmangled_property_name(Z_STR_P(&key)));
 						zval_ptr_dtor_str(&key);
 						goto failure;
-					} else if (!(obj->ce->ce_flags & ZEND_ACC_ALLOW_DYNAMIC_PROPERTIES)) {
+					} else if (!(OBJ_CE(obj)->ce_flags & ZEND_ACC_ALLOW_DYNAMIC_PROPERTIES)) {
 						zend_error(E_DEPRECATED, "Creation of dynamic property %s::$%s is deprecated",
-							ZSTR_VAL(obj->ce->name), zend_get_unmangled_property_name(Z_STR_P(&key)));
+							ZSTR_VAL(OBJ_NAME(obj)), zend_get_unmangled_property_name(Z_STR_P(&key)));
 						if (EG(exception)) {
 							zval_ptr_dtor_str(&key);
 							goto failure;

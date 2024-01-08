@@ -24,6 +24,7 @@
 #include "zend_builtin_functions.h"
 #include "zend_interfaces.h"
 #include "zend_exceptions.h"
+#include "zend_types.h"
 #include "zend_vm.h"
 #include "zend_dtrace.h"
 #include "zend_smart_str.h"
@@ -82,7 +83,7 @@ static int zend_implement_throwable(zend_class_entry *interface, zend_class_entr
 
 static inline zend_class_entry *i_get_exception_base(zend_object *object) /* {{{ */
 {
-	return instanceof_function(object->ce, zend_ce_exception) ? zend_ce_exception : zend_ce_error;
+	return instanceof_function(OBJ_CE(object), zend_ce_exception) ? zend_ce_exception : zend_ce_error;
 }
 /* }}} */
 
@@ -107,7 +108,7 @@ void zend_exception_set_previous(zend_object *exception, zend_object *add_previo
 		return;
 	}
 
-	ZEND_ASSERT(instanceof_function(add_previous->ce, zend_ce_throwable)
+	ZEND_ASSERT(instanceof_function(OBJ_CE(add_previous), zend_ce_throwable)
 		&& "Previous exception must implement Throwable");
 
 	ZVAL_OBJ(&pv, add_previous);
@@ -172,7 +173,7 @@ ZEND_API ZEND_COLD void zend_throw_exception_internal(zend_object *exception) /*
 #ifdef HAVE_DTRACE
 	if (DTRACE_EXCEPTION_THROWN_ENABLED()) {
 		if (exception != NULL) {
-			DTRACE_EXCEPTION_THROWN(ZSTR_VAL(exception->ce->name));
+			DTRACE_EXCEPTION_THROWN(ZSTR_VAL(OBJ_NAME(exception)));
 		} else {
 			DTRACE_EXCEPTION_THROWN(NULL);
 		}
@@ -195,7 +196,7 @@ ZEND_API ZEND_COLD void zend_throw_exception_internal(zend_object *exception) /*
 		}
 	}
 	if (!EG(current_execute_data)) {
-		if (exception && (exception->ce == zend_ce_parse_error || exception->ce == zend_ce_compile_error)) {
+		if (exception && (OBJ_CE(exception) == zend_ce_parse_error || OBJ_CE(exception) == zend_ce_compile_error)) {
 			return;
 		}
 		if (EG(exception)) {
@@ -900,7 +901,7 @@ ZEND_API ZEND_COLD zend_result zend_exception_error(zend_object *ex, int severit
 	zend_result result = FAILURE;
 
 	ZVAL_OBJ(&exception, ex);
-	ce_exception = ex->ce;
+	ce_exception = OBJ_CE(ex);
 	EG(exception) = NULL;
 	if (ce_exception == zend_ce_parse_error || ce_exception == zend_ce_compile_error) {
 		zend_string *message = zval_get_string(GET_PROPERTY(&exception, ZEND_STR_MESSAGE));
@@ -918,7 +919,7 @@ ZEND_API ZEND_COLD zend_result zend_exception_error(zend_object *ex, int severit
 		zend_string *str, *file = NULL;
 		zend_long line = 0;
 
-		zend_call_known_instance_method_with_0_params(ex->ce->__tostring, ex, &tmp);
+		zend_call_known_instance_method_with_0_params(OBJ_CE(ex)->__tostring, ex, &tmp);
 		if (!EG(exception)) {
 			if (Z_TYPE(tmp) != IS_STRING) {
 				zend_error(E_WARNING, "%s::__toString() must return a string", ZSTR_VAL(ce_exception->name));
@@ -1031,10 +1032,10 @@ ZEND_API ZEND_COLD void zend_throw_graceful_exit(void)
 
 ZEND_API bool zend_is_unwind_exit(const zend_object *ex)
 {
-	return ex->ce == &zend_ce_unwind_exit;
+	return OBJ_CE(ex) == &zend_ce_unwind_exit;
 }
 
 ZEND_API bool zend_is_graceful_exit(const zend_object *ex)
 {
-	return ex->ce == &zend_ce_graceful_exit;
+	return OBJ_CE(ex) == &zend_ce_graceful_exit;
 }

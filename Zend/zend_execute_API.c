@@ -31,6 +31,7 @@
 #include "zend_exceptions.h"
 #include "zend_closures.h"
 #include "zend_generators.h"
+#include "zend_types.h"
 #include "zend_vm.h"
 #include "zend_float.h"
 #include "zend_fibers.h"
@@ -1239,13 +1240,13 @@ ZEND_API zend_class_entry *zend_lookup_class(zend_string *name) /* {{{ */
 }
 /* }}} */
 
-ZEND_API zend_class_entry *zend_get_called_scope(zend_execute_data *ex) /* {{{ */
+ZEND_API zend_class_reference *zend_get_called_scope(zend_execute_data *ex) /* {{{ */
 {
 	while (ex) {
 		if (Z_TYPE(ex->This) == IS_OBJECT) {
-			return Z_OBJCE(ex->This);
+			return Z_OBJCR(ex->This);
 		} else if (Z_CE(ex->This)) {
-			return Z_CE(ex->This);
+			return ZEND_CE_TO_REF(Z_CE(ex->This));
 		} else if (ex->func) {
 			if (ex->func->type != ZEND_INTERNAL_FUNCTION || ex->func->common.scope) {
 				return NULL;
@@ -1665,13 +1666,14 @@ check_fetch_type:
 				return NULL;
 			}
 			return scope->parents[0]->ce;
-		case ZEND_FETCH_CLASS_STATIC:
-			ce = zend_get_called_scope(EG(current_execute_data));
-			if (UNEXPECTED(!ce)) {
-				zend_throw_or_error(fetch_type, NULL, "Cannot access \"static\" when no class scope is active");
-				return NULL;
+		case ZEND_FETCH_CLASS_STATIC: {
+				zend_class_reference *class_ref = zend_get_called_scope(EG(current_execute_data));
+				if (UNEXPECTED(!class_ref)) {
+					zend_throw_or_error(fetch_type, NULL, "Cannot access \"static\" when no class scope is active");
+					return NULL;
+				}
+				return class_ref->ce;
 			}
-			return ce;
 		case ZEND_FETCH_CLASS_AUTO: {
 				fetch_sub_type = zend_get_class_fetch_type(class_name);
 				if (UNEXPECTED(fetch_sub_type != ZEND_FETCH_CLASS_DEFAULT)) {

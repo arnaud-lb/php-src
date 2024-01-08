@@ -49,7 +49,7 @@ ZEND_API zval* zend_call_method(zend_object *object, zend_class_entry *obj_ce, z
 	}
 
 	if (!obj_ce) {
-		obj_ce = object ? object->ce : NULL;
+		obj_ce = object ? OBJ_CE(object) : NULL;
 	}
 	if (!fn_proxy || !*fn_proxy) {
 		if (EXPECTED(obj_ce)) {
@@ -74,7 +74,7 @@ ZEND_API zval* zend_call_method(zend_object *object, zend_class_entry *obj_ce, z
 	}
 
 	if (object) {
-		called_scope = object->ce;
+		called_scope = OBJ_CE(object);
 	} else {
 		called_scope = obj_ce;
 	}

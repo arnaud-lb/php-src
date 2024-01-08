@@ -1007,7 +1007,7 @@ ZEND_API zend_result ZEND_FASTCALL zend_ast_evaluate_inner(
 			}
 
 			zend_object *zobj = Z_OBJ(op1);
-			if (!(zobj->ce->ce_flags & ZEND_ACC_ENUM)) {
+			if (!(OBJ_CE(zobj)->ce_flags & ZEND_ACC_ENUM)) {
 				zend_throw_error(NULL, "Fetching properties on non-enums in constant expressions is not allowed");
 				zval_ptr_dtor_nogc(&op1);
 				zval_ptr_dtor_nogc(&op2);

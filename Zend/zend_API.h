@@ -25,6 +25,7 @@
 #include "zend_modules.h"
 #include "zend_list.h"
 #include "zend_operators.h"
+#include "zend_types.h"
 #include "zend_variables.h"
 #include "zend_execute.h"
 #include "zend_type_info.h"
@@ -531,11 +532,13 @@ ZEND_API const char *zend_get_type_by_const(int type);
 #define array_init(arg)				ZVAL_ARR((arg), zend_new_array(0))
 #define array_init_size(arg, size)	ZVAL_ARR((arg), zend_new_array(size))
 ZEND_API void object_init(zval *arg);
-ZEND_API zend_result object_init_ex(zval *arg, zend_class_entry *ce);
-ZEND_API zend_result object_and_properties_init(zval *arg, zend_class_entry *ce, HashTable *properties);
+ZEND_API zend_result object_init_ref(zval *arg, zend_class_reference *class_ref);
+ZEND_API zend_result object_init_ex(zval *arg, zend_class_entry *class_type);
+ZEND_API zend_result object_and_properties_init(zval *arg, zend_class_reference *class_ref, HashTable *properties);
 ZEND_API void object_properties_init(zend_object *object, zend_class_entry *class_type);
 ZEND_API void object_properties_init_ex(zend_object *object, HashTable *properties);
 ZEND_API void object_properties_load(zend_object *object, HashTable *properties);
+ZEND_API zend_class_reference *zend_build_class_reference(zend_class_entry *ce, const zend_type_list *type_args);
 
 ZEND_API void zend_merge_properties(zval *obj, HashTable *properties);
 
@@ -850,7 +853,7 @@ static zend_always_inline void zend_call_known_instance_method(
 		zend_function *fn, zend_object *object, zval *retval_ptr,
 		uint32_t param_count, zval *params)
 {
-	zend_call_known_function(fn, object, object->ce, retval_ptr, param_count, params, NULL);
+	zend_call_known_function(fn, object, OBJ_CE(object), retval_ptr, param_count, params, NULL);
 }
 
 static zend_always_inline void zend_call_known_instance_method_with_0_params(
@@ -2514,7 +2517,7 @@ static zend_always_inline bool zend_parse_arg_obj_or_class_name(
 
 		return *destination != NULL;
 	} else if (EXPECTED(Z_TYPE_P(arg) == IS_OBJECT)) {
-		*destination = Z_OBJ_P(arg)->ce;
+		*destination = Z_OBJCE_P(arg);
 	} else if (allow_null && EXPECTED(Z_TYPE_P(arg) == IS_NULL)) {
 		*destination = NULL;
 	} else {

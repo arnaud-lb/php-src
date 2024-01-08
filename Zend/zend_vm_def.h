@@ -23,6 +23,7 @@
  * php zend_vm_gen.php
  */
 
+#include "zend_types.h"
 ZEND_VM_HELPER(zend_add_helper, ANY, ANY, zval *op_1, zval *op_2)
 {
 	USE_OPLINE
@@ -2073,7 +2074,7 @@ ZEND_VM_HOT_OBJ_HANDLER(82, ZEND_FETCH_OBJ_R, CONST|TMPVAR|UNUSED|THIS|CV, CONST
 		if (OP2_TYPE == IS_CONST) {
 			cache_slot = CACHE_ADDR(opline->extended_value & ~ZEND_FETCH_REF /* FUNC_ARG fetch may contain it */);
 
-			if (EXPECTED(zobj->ce == CACHED_PTR_EX(cache_slot))) {
+			if (EXPECTED(OBJ_CE(zobj) == CACHED_PTR_EX(cache_slot))) {
 				uintptr_t prop_offset = (uintptr_t)CACHED_PTR_EX(cache_slot + 1);
 
 				if (EXPECTED(IS_VALID_PROPERTY_OFFSET(prop_offset))) {
@@ -2135,7 +2136,7 @@ ZEND_VM_C_LABEL(fetch_obj_r_fast_copy):
 		 * Fetch prop_info before calling read_property(), as it may deallocate the object. */
 		zend_property_info *prop_info = NULL;
 		if (zobj->handlers->read_property != zend_std_read_property) {
-			prop_info = zend_get_property_info(zobj->ce, name, /* silent */ true);
+			prop_info = zend_get_property_info(OBJ_CE(zobj), name, /* silent */ true);
 		}
 #endif
 		retval = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, EX_VAR(opline->result.var));
@@ -2238,7 +2239,7 @@ ZEND_VM_COLD_CONST_HANDLER(91, ZEND_FETCH_OBJ_IS, CONST|TMPVAR|UNUSED|THIS|CV, C
 		if (OP2_TYPE == IS_CONST) {
 			cache_slot = CACHE_ADDR(opline->extended_value);
 
-			if (EXPECTED(zobj->ce == CACHED_PTR_EX(cache_slot))) {
+			if (EXPECTED(OBJ_CE(zobj) == CACHED_PTR_EX(cache_slot))) {
 				uintptr_t prop_offset = (uintptr_t)CACHED_PTR_EX(cache_slot + 1);
 
 				if (EXPECTED(IS_VALID_PROPERTY_OFFSET(prop_offset))) {
@@ -2409,7 +2410,7 @@ ZEND_VM_HANDLER(24, ZEND_ASSIGN_OBJ, VAR|UNUSED|THIS|CV, CONST|TMPVAR|CV, CACHE_
 ZEND_VM_C_LABEL(assign_object):
 	zobj = Z_OBJ_P(object);
 	if (OP2_TYPE == IS_CONST) {
-		if (EXPECTED(zobj->ce == CACHED_PTR(opline->extended_value))) {
+		if (EXPECTED(OBJ_CE(zobj) == CACHED_PTR(opline->extended_value))) {
 			void **cache_slot = CACHE_ADDR(opline->extended_value);
 			uintptr_t prop_offset = (uintptr_t)CACHED_PTR_EX(cache_slot + 1);
 			zval *property_val;
@@ -2446,7 +2447,7 @@ ZEND_VM_C_LABEL(fast_assign_obj):
 					}
 				}
 
-				if (!zobj->ce->__set && (zobj->ce->ce_flags & ZEND_ACC_ALLOW_DYNAMIC_PROPERTIES)) {
+				if (!OBJ_CE(zobj)->__set && (OBJ_CE(zobj)->ce_flags & ZEND_ACC_ALLOW_DYNAMIC_PROPERTIES)) {
 					if (EXPECTED(zobj->properties == NULL)) {
 						rebuild_object_properties(zobj);
 					}
@@ -3553,7 +3554,7 @@ ZEND_VM_HOT_OBJ_HANDLER(112, ZEND_INIT_METHOD_CALL, CONST|TMPVAR|UNUSED|THIS|CV,
 		} while (0);
 	}
 
-	called_scope = obj->ce;
+	called_scope = OBJ_CE(obj);
 
 	if (OP2_TYPE == IS_CONST &&
 	    EXPECTED(CACHED_PTR(opline->result.num) == called_scope)) {
@@ -3569,7 +3570,7 @@ ZEND_VM_HOT_OBJ_HANDLER(112, ZEND_INIT_METHOD_CALL, CONST|TMPVAR|UNUSED|THIS|CV,
 		fbc = obj->handlers->get_method(&obj, Z_STR_P(function_name), ((OP2_TYPE == IS_CONST) ? (RT_CONSTANT(opline, opline->op2) + 1) : NULL));
 		if (UNEXPECTED(fbc == NULL)) {
 			if (EXPECTED(!EG(exception))) {
-				zend_undefined_method(obj->ce, Z_STR_P(function_name));
+				zend_undefined_method(OBJ_CE(obj), Z_STR_P(function_name));
 			}
 			FREE_OP2();
 			if ((OP1_TYPE & (IS_VAR|IS_TMP_VAR)) && GC_DELREF(orig_obj) == 0) {
@@ -3717,7 +3718,7 @@ ZEND_VM_HANDLER(113, ZEND_INIT_STATIC_METHOD_CALL, UNUSED|CLASS_FETCH|CONST|VAR,
 			zend_throw_error(NULL, "Cannot call constructor");
 			HANDLE_EXCEPTION();
 		}
-		if (Z_TYPE(EX(This)) == IS_OBJECT && Z_OBJ(EX(This))->ce != ce->constructor->common.scope && (ce->constructor->common.fn_flags & ZEND_ACC_PRIVATE)) {
+		if (Z_TYPE(EX(This)) == IS_OBJECT && Z_OBJCE(EX(This)) != ce->constructor->common.scope && (ce->constructor->common.fn_flags & ZEND_ACC_PRIVATE)) {
 			zend_throw_error(NULL, "Cannot call private %s::__construct()", ZSTR_VAL(ce->name));
 			HANDLE_EXCEPTION();
 		}
@@ -4657,7 +4658,7 @@ ZEND_VM_HANDLER(107, ZEND_CATCH, CONST, JMP_ADDR, LAST_CATCH|CACHE_SLOT)
 
 		CACHE_PTR(opline->extended_value & ~ZEND_LAST_CATCH, catch_ce);
 	}
-	ce = EG(exception)->ce;
+	ce = OBJ_CE(EG(exception));
 
 #ifdef HAVE_DTRACE
 	if (DTRACE_EXCEPTION_CAUGHT_ENABLED()) {
@@ -5768,32 +5769,49 @@ ZEND_VM_HANDLER(68, ZEND_NEW, UNUSED|CLASS_FETCH|CONST|VAR, UNUSED|CACHE_SLOT, N
 	USE_OPLINE
 	zval *result;
 	zend_function *constructor;
-	zend_class_entry *ce;
+	zend_class_reference *class_ref;
 	zend_execute_data *call;
 
 	SAVE_OPLINE();
 	if (OP1_TYPE == IS_CONST) {
-		ce = CACHED_PTR(opline->op2.num);
+		zend_class_entry *ce = CACHED_PTR(opline->op2.num);
+		zend_string *name;
+		const zend_type_list *type_args;
+		ZEND_PNR_UNPACK(Z_PNR_P(RT_CONSTANT(opline, opline->op1)), name, type_args);
 		if (UNEXPECTED(ce == NULL)) {
-			ce = zend_fetch_class_by_name(Z_STR_P(RT_CONSTANT(opline, opline->op1)), Z_STR_P(RT_CONSTANT(opline, opline->op1) + 1), ZEND_FETCH_CLASS_DEFAULT | ZEND_FETCH_CLASS_EXCEPTION);
+			// TODO: pre-compute lower case name
+			ce = zend_fetch_class_by_name(name, NULL, ZEND_FETCH_CLASS_DEFAULT | ZEND_FETCH_CLASS_EXCEPTION);
 			if (UNEXPECTED(ce == NULL)) {
 				ZVAL_UNDEF(EX_VAR(opline->result.var));
 				HANDLE_EXCEPTION();
 			}
 			CACHE_PTR(opline->op2.num, ce);
 		}
+
+		if (EXPECTED(ce->num_generic_params == 0 && type_args == &zend_empty_type_list)) {
+			class_ref = ZEND_CE_TO_REF(ce);
+		} else {
+			// TODO: re-use class references
+			class_ref = zend_build_class_reference(ce, type_args);
+			if (UNEXPECTED(class_ref == NULL)) {
+				ZVAL_UNDEF(EX_VAR(opline->result.var));
+				HANDLE_EXCEPTION();
+			}
+		}
 	} else if (OP1_TYPE == IS_UNUSED) {
-		ce = zend_fetch_class(NULL, opline->op1.num);
+		zend_class_entry *ce = zend_fetch_class(NULL, opline->op1.num);
 		if (UNEXPECTED(ce == NULL)) {
 			ZVAL_UNDEF(EX_VAR(opline->result.var));
 			HANDLE_EXCEPTION();
 		}
+		class_ref = ZEND_CE_TO_REF(ce);
 	} else {
-		ce = Z_CE_P(EX_VAR(opline->op1.var));
+		zend_class_entry *ce = Z_CE_P(EX_VAR(opline->op1.var));
+		class_ref = ZEND_CE_TO_REF(ce);
 	}
 
 	result = EX_VAR(opline->result.var);
-	if (UNEXPECTED(object_init_ex(result, ce) != SUCCESS)) {
+	if (UNEXPECTED(object_init_ref(result, class_ref) != SUCCESS)) {
 		ZVAL_UNDEF(result);
 		HANDLE_EXCEPTION();
 	}
@@ -5867,7 +5885,7 @@ ZEND_VM_COLD_CONST_HANDLER(110, ZEND_CLONE, CONST|TMPVAR|UNUSED|THIS|CV, ANY)
 	} while (0);
 
 	zobj = Z_OBJ_P(obj);
-	ce = zobj->ce;
+	ce = OBJ_CE(zobj);
 	clone = ce->clone;
 	clone_call = zobj->handlers->clone_obj;
 	if (UNEXPECTED(clone_call == NULL)) {
@@ -6732,7 +6750,7 @@ ZEND_VM_HANDLER(77, ZEND_FE_RESET_R, CONST|TMP|VAR|CV, JMP_ADDR)
 		ZEND_VM_NEXT_OPCODE();
 	} else if (OP1_TYPE != IS_CONST && EXPECTED(Z_TYPE_P(array_ptr) == IS_OBJECT)) {
 		zend_object *zobj = Z_OBJ_P(array_ptr);
-		if (!zobj->ce->get_iterator) {
+		if (!OBJ_CE(zobj)->get_iterator) {
 			HashTable *properties = zobj->properties;
 			if (properties) {
 				if (UNEXPECTED(GC_REFCOUNT(properties) > 1)) {
@@ -9326,10 +9344,10 @@ ZEND_VM_COLD_CONST_HANDLER(190, ZEND_COUNT, CONST|TMPVAR|CV, UNUSED)
 			}
 
 			/* if not and the object implements Countable we call its count() method */
-			if (zend_class_implements_interface(zobj->ce, zend_ce_countable)) {
+			if (zend_class_implements_interface(OBJ_CE(zobj), zend_ce_countable)) {
 				zval retval;
 
-				zend_function *count_fn = zend_hash_find_ptr(&zobj->ce->function_table, ZSTR_KNOWN(ZEND_STR_COUNT));
+				zend_function *count_fn = zend_hash_find_ptr(&OBJ_CE(zobj)->function_table, ZSTR_KNOWN(ZEND_STR_COUNT));
 				zend_call_known_instance_method_with_0_params(count_fn, zobj, &retval);
 				count = zval_get_long(&retval);
 				zval_ptr_dtor(&retval);

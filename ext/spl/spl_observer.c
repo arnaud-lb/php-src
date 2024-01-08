@@ -88,7 +88,7 @@ static zend_result spl_object_storage_get_hash(zend_hash_key *key, spl_SplObject
 		zval rv;
 		ZVAL_OBJ(&param, obj);
 		zend_call_method_with_1_params(
-			&intern->std, intern->std.ce, &intern->fptr_get_hash, "getHash", &rv, &param);
+			&intern->std, OBJ_CE(&intern->std), &intern->fptr_get_hash, "getHash", &rv, &param);
 		if (!Z_ISUNDEF(rv)) {
 			if (Z_TYPE(rv) == IS_STRING) {
 				key->key = Z_STR(rv);
@@ -303,7 +303,7 @@ static zend_object *spl_object_storage_clone(zend_object *old_object)
 {
 	zend_object *new_object;
 
-	new_object = spl_object_storage_new_ex(old_object->ce, old_object);
+	new_object = spl_object_storage_new_ex(OBJ_CE(old_object), old_object);
 
 	zend_objects_clone_members(new_object, old_object);
 
@@ -375,15 +375,9 @@ static int spl_object_storage_compare_info(zval *e1, zval *e2) /* {{{ */
 
 static int spl_object_storage_compare_objects(zval *o1, zval *o2) /* {{{ */
 {
-	zend_object *zo1;
-	zend_object *zo2;
-
 	ZEND_COMPARE_OBJECTS_FALLBACK(o1, o2);
 
-	zo1 = (zend_object *)Z_OBJ_P(o1);
-	zo2 = (zend_object *)Z_OBJ_P(o2);
-
-	if (zo1->ce != spl_ce_SplObjectStorage || zo2->ce != spl_ce_SplObjectStorage) {
+	if (Z_OBJCE_P(o1) != spl_ce_SplObjectStorage || Z_OBJCE_P(o2) != spl_ce_SplObjectStorage) {
 		return ZEND_UNCOMPARABLE;
 	}
 
@@ -1144,7 +1138,7 @@ PHP_METHOD(MultipleIterator, rewind)
 	zend_hash_internal_pointer_reset_ex(&intern->storage, &intern->pos);
 	while ((element = zend_hash_get_current_data_ptr_ex(&intern->storage, &intern->pos)) != NULL && !EG(exception)) {
 		zend_object *it = element->obj;
-		zend_call_known_instance_method_with_0_params(it->ce->iterator_funcs_ptr->zf_rewind, it, NULL);
+		zend_call_known_instance_method_with_0_params(OBJ_CE(it)->iterator_funcs_ptr->zf_rewind, it, NULL);
 		zend_hash_move_forward_ex(&intern->storage, &intern->pos);
 	}
 }
@@ -1165,7 +1159,7 @@ PHP_METHOD(MultipleIterator, next)
 	zend_hash_internal_pointer_reset_ex(&intern->storage, &intern->pos);
 	while ((element = zend_hash_get_current_data_ptr_ex(&intern->storage, &intern->pos)) != NULL && !EG(exception)) {
 		zend_object *it = element->obj;
-		zend_call_known_instance_method_with_0_params(it->ce->iterator_funcs_ptr->zf_next, it, NULL);
+		zend_call_known_instance_method_with_0_params(OBJ_CE(it)->iterator_funcs_ptr->zf_next, it, NULL);
 		zend_hash_move_forward_ex(&intern->storage, &intern->pos);
 	}
 }
@@ -1194,7 +1188,7 @@ PHP_METHOD(MultipleIterator, valid)
 	zend_hash_internal_pointer_reset_ex(&intern->storage, &intern->pos);
 	while ((element = zend_hash_get_current_data_ptr_ex(&intern->storage, &intern->pos)) != NULL && !EG(exception)) {
 		zend_object *it = element->obj;
-		zend_call_known_instance_method_with_0_params(it->ce->iterator_funcs_ptr->zf_valid, it, &retval);
+		zend_call_known_instance_method_with_0_params(OBJ_CE(it)->iterator_funcs_ptr->zf_valid, it, &retval);
 
 		if (!Z_ISUNDEF(retval)) {
 			valid = (Z_TYPE(retval) == IS_TRUE);
@@ -1232,7 +1226,7 @@ static void spl_multiple_iterator_get_all(spl_SplObjectStorage *intern, int get_
 	zend_hash_internal_pointer_reset_ex(&intern->storage, &intern->pos);
 	while ((element = zend_hash_get_current_data_ptr_ex(&intern->storage, &intern->pos)) != NULL && !EG(exception)) {
 		zend_object *it = element->obj;
-		zend_call_known_instance_method_with_0_params(it->ce->iterator_funcs_ptr->zf_valid, it, &retval);
+		zend_call_known_instance_method_with_0_params(OBJ_CE(it)->iterator_funcs_ptr->zf_valid, it, &retval);
 
 		if (!Z_ISUNDEF(retval)) {
 			valid = Z_TYPE(retval) == IS_TRUE;
@@ -1243,9 +1237,9 @@ static void spl_multiple_iterator_get_all(spl_SplObjectStorage *intern, int get_
 
 		if (valid) {
 			if (SPL_MULTIPLE_ITERATOR_GET_ALL_CURRENT == get_type) {
-				zend_call_known_instance_method_with_0_params(it->ce->iterator_funcs_ptr->zf_current, it, &retval);
+				zend_call_known_instance_method_with_0_params(OBJ_CE(it)->iterator_funcs_ptr->zf_current, it, &retval);
 			} else {
-				zend_call_known_instance_method_with_0_params(it->ce->iterator_funcs_ptr->zf_key, it, &retval);
+				zend_call_known_instance_method_with_0_params(OBJ_CE(it)->iterator_funcs_ptr->zf_key, it, &retval);
 			}
 			if (Z_ISUNDEF(retval)) {
 				zend_throw_exception(spl_ce_RuntimeException, "Failed to call sub iterator method", 0);

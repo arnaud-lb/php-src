@@ -673,14 +673,24 @@ static zend_never_inline ZEND_COLD void ZEND_FASTCALL zend_throw_non_object_erro
 
 static void zend_verify_type_generic_params_explainer(smart_str *dest, zend_class_entry *scope, zend_type type) {
 	// TODO: It's all a hack...
-	zend_class_entry *called_scope = zend_get_called_scope(EG(current_execute_data));
+	zend_class_reference *called_scope = zend_get_called_scope(EG(current_execute_data));
 
 	if (ZEND_TYPE_HAS_GENERIC_PARAM(type)) {
 		uint32_t generic_param_id = ZEND_TYPE_GENERIC_PARAM_ID(type);
-		generic_param_id -= scope->num_bound_generic_args;
-		zend_generic_param *param = &scope->generic_params[generic_param_id];
-		zend_type real_type = called_scope->bound_generic_args[generic_param_id];
-		zend_string *real_type_string = zend_type_to_string(real_type, called_scope);
+		zend_generic_param *param = &scope->generic_params[generic_param_id - scope->num_bound_generic_args];
+		for (;;) {
+			if (generic_param_id >= called_scope->ce->num_bound_generic_args) {
+				ZEND_ASSERT(generic_param_id - called_scope->ce->num_bound_generic_args < called_scope->args.num_types);
+				type = called_scope->args.types[generic_param_id - called_scope->ce->num_bound_generic_args];
+			} else {
+				type = called_scope->ce->bound_generic_args[generic_param_id];
+			}
+			if (!ZEND_TYPE_HAS_GENERIC_PARAM(type)) {
+				break;
+			}
+			generic_param_id = ZEND_TYPE_GENERIC_PARAM_ID(type);
+		}
+		zend_string *real_type_string = zend_type_to_string(type, called_scope->ce);
 		smart_str_append(dest, param->name);
 		smart_str_appends(dest, " = ");
 		smart_str_append(dest, real_type_string);
@@ -1085,6 +1095,15 @@ static zend_never_inline bool check_property_type_generic(
 }
 #endif
 
+static zend_type zend_resolve_generic_type(zend_class_reference *scope, uint32_t param_id) {
+	if (param_id >= scope->ce->num_bound_generic_args) {
+		ZEND_ASSERT(param_id - scope->ce->num_bound_generic_args < scope->args.num_types);
+		return scope->args.types[param_id - scope->ce->num_bound_generic_args];
+	} else {
+		return scope->ce->bound_generic_args[param_id];
+	}
+}
+
 static zend_always_inline bool i_zend_check_property_type(const zend_object *obj, const zend_property_info *info, zval *property, bool strict)
 {
 	ZEND_ASSERT(!Z_ISREF_P(property));
@@ -1098,9 +1117,7 @@ static zend_always_inline bool i_zend_check_property_type(const zend_object *obj
 	}
 
 	if (ZEND_TYPE_HAS_GENERIC_PARAM(info->type)) {
-		uint32_t param_id = ZEND_TYPE_GENERIC_PARAM_ID(info->type);
-		ZEND_ASSERT(param_id < obj->ce->num_bound_generic_args);
-		zend_type real_type = obj->ce->bound_generic_args[param_id];
+		zend_type real_type = zend_resolve_generic_type(obj->cr, ZEND_TYPE_GENERIC_PARAM_ID(info->type));
 		if (ZEND_TYPE_CONTAINS_CODE(real_type, Z_TYPE_P(property))) {
 			return 1;
 		}
@@ -1156,11 +1173,11 @@ static zend_always_inline bool zend_value_instanceof_static(zval *zv) {
 		return 0;
 	}
 
-	zend_class_entry *called_scope = zend_get_called_scope(EG(current_execute_data));
+	zend_class_reference *called_scope = zend_get_called_scope(EG(current_execute_data));
 	if (!called_scope) {
 		return 0;
 	}
-	return instanceof_function(Z_OBJCE_P(zv), called_scope);
+	return instanceof_function(Z_OBJCE_P(zv), called_scope->ce);
 }
 
 static ZEND_COLD void zend_validate_generic_args_error(
@@ -1263,10 +1280,7 @@ static bool zend_check_intersection_type_from_cache_slot(zend_type_list *interse
 			} else {
 				ZEND_ASSERT(ZEND_TYPE_HAS_GENERIC_PARAM(*list_type));
 				// TODO: Deduplicate this code.
-				uint32_t param_id = ZEND_TYPE_GENERIC_PARAM_ID(*list_type);
-				zend_class_entry *called_scope = zend_get_called_scope(EG(current_execute_data));
-				ZEND_ASSERT(param_id < called_scope->num_bound_generic_args);
-				zend_type real_type = called_scope->bound_generic_args[param_id];
+				zend_type real_type = zend_resolve_generic_type(zend_get_called_scope(EG(current_execute_data)), ZEND_TYPE_GENERIC_PARAM_ID(*list_type));
 				if (!zend_check_type_slow(
 							&real_type, arg, ref, /* cache_slot */ NULL, scope, is_return_type, is_internal)) {
 					status = false;
@@ -1318,11 +1332,7 @@ static zend_always_inline bool zend_check_type_slow(
 							PROGRESS_CACHE_SLOT();
 						} else {
 							ZEND_ASSERT(ZEND_TYPE_HAS_GENERIC_PARAM(*list_type));
-							// TODO: Deduplicate this code.
-							uint32_t param_id = ZEND_TYPE_GENERIC_PARAM_ID(*list_type);
-							zend_class_entry *called_scope = zend_get_called_scope(EG(current_execute_data));
-							ZEND_ASSERT(param_id < called_scope->num_bound_generic_args);
-							zend_type real_type = called_scope->bound_generic_args[param_id];
+							zend_type real_type = zend_resolve_generic_type(zend_get_called_scope(EG(current_execute_data)), ZEND_TYPE_GENERIC_PARAM_ID(*list_type));
 							if (ZEND_TYPE_CONTAINS_CODE(real_type, Z_TYPE_P(arg))) {
 								return true;
 							}
@@ -1343,20 +1353,17 @@ static zend_always_inline bool zend_check_type_slow(
 			/* If we have a CE we check if it satisfies the type constraint,
 			 * otherwise it will check if a standard type satisfies it. */
 			if (ce && zend_validate_generic_args(ce, args)
-					&& instanceof_unpacked(ZEND_CE_TO_REF(Z_OBJCE_P(arg)), ce, args)) {
+					&& instanceof_unpacked(Z_OBJCR_P(arg), ce, args)) {
 				return true;
 			}
 		} else if (UNEXPECTED(ZEND_TYPE_HAS_GENERIC_PARAM(*type))) {
-			// TODO: This doesn't handle free generic parameters.
-			uint32_t param_id = ZEND_TYPE_GENERIC_PARAM_ID(*type);
-			zend_class_entry *called_scope = zend_get_called_scope(EG(current_execute_data));
-			ZEND_ASSERT(param_id < called_scope->num_bound_generic_args);
-			zend_type *real_type = &called_scope->bound_generic_args[param_id];
-			if (ZEND_TYPE_CONTAINS_CODE(*real_type, Z_TYPE_P(arg))) {
+			// TODO: Deduplicate this code.
+			zend_type real_type = zend_resolve_generic_type(zend_get_called_scope(EG(current_execute_data)), ZEND_TYPE_GENERIC_PARAM_ID(*type));
+			if (ZEND_TYPE_CONTAINS_CODE(real_type, Z_TYPE_P(arg))) {
 				return true;
 			}
 			if (zend_check_type_slow(
-						real_type, arg, ref, /* cache_slot */ NULL, scope, is_return_type, is_internal)) {
+						&real_type, arg, ref, /* cache_slot */ NULL, scope, is_return_type, is_internal)) {
 				return true;
 			}
 		}
@@ -1596,6 +1603,31 @@ ZEND_API ZEND_COLD void ZEND_FASTCALL zend_missing_arg_error(zend_execute_data *
 	}
 }
 
+ZEND_API ZEND_COLD void ZEND_FASTCALL zend_missing_type_arg_error(zend_execute_data *execute_data)
+{
+	zend_execute_data *ptr = EX(prev_execute_data);
+
+	if (ptr && ptr->func && ZEND_USER_CODE(ptr->func->common.type)) {
+		zend_throw_error(zend_ce_argument_count_error, "Too few arguments to function %s%s%s(), %d passed in %s on line %d and %s %d expected",
+			EX(func)->common.scope ? ZSTR_VAL(EX(func)->common.scope->name) : "",
+			EX(func)->common.scope ? "::" : "",
+			ZSTR_VAL(EX(func)->common.function_name),
+			EX_NUM_ARGS(),
+			ZSTR_VAL(ptr->func->op_array.filename),
+			ptr->opline->lineno,
+			EX(func)->common.required_num_args == EX(func)->common.num_args ? "exactly" : "at least",
+			EX(func)->common.required_num_args);
+	} else {
+		zend_throw_error(zend_ce_argument_count_error, "Too few arguments to function %s%s%s(), %d passed and %s %d expected",
+			EX(func)->common.scope ? ZSTR_VAL(EX(func)->common.scope->name) : "",
+			EX(func)->common.scope ? "::" : "",
+			ZSTR_VAL(EX(func)->common.function_name),
+			EX_NUM_ARGS(),
+			EX(func)->common.required_num_args == EX(func)->common.num_args ? "exactly" : "at least",
+			EX(func)->common.required_num_args);
+	}
+}
+
 ZEND_API ZEND_COLD void zend_verify_return_error(const zend_function *zf, zval *value)
 {
 	const zend_arg_info *arg_info = &zf->common.arg_info[-1];
@@ -1711,7 +1743,7 @@ ZEND_API bool zend_never_inline zend_verify_class_constant_type(zend_class_const
 
 static zend_never_inline ZEND_COLD void ZEND_FASTCALL zend_use_object_as_array(const zend_object *object)
 {
-	zend_throw_error(NULL, "Cannot use object of type %s as array", ZSTR_VAL(object->ce->name));
+	zend_throw_error(NULL, "Cannot use object of type %s as array", ZSTR_VAL(OBJ_NAME(object)));
 }
 
 static zend_never_inline ZEND_COLD void ZEND_FASTCALL zend_illegal_array_offset_access(const zval *offset)
@@ -2847,7 +2879,7 @@ fetch_from_array:
 		retval = obj->handlers->read_dimension(obj, dim, type, result);
 
 		if (UNEXPECTED(retval == &EG(uninitialized_zval))) {
-			zend_class_entry *ce = obj->ce;
+			zend_class_entry *ce = OBJ_CE(obj);
 
 			ZVAL_NULL(result);
 			zend_error(E_NOTICE, "Indirect modification of overloaded element of %s has no effect", ZSTR_VAL(ce->name));
@@ -2858,7 +2890,7 @@ fetch_from_array:
 					retval = result;
 				}
 				if (Z_TYPE_P(retval) != IS_OBJECT) {
-					zend_class_entry *ce = obj->ce;
+					zend_class_entry *ce = OBJ_CE(obj);
 					zend_error(E_NOTICE, "Indirect modification of overloaded element of %s has no effect", ZSTR_VAL(ce->name));
 				}
 			} else if (UNEXPECTED(Z_REFCOUNT_P(retval) == 1)) {
@@ -3305,13 +3337,13 @@ ZEND_API bool zend_verify_ref_array_assignable(zend_reference *ref) {
 static zend_property_info *zend_object_fetch_property_type_info(
 		zend_object *obj, zval *slot)
 {
-	if (EXPECTED(!ZEND_CLASS_HAS_TYPE_HINTS(obj->ce))) {
+	if (EXPECTED(!ZEND_CLASS_HAS_TYPE_HINTS(OBJ_CE(obj)))) {
 		return NULL;
 	}
 
 	/* Not a declared property */
 	if (UNEXPECTED(slot < obj->properties_table ||
-			slot >= obj->properties_table + obj->ce->default_properties_count)) {
+			slot >= obj->properties_table + OBJ_CE(obj)->default_properties_count)) {
 		return NULL;
 	}
 
@@ -3396,7 +3428,7 @@ static zend_always_inline void zend_fetch_property_address(zval *result, zval *c
 
 	zobj = Z_OBJ_P(container);
 	if (prop_op_type == IS_CONST &&
-	    EXPECTED(zobj->ce == CACHED_PTR_EX(cache_slot))) {
+	    EXPECTED(OBJ_CE(zobj) == CACHED_PTR_EX(cache_slot))) {
 		uintptr_t prop_offset = (uintptr_t)CACHED_PTR_EX(cache_slot + 1);
 
 		if (EXPECTED(IS_VALID_PROPERTY_OFFSET(prop_offset))) {
@@ -4963,7 +4995,7 @@ static zend_never_inline zend_execute_data *zend_init_dynamic_call_object(zend_o
 			}
 		}
 	} else {
-		zend_throw_error(NULL, "Object of type %s is not callable", ZSTR_VAL(function->ce->name));
+		zend_throw_error(NULL, "Object of type %s is not callable", ZSTR_VAL(OBJ_NAME(function)));
 		return NULL;
 	}
 
@@ -5038,13 +5070,13 @@ static zend_never_inline zend_execute_data *zend_init_dynamic_call_array(zend_ar
 			fbc = Z_OBJ_HT_P(obj)->get_method(&object, Z_STR_P(method), NULL);
 			if (UNEXPECTED(fbc == NULL)) {
 				if (EXPECTED(!EG(exception))) {
-					zend_undefined_method(object->ce, Z_STR_P(method));
+					zend_undefined_method(OBJ_CE(object), Z_STR_P(method));
 				}
 				return NULL;
 			}
 
 			if ((fbc->common.fn_flags & ZEND_ACC_STATIC) != 0) {
-				object_or_called_scope = object->ce;
+				object_or_called_scope = OBJ_CE(object);
 			} else {
 				call_info |= ZEND_CALL_RELEASE_THIS | ZEND_CALL_HAS_THIS;
 				GC_ADDREF(object); /* For $this pointer */

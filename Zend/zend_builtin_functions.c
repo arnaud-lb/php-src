@@ -31,6 +31,7 @@
 #include "zend_generators.h"
 #include "zend_builtin_functions_arginfo.h"
 #include "zend_smart_str.h"
+#include "zend_types.h"
 
 /* }}} */
 
@@ -579,7 +580,7 @@ ZEND_FUNCTION(get_class)
 /* {{{ Retrieves the "Late Static Binding" class name */
 ZEND_FUNCTION(get_called_class)
 {
-	zend_class_entry *called_scope;
+	zend_class_reference *called_scope;
 
 	ZEND_PARSE_PARAMETERS_NONE();
 
@@ -589,7 +590,7 @@ ZEND_FUNCTION(get_called_class)
 		RETURN_THROWS();
 	}
 
-	RETURN_STR_COPY(called_scope->name);
+	RETURN_STR_COPY(called_scope->ce->name);
 }
 /* }}} */
 
@@ -773,7 +774,7 @@ ZEND_FUNCTION(get_object_vars)
 		RETURN_EMPTY_ARRAY();
 	}
 
-	if (!zobj->ce->default_properties_count && properties == zobj->properties && !GC_IS_RECURSIVE(properties)) {
+	if (!OBJ_CE(zobj)->default_properties_count && properties == zobj->properties && !GC_IS_RECURSIVE(properties)) {
 		/* fast copy */
 		if (EXPECTED(zobj->handlers == &std_object_handlers)) {
 			RETURN_ARR(zend_proptable_to_symtable(properties, 0));
@@ -840,7 +841,7 @@ ZEND_FUNCTION(get_mangled_object_vars)
 	}
 
 	properties = zend_proptable_to_symtable(properties,
-		(obj->ce->default_properties_count ||
+		(OBJ_CE(obj)->default_properties_count ||
 		 obj->handlers != &std_object_handlers ||
 		 GC_IS_RECURSIVE(properties)));
 	RETURN_ARR(properties);
@@ -1842,7 +1843,7 @@ ZEND_API void zend_fetch_debug_backtrace(zval *return_value, int skip_last, int 
 				if (func->common.scope) {
 					ZVAL_STR_COPY(&tmp, func->common.scope->name);
 				} else if (object->handlers->get_class_name == zend_std_get_class_name) {
-					ZVAL_STR_COPY(&tmp, object->ce->name);
+					ZVAL_STR_COPY(&tmp, OBJ_CE(object)->name);
 				} else {
 					ZVAL_STR(&tmp, object->handlers->get_class_name(object));
 				}

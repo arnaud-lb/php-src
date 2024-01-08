@@ -105,7 +105,7 @@ PHPAPI zend_class_entry *reflection_fiber_ptr;
 #define GET_REFLECTION_OBJECT() do { \
 	intern = Z_REFLECTION_P(ZEND_THIS); \
 	if (intern->ptr == NULL) { \
-		if (EG(exception) && EG(exception)->ce == reflection_exception_ptr) { \
+		if (EG(exception) && OBJ_CE(EG(exception)) == reflection_exception_ptr) { \
 			RETURN_THROWS(); \
 		} \
 		zend_throw_error(NULL, "Internal error: Failed to retrieve the reflection object"); \
@@ -645,7 +645,7 @@ static int format_default_value(smart_str *str, zval *value) {
 	} else if (Z_TYPE_P(value) == IS_OBJECT) {
 		/* This branch may only be reached for default properties, which don't support arbitrary objects. */
 		zend_object *obj = Z_OBJ_P(value);
-		zend_class_entry *class = obj->ce;
+		zend_class_entry *class = OBJ_CE(obj);
 		ZEND_ASSERT(class->ce_flags & ZEND_ACC_ENUM);
 		smart_str_append(str, class->name);
 		smart_str_appends(str, "::");
@@ -3236,7 +3236,7 @@ static void instantiate_reflection_method(INTERNAL_FUNCTION_PARAMETERS, bool is_
 		}
 
 		orig_obj = arg1_obj;
-		ce = arg1_obj->ce;
+		ce = OBJ_CE(arg1_obj);
 		method_name = ZSTR_VAL(arg2_str);
 		method_name_len = ZSTR_LEN(arg2_str);
 	} else if (arg2_str) {
@@ -3779,7 +3779,7 @@ ZEND_METHOD(ReflectionClassConstant, __construct)
 	ZEND_PARSE_PARAMETERS_END();
 
 	if (classname_obj) {
-		ce = classname_obj->ce;
+		ce = OBJ_CE(classname_obj);
 	} else {
 		if ((ce = zend_lookup_class(classname_str)) == NULL) {
 			zend_throw_exception_ex(reflection_exception_ptr, 0, "Class \"%s\" does not exist", ZSTR_VAL(classname_str));
@@ -4047,8 +4047,8 @@ static void reflection_class_object_ctor(INTERNAL_FUNCTION_PARAMETERS, int is_ob
 	intern = Z_REFLECTION_P(object);
 
 	if (arg_obj) {
-		ZVAL_STR_COPY(reflection_prop_name(object), arg_obj->ce->name);
-		intern->ptr = arg_obj->ce;
+		ZVAL_STR_COPY(reflection_prop_name(object), OBJ_CE(arg_obj)->name);
+		intern->ptr = OBJ_CE(arg_obj);
 		if (is_object) {
 			ZVAL_OBJ_COPY(&intern->obj, arg_obj);
 		}
@@ -5518,7 +5518,7 @@ ZEND_METHOD(ReflectionProperty, __construct)
 	intern = Z_REFLECTION_P(object);
 
 	if (classname_obj) {
-		ce = classname_obj->ce;
+		ce = OBJ_CE(classname_obj);
 	} else {
 		if ((ce = zend_lookup_class(classname_str)) == NULL) {
 			zend_throw_exception_ex(reflection_exception_ptr, 0, "Class \"%s\" does not exist", ZSTR_VAL(classname_str));
@@ -6719,7 +6719,7 @@ static int call_attribute_constructor(
 		EG(current_execute_data) = call;
 	}
 
-	zend_call_known_function(ctor, obj, obj->ce, NULL, argc, args, named_params);
+	zend_call_known_function(ctor, obj, OBJ_CE(obj), NULL, argc, args, named_params);
 
 	if (filename) {
 		EG(current_execute_data) = call->prev_execute_data;
@@ -7183,11 +7183,11 @@ ZEND_METHOD(ReflectionFiber, getCallable)
 /* {{{ _reflection_write_property */
 static zval *_reflection_write_property(zend_object *object, zend_string *name, zval *value, void **cache_slot)
 {
-	if (zend_hash_exists(&object->ce->properties_info, name)
+	if (zend_hash_exists(&OBJ_CE(object)->properties_info, name)
 		&& (zend_string_equals(name, ZSTR_KNOWN(ZEND_STR_NAME)) || zend_string_equals(name, ZSTR_KNOWN(ZEND_STR_CLASS))))
 	{
 		zend_throw_exception_ex(reflection_exception_ptr, 0,
-			"Cannot set read-only property %s::$%s", ZSTR_VAL(object->ce->name), ZSTR_VAL(name));
+			"Cannot set read-only property %s::$%s", ZSTR_VAL(OBJ_CE(object)->name), ZSTR_VAL(name));
 		return &EG(uninitialized_zval);
 	}
 	else

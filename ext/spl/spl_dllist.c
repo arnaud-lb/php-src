@@ -385,7 +385,7 @@ static zend_object *spl_dllist_object_new(zend_class_entry *class_type) /* {{{ *
 
 static zend_object *spl_dllist_object_clone(zend_object *old_object) /* {{{ */
 {
-	zend_object *new_object = spl_dllist_object_new_ex(old_object->ce, old_object, 1);
+	zend_object *new_object = spl_dllist_object_new_ex(OBJ_CE(old_object), old_object, 1);
 
 	zend_objects_clone_members(new_object, old_object);
 
@@ -399,7 +399,7 @@ static zend_result spl_dllist_object_count_elements(zend_object *object, zend_lo
 
 	if (intern->fptr_count) {
 		zval rv;
-		zend_call_method_with_0_params(object, intern->std.ce, &intern->fptr_count, "count", &rv);
+		zend_call_method_with_0_params(object, OBJ_CE(&intern->std), &intern->fptr_count, "count", &rv);
 		if (!Z_ISUNDEF(rv)) {
 			*count = zval_get_long(&rv);
 			zval_ptr_dtor(&rv);

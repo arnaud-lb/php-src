@@ -780,7 +780,7 @@ static HashTable* php_var_serialize_call_sleep(zend_object *obj, zend_function *
 
 	if (Z_TYPE(retval) != IS_ARRAY) {
 		zval_ptr_dtor(&retval);
-		php_error_docref(NULL, E_WARNING, "%s::__sleep() should return an array only containing the names of instance-variables to serialize", ZSTR_VAL(obj->ce->name));
+		php_error_docref(NULL, E_WARNING, "%s::__sleep() should return an array only containing the names of instance-variables to serialize", ZSTR_VAL(OBJ_NAME(obj)));
 		return NULL;
 	}
 
@@ -1171,7 +1171,7 @@ again:
 				 && Z_OBJ_HT_P(struc)->get_properties == zend_std_get_properties) {
 					/* Optimized version without rebulding properties HashTable */
 					zend_object *obj = Z_OBJ_P(struc);
-					zend_class_entry *ce = obj->ce;
+					zend_class_entry *ce = OBJ_CE(obj);
 					zend_property_info *prop_info;
 					zval *prop;
 					int i;

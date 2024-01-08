@@ -2859,7 +2859,7 @@ ZEND_API bool ZEND_FASTCALL zend_object_is_true(const zval *op) /* {{{ */
 	if (zobj->handlers->cast_object(zobj, &tmp, _IS_BOOL) == SUCCESS) {
 		return Z_TYPE(tmp) == IS_TRUE;
 	}
-	zend_error(E_RECOVERABLE_ERROR, "Object of class %s could not be converted to bool", ZSTR_VAL(zobj->ce->name));
+	zend_error(E_RECOVERABLE_ERROR, "Object of class %s could not be converted to bool", ZSTR_VAL(OBJ_NAME(zobj)));
 	return false;
 }
 /* }}} */

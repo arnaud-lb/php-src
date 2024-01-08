@@ -1396,7 +1396,7 @@ static void php_hashcontext_free(zend_object *obj) {
 /* {{{ php_hashcontext_clone */
 static zend_object *php_hashcontext_clone(zend_object *zobj) {
 	php_hashcontext_object *oldobj = php_hashcontext_from_object(zobj);
-	zend_object *znew = php_hashcontext_create(zobj->ce);
+	zend_object *znew = php_hashcontext_create(OBJ_CE(zobj));
 	php_hashcontext_object *newobj = php_hashcontext_from_object(znew);
 
 	if (!oldobj->context) {

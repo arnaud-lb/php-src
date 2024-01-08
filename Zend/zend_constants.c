@@ -21,6 +21,7 @@
 #include "zend_constants.h"
 #include "zend_exceptions.h"
 #include "zend_execute.h"
+#include "zend_types.h"
 #include "zend_variables.h"
 #include "zend_operators.h"
 #include "zend_globals.h"
@@ -327,11 +328,12 @@ ZEND_API zval *zend_get_class_constant_ex(zend_string *class_name, zend_string *
 			ce = scope->parents[0]->ce;
 		}
 	} else if (zend_string_equals_ci(class_name, ZSTR_KNOWN(ZEND_STR_STATIC))) {
-		ce = zend_get_called_scope(EG(current_execute_data));
-		if (UNEXPECTED(!ce)) {
+		zend_class_reference *class_ref = zend_get_called_scope(EG(current_execute_data));
+		if (UNEXPECTED(!class_ref)) {
 			zend_throw_error(NULL, "Cannot access \"static\" when no class scope is active");
 			goto failure;
 		}
+		ce = class_ref->ce;
 	} else {
 		ce = zend_fetch_class(class_name, flags);
 	}

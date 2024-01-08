@@ -1442,7 +1442,7 @@ tail_call:
 			}
 			if (!(OBJ_FLAGS(obj) & IS_OBJ_DESTRUCTOR_CALLED)
 			 && (obj->handlers->dtor_obj != zend_objects_destroy_object
-			  || obj->ce->destructor != NULL)) {
+			  || OBJ_CE(obj)->destructor != NULL)) {
 				*flags |= GC_HAS_DESTRUCTORS;
 			}
 
@@ -1846,7 +1846,7 @@ rerun_gc:
 					if (GC_TYPE(p) == IS_OBJECT && !(OBJ_FLAGS(p) & IS_OBJ_DESTRUCTOR_CALLED)) {
 						zend_object *obj = (zend_object *) p;
 						if (obj->handlers->dtor_obj != zend_objects_destroy_object
-							|| obj->ce->destructor) {
+							|| OBJ_CE(obj)->destructor) {
 							current->ref = GC_MAKE_DTOR_GARBAGE(obj);
 							GC_REF_SET_COLOR(obj, GC_PURPLE);
 						} else {

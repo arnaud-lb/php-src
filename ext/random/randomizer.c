@@ -28,7 +28,7 @@
 #include "Zend/zend_exceptions.h"
 
 static inline void randomizer_common_init(php_random_randomizer *randomizer, zend_object *engine_object) {
-	if (engine_object->ce->type == ZEND_INTERNAL_CLASS) {
+	if (OBJ_CE(engine_object)->type == ZEND_INTERNAL_CLASS) {
 		/* Internal classes always php_random_engine struct */
 		php_random_engine *engine = php_random_engine_from_obj(engine_object);
 
@@ -43,7 +43,7 @@ static inline void randomizer_common_init(php_random_randomizer *randomizer, zen
 		zend_function *generate_method;
 
 		mname = ZSTR_INIT_LITERAL("generate", 0);
-		generate_method = zend_hash_find_ptr(&engine_object->ce->function_table, mname);
+		generate_method = zend_hash_find_ptr(&OBJ_CE(engine_object)->function_table, mname);
 		zend_string_release(mname);
 
 		/* Create compatible state */
@@ -503,7 +503,7 @@ PHP_METHOD(Random_Randomizer, __unserialize)
 		RETURN_THROWS();
 	}
 
-	zengine = zend_read_property(randomizer->std.ce, &randomizer->std, "engine", strlen("engine"), 1, NULL);
+	zengine = zend_read_property(OBJ_CE(&randomizer->std), &randomizer->std, "engine", strlen("engine"), 1, NULL);
 	if (Z_TYPE_P(zengine) != IS_OBJECT || !instanceof_function(Z_OBJCE_P(zengine), random_ce_Random_Engine)) {
 		zend_throw_exception(NULL, "Invalid serialization data for Random\\Randomizer object", 0);
 		RETURN_THROWS();

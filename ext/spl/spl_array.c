@@ -230,7 +230,7 @@ static zend_object *spl_array_object_clone(zend_object *old_object)
 {
 	zend_object *new_object;
 
-	new_object = spl_array_object_new_ex(old_object->ce, old_object, 1);
+	new_object = spl_array_object_new_ex(OBJ_CE(old_object), old_object, 1);
 
 	zend_objects_clone_members(new_object, old_object);
 
@@ -412,7 +412,7 @@ static zval *spl_array_read_dimension_ex(int check_inherited, zend_object *objec
 				ZVAL_UNDEF(&tmp);
 				offset = &tmp;
 			}
-			zend_call_method_with_1_params(object, object->ce, &intern->fptr_offset_get, "offsetGet", rv, offset);
+			zend_call_method_with_1_params(object, OBJ_CE(object), &intern->fptr_offset_get, "offsetGet", rv, offset);
 
 			if (!Z_ISUNDEF_P(rv)) {
 				return rv;
@@ -421,7 +421,7 @@ static zval *spl_array_read_dimension_ex(int check_inherited, zend_object *objec
 		}
 	}
 
-	ret = spl_array_get_dimension_ptr(check_inherited, intern, object->ce->name, offset, type);
+	ret = spl_array_get_dimension_ptr(check_inherited, intern, OBJ_CE(object)->name, offset, type);
 
 	/* When in a write context,
 	 * ZE has to be fooled into thinking this is in a reference set
@@ -471,7 +471,7 @@ static void spl_array_write_dimension_ex(int check_inherited, zend_object *objec
 			ZVAL_NULL(&tmp);
 			offset = &tmp;
 		}
-		zend_call_method_with_2_params(object, object->ce, &intern->fptr_offset_set, "offsetSet", NULL, offset, value);
+		zend_call_method_with_2_params(object, OBJ_CE(object), &intern->fptr_offset_set, "offsetSet", NULL, offset, value);
 		return;
 	}
 
@@ -495,7 +495,7 @@ static void spl_array_write_dimension_ex(int check_inherited, zend_object *objec
 	}
 
 	if (get_hash_key(&key, intern, offset) == FAILURE) {
-		zend_illegal_container_offset(object->ce->name, offset, BP_VAR_W);
+		zend_illegal_container_offset(OBJ_NAME(object), offset, BP_VAR_W);
 		zval_ptr_dtor(value);
 		return;
 	}
@@ -526,7 +526,7 @@ static void spl_array_unset_dimension_ex(int check_inherited, zend_object *objec
 	spl_hash_key key;
 
 	if (check_inherited && intern->fptr_offset_del) {
-		zend_call_method_with_1_params(object, object->ce, &intern->fptr_offset_del, "offsetUnset", NULL, offset);
+		zend_call_method_with_1_params(object, OBJ_CE(object), &intern->fptr_offset_del, "offsetUnset", NULL, offset);
 		return;
 	}
 
@@ -536,7 +536,7 @@ static void spl_array_unset_dimension_ex(int check_inherited, zend_object *objec
 	}
 
 	if (get_hash_key(&key, intern, offset) == FAILURE) {
-		zend_illegal_container_offset(object->ce->name, offset, BP_VAR_UNSET);
+		zend_illegal_container_offset(OBJ_NAME(object), offset, BP_VAR_UNSET);
 		return;
 	}
 
@@ -585,7 +585,7 @@ static bool spl_array_has_dimension_ex(bool check_inherited, zend_object *object
 	zval rv, *value = NULL, *tmp;
 
 	if (check_inherited && intern->fptr_offset_has) {
-		zend_call_method_with_1_params(object, object->ce, &intern->fptr_offset_has, "offsetExists", &rv, offset);
+		zend_call_method_with_1_params(object, OBJ_CE(object), &intern->fptr_offset_has, "offsetExists", &rv, offset);
 
 		if (!zend_is_true(&rv)) {
 			zval_ptr_dtor(&rv);
@@ -606,7 +606,7 @@ static bool spl_array_has_dimension_ex(bool check_inherited, zend_object *object
 		spl_hash_key key;
 
 		if (get_hash_key(&key, intern, offset) == FAILURE) {
-			zend_illegal_container_offset(object->ce->name, offset, BP_VAR_IS);
+			zend_illegal_container_offset(OBJ_CE(object)->name, offset, BP_VAR_IS);
 			return 0;
 		}
 
@@ -844,7 +844,7 @@ static zval *spl_array_get_property_ptr_ptr(zend_object *object, zend_string *na
 			return NULL;
 		}
 		ZVAL_STR(&member, name);
-		return spl_array_get_dimension_ptr(1, intern, object->ce->name, &member, type);
+		return spl_array_get_dimension_ptr(1, intern, OBJ_CE(object)->name, &member, type);
 	}
 	return zend_std_get_property_ptr_ptr(object, name, type, cache_slot);
 } /* }}} */
@@ -970,7 +970,7 @@ static void spl_array_set_array(zval *object, spl_array_object *intern, zval *ar
 			if (handler != zend_std_get_properties) {
 				zend_throw_exception_ex(spl_ce_InvalidArgumentException, 0,
 					"Overloaded object of type %s is not compatible with %s",
-					ZSTR_VAL(Z_OBJCE_P(array)->name), ZSTR_VAL(intern->std.ce->name));
+					ZSTR_VAL(Z_OBJCE_P(array)->name), ZSTR_VAL(OBJ_CE(&intern->std)->name));
 				return;
 			}
 			zval_ptr_dtor(&intern->array);
@@ -1136,7 +1136,7 @@ static zend_result spl_array_object_count_elements(zend_object *object, zend_lon
 
 	if (intern->fptr_count) {
 		zval rv;
-		zend_call_method_with_0_params(object, intern->std.ce, &intern->fptr_count, "count", &rv);
+		zend_call_method_with_0_params(object, OBJ_CE(&intern->std), &intern->fptr_count, "count", &rv);
 		if (Z_TYPE(rv) != IS_UNDEF) {
 			*count = zval_get_long(&rv);
 			zval_ptr_dtor(&rv);

@@ -29,6 +29,18 @@ class ConcreteIntDefaulted extends AbstractDefaulted {
 class ConcreteStringDefaulted extends AbstractDefaulted<string> {
 }
 
+class ConcretePassthru<T> {
+    public function method(T $param) {
+        var_dump($param);
+    }
+}
+
+class ConcreteDefaulted<T=int> {
+    public function method(T $param) {
+        var_dump($param);
+    }
+}
+
 function test(AbstractTest<int> $test) {
     $test->method(42);
 }
@@ -63,6 +75,40 @@ try {
     echo $e->getMessage(), "\n";
 }
 
+function test4(ConcretePassthru<int> $test) {
+    $test->method(42);
+}
+
+test4(new ConcretePassthru<int>);
+try {
+    test4(new ConcretePassthru<string>);
+} catch (TypeError $e) {
+    echo $e->getMessage(), "\n";
+}
+
+function test5(ConcreteDefaulted $test) {
+    $test->method(42);
+}
+
+function test6(ConcreteDefaulted<int> $test) {
+    $test->method(42);
+}
+
+test5(new ConcreteDefaulted);
+test5(new ConcreteDefaulted<int>);
+test6(new ConcreteDefaulted);
+test6(new ConcreteDefaulted<int>);
+try {
+    test5(new ConcreteDefaulted<string>);
+} catch (TypeError $e) {
+    echo $e->getMessage(), "\n";
+}
+try {
+    test6(new ConcreteDefaulted<string>);
+} catch (TypeError $e) {
+    echo $e->getMessage(), "\n";
+}
+
 ?>
 --EXPECTF--
 int(42)
@@ -73,3 +119,11 @@ int(42)
 int(42)
 test2(): Argument #1 ($test) must be of type AbstractDefaulted, ConcreteStringDefaulted given, called in %s on line %d
 test3(): Argument #1 ($test) must be of type AbstractDefaulted<int>, ConcreteStringDefaulted given, called in %s on line %d
+int(42)
+test4(): Argument #1 ($test) must be of type ConcretePassthru<int>, ConcretePassthru given, called in %s on line %d
+int(42)
+int(42)
+int(42)
+int(42)
+test5(): Argument #1 ($test) must be of type ConcreteDefaulted, ConcreteDefaulted given, called in %s on line %d
+test6(): Argument #1 ($test) must be of type ConcreteDefaulted<int>, ConcreteDefaulted given, called in %s on line %d

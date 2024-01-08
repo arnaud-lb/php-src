@@ -124,7 +124,7 @@ static void spl_ptr_heap_pqueue_elem_ctor(void *elem) { /* {{{ */
 static zend_result spl_ptr_heap_cmp_cb_helper(zval *object, spl_heap_object *heap_object, zval *a, zval *b, zend_long *result) { /* {{{ */
 	zval zresult;
 
-	zend_call_method_with_2_params(Z_OBJ_P(object), heap_object->std.ce, &heap_object->fptr_cmp, "compare", &zresult, a, b);
+	zend_call_method_with_2_params(Z_OBJ_P(object), OBJ_CE(&heap_object->std), &heap_object->fptr_cmp, "compare", &zresult, a, b);
 
 	if (EG(exception)) {
 		return FAILURE;
@@ -475,7 +475,7 @@ static zend_object *spl_heap_object_new(zend_class_entry *class_type) /* {{{ */
 
 static zend_object *spl_heap_object_clone(zend_object *old_object) /* {{{ */
 {
-	zend_object *new_object = spl_heap_object_new_ex(old_object->ce, old_object, 1);
+	zend_object *new_object = spl_heap_object_new_ex(OBJ_CE(old_object), old_object, 1);
 
 	zend_objects_clone_members(new_object, old_object);
 
@@ -489,7 +489,7 @@ static zend_result spl_heap_object_count_elements(zend_object *object, zend_long
 
 	if (intern->fptr_count) {
 		zval rv;
-		zend_call_method_with_0_params(object, intern->std.ce, &intern->fptr_count, "count", &rv);
+		zend_call_method_with_0_params(object, OBJ_CE(&intern->std), &intern->fptr_count, "count", &rv);
 		if (!Z_ISUNDEF(rv)) {
 			*count = zval_get_long(&rv);
 			zval_ptr_dtor(&rv);

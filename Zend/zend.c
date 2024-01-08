@@ -26,6 +26,7 @@
 #include "zend_exceptions.h"
 #include "zend_builtin_functions.h"
 #include "zend_ini.h"
+#include "zend_types.h"
 #include "zend_vm.h"
 #include "zend_dtrace.h"
 #include "zend_virtual_cwd.h"
@@ -556,13 +557,13 @@ static void zend_print_zval_r_to_buf(smart_str *buf, zval *expr, int indent) /* 
 				smart_str_appends(buf, ZSTR_VAL(class_name));
 				zend_string_release_ex(class_name, 0);
 
-				if (!(zobj->ce->ce_flags & ZEND_ACC_ENUM)) {
+				if (!(OBJ_CE(zobj)->ce_flags & ZEND_ACC_ENUM)) {
 					smart_str_appends(buf, " Object\n");
 				} else {
 					smart_str_appends(buf, " Enum");
-					if (zobj->ce->enum_backing_type != IS_UNDEF) {
+					if (OBJ_CE(zobj)->enum_backing_type != IS_UNDEF) {
 						smart_str_appendc(buf, ':');
-						smart_str_appends(buf, zend_get_type_by_const(zobj->ce->enum_backing_type));
+						smart_str_appends(buf, zend_get_type_by_const(OBJ_CE(zobj)->enum_backing_type));
 					}
 					smart_str_appendc(buf, '\n');
 				}

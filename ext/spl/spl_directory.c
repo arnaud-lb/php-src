@@ -379,7 +379,7 @@ static zend_result spl_filesystem_file_open(spl_filesystem_object *intern, bool 
 	intern->u.file.enclosure = '"';
 	intern->u.file.escape = (unsigned char) '\\';
 
-	intern->u.file.func_getCurr = zend_hash_str_find_ptr(&intern->std.ce->function_table, "getcurrentline", sizeof("getcurrentline") - 1);
+	intern->u.file.func_getCurr = zend_hash_str_find_ptr(&OBJ_CE(&intern->std)->function_table, "getcurrentline", sizeof("getcurrentline") - 1);
 
 	return SUCCESS;
 } /* }}} */
@@ -398,7 +398,7 @@ static zend_object *spl_filesystem_object_clone(zend_object *old_object)
 	spl_filesystem_object *source;
 
 	source = spl_filesystem_from_obj(old_object);
-	new_object = spl_filesystem_object_new_ex(old_object->ce);
+	new_object = spl_filesystem_object_new_ex(OBJ_CE(old_object));
 	intern = spl_filesystem_from_obj(new_object);
 
 	intern->flags = source->flags;

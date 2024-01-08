@@ -716,7 +716,7 @@ static inline void phpdbg_handle_exception(void) /* {{{ */
 
 	EG(exception) = NULL;
 
-	zend_call_known_instance_method_with_0_params(ex->ce->__tostring, ex, &tmp);
+	zend_call_known_instance_method_with_0_params(OBJ_CE(ex)->__tostring, ex, &tmp);
 	file = zval_get_string(zend_read_property_ex(zend_get_exception_base(ex), ex, ZSTR_KNOWN(ZEND_STR_FILE), /* silent */ true, &rv));
 	line = zval_get_long(zend_read_property_ex(zend_get_exception_base(ex), ex, ZSTR_KNOWN(ZEND_STR_LINE), /* silent */ true, &rv));
 
@@ -729,7 +729,7 @@ static inline void phpdbg_handle_exception(void) /* {{{ */
 		msg = zval_get_string(zend_read_property_ex(zend_get_exception_base(ex), ex, ZSTR_KNOWN(ZEND_STR_STRING), /* silent */ true, &rv));
 	}
 
-	phpdbg_error("Uncaught %s in %s on line " ZEND_LONG_FMT, ZSTR_VAL(ex->ce->name), ZSTR_VAL(file), line);
+	phpdbg_error("Uncaught %s in %s on line " ZEND_LONG_FMT, ZSTR_VAL(OBJ_CE(ex)->name), ZSTR_VAL(file), line);
 	zend_string_release(file);
 	phpdbg_writeln("%s", ZSTR_VAL(msg));
 	zend_string_release(msg);
@@ -1032,7 +1032,7 @@ PHPDBG_COMMAND(generator) /* {{{ */
 	if (param) {
 		i = param->num;
 		zend_object **obj = EG(objects_store).object_buckets + i;
-		if (i < EG(objects_store).top && *obj && IS_OBJ_VALID(*obj) && (*obj)->ce == zend_ce_generator) {
+		if (i < EG(objects_store).top && *obj && IS_OBJ_VALID(*obj) && OBJ_CE(*obj) == zend_ce_generator) {
 			zend_generator *gen = (zend_generator *) *obj;
 			if (gen->execute_data) {
 				if (zend_generator_get_current(gen)->flags & ZEND_GENERATOR_CURRENTLY_RUNNING) {
@@ -1049,7 +1049,7 @@ PHPDBG_COMMAND(generator) /* {{{ */
 	} else {
 		for (i = 0; i < EG(objects_store).top; i++) {
 			zend_object *obj = EG(objects_store).object_buckets[i];
-			if (obj && IS_OBJ_VALID(obj) && obj->ce == zend_ce_generator) {
+			if (obj && IS_OBJ_VALID(obj) && OBJ_CE(obj) == zend_ce_generator) {
 				zend_generator *gen = (zend_generator *) obj, *current = zend_generator_get_current(gen);
 				if (gen->execute_data) {
 					zend_string *s = phpdbg_compile_stackframe(gen->execute_data);
@@ -1700,7 +1700,7 @@ void phpdbg_execute_ex(zend_execute_data *execute_data) /* {{{ */
 			zend_string *msg = zval_get_string(zend_read_property_ex(zend_get_exception_base(exception), exception, ZSTR_KNOWN(ZEND_STR_MESSAGE), /* silent */ true, &rv));
 
 			phpdbg_error("Uncaught %s in %s on line " ZEND_LONG_FMT ": %.*s",
-				ZSTR_VAL(exception->ce->name), ZSTR_VAL(file), line,
+				ZSTR_VAL(OBJ_NAME(exception)), ZSTR_VAL(file), line,
 				ZSTR_LEN(msg) < 80 ? (int) ZSTR_LEN(msg) : 80, ZSTR_VAL(msg));
 			zend_string_release(msg);
 			zend_string_release(file);

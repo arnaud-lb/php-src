@@ -242,7 +242,7 @@ typedef struct {
 	((uint32_t) (uintptr_t) (t).ptr)
 
 #define ZEND_TYPE_LIST_SIZE(num_types) \
-	(sizeof(zend_type_list) + ((num_types) - 1) * sizeof(zend_type))
+	(sizeof(zend_type_list) + ((ssize_t)(num_types) - 1) * sizeof(zend_type))
 
 /* This iterates over a zend_type_list. */
 #define ZEND_TYPE_LIST_FOREACH(list, type_ptr) do { \
@@ -417,6 +417,9 @@ static const zend_type_list zend_empty_type_list = {0};
 #define ZEND_PNR_GET_NAME(pnr) \
 	(ZEND_PNR_IS_COMPLEX(pnr) ? ZEND_PNR_COMPLEX_GET_NAME(pnr) : ZEND_PNR_SIMPLE_GET_NAME(pnr))
 
+#define ZEND_PNR_GET_ARGS(pnr) \
+	(ZEND_PNR_IS_COMPLEX(pnr) ? &ZEND_PNR_COMPLEX_GET_REF(pnr)->args : &zend_empty_type_list)
+
 #define ZEND_PNR_UNPACK(pnr, name_var, args_var) do { \
 	if (ZEND_PNR_IS_COMPLEX(pnr)) { \
 		zend_name_reference *__ref = ZEND_PNR_COMPLEX_GET_REF(pnr); \
@@ -441,6 +444,7 @@ typedef union _zend_value {
 	zval             *zv;
 	void             *ptr;
 	zend_class_entry *ce;
+	zend_packed_name_reference pnr;
 	zend_function    *func;
 	struct {
 		uint32_t w1;
@@ -672,7 +676,7 @@ typedef struct _HashTableIterator {
 struct _zend_object {
 	zend_refcounted_h gc;
 	uint32_t          handle; // TODO: may be removed ???
-	zend_class_entry *ce;
+	zend_class_reference *cr;
 	const zend_object_handlers *handlers;
 	HashTable        *properties;
 	zval              properties_table[1];
@@ -949,6 +953,9 @@ static zend_always_inline uint32_t zval_gc_info(uint32_t gc_type_info) {
 
 #define OBJ_FLAGS(obj)              GC_FLAGS(obj)
 
+#define OBJ_CE(obj)					(obj)->cr->ce
+#define OBJ_NAME(obj)				OBJ_CE(obj)->name
+
 /* Fast class cache */
 #define ZSTR_HAS_CE_CACHE(s)		(GC_FLAGS(s) & IS_STR_CLASS_NAME_MAP_PTR)
 #define ZSTR_GET_CE_CACHE(s)		ZSTR_GET_CE_CACHE_EX(s, 1)
@@ -1110,8 +1117,11 @@ static zend_always_inline uint32_t zval_gc_info(uint32_t gc_type_info) {
 #define Z_OBJ_HANDLE(zval)          (Z_OBJ((zval)))->handle
 #define Z_OBJ_HANDLE_P(zval_p)      Z_OBJ_HANDLE(*(zval_p))
 
-#define Z_OBJCE(zval)				(Z_OBJ(zval)->ce)
+#define Z_OBJCE(zval)				(Z_OBJ(zval)->cr->ce)
 #define Z_OBJCE_P(zval_p)			Z_OBJCE(*(zval_p))
+
+#define Z_OBJCR(zval)				(Z_OBJ(zval)->cr)
+#define Z_OBJCR_P(zval_p)			Z_OBJCR(*(zval_p))
 
 #define Z_OBJPROP(zval)				Z_OBJ_HT((zval))->get_properties(Z_OBJ(zval))
 #define Z_OBJPROP_P(zval_p)			Z_OBJPROP(*(zval_p))
@@ -1147,6 +1157,9 @@ static zend_always_inline uint32_t zval_gc_info(uint32_t gc_type_info) {
 
 #define Z_CE(zval)					(zval).value.ce
 #define Z_CE_P(zval_p)				Z_CE(*(zval_p))
+
+#define Z_PNR(zval)					(zval).value.pnr
+#define Z_PNR_P(zval_p)				Z_PNR(*(zval_p))
 
 #define Z_FUNC(zval)				(zval).value.func
 #define Z_FUNC_P(zval_p)			Z_FUNC(*(zval_p))
@@ -1362,6 +1375,11 @@ static zend_always_inline uint32_t zval_gc_info(uint32_t gc_type_info) {
 
 #define ZVAL_CE(z, c) do {										\
 		Z_CE_P(z) = (c);										\
+		Z_TYPE_INFO_P(z) = IS_PTR;								\
+	} while (0)
+
+#define ZVAL_PNR(z, c) do {										\
+		Z_PNR_P(z) = (c);										\
 		Z_TYPE_INFO_P(z) = IS_PTR;								\
 	} while (0)
 
