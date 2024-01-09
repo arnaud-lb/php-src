@@ -8270,8 +8270,8 @@ static void zend_compile_generic_params(zend_ast *params_ast)
 	}
 }
 
-zend_class_entry *zend_init_class_entry_header(void *ptr) {
-	zend_class_reference *ref = ptr;
+zend_class_entry *zend_init_class_entry_header(zend_class_entry_storage *ptr) {
+	zend_class_reference *ref = (zend_class_reference*) ptr;
 	zend_class_entry *ce = (zend_class_entry *) ((char *) ptr + ZEND_CLASS_ENTRY_HEADER_SIZE);
 	ref->ce = ce;
 	ref->args.num_types = 0;

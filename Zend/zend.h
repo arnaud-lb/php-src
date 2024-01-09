@@ -253,6 +253,10 @@ struct _zend_class_entry {
 	} info;
 };
 
+typedef char zend_class_entry_storage[ZEND_CLASS_ENTRY_HEADER_SIZE + sizeof(zend_class_entry)];
+
+#define ZEND_CES_TO_CE(ces) ((zend_class_entry*)((char*) (ces) + ZEND_CLASS_ENTRY_HEADER_SIZE))
+
 typedef struct _zend_utility_functions {
 	void (*error_function)(int type, zend_string *error_filename, const uint32_t error_lineno, zend_string *message);
 	size_t (*printf_function)(const char *format, ...) ZEND_ATTRIBUTE_PTR_FORMAT(printf, 1, 2);

@@ -3359,7 +3359,7 @@ ZEND_API int zend_next_free_module(void) /* {{{ */
 
 static zend_class_entry *do_register_internal_class(zend_class_entry *orig_class_entry, uint32_t ce_flags) /* {{{ */
 {
-	void *ref = malloc(sizeof(zend_class_entry) + ZEND_CLASS_ENTRY_HEADER_SIZE);
+	zend_class_entry_storage *ref = (zend_class_entry_storage*) malloc(sizeof(zend_class_entry) + ZEND_CLASS_ENTRY_HEADER_SIZE);
 	zend_class_entry *class_entry = zend_init_class_entry_header(ref);
 	zend_string *lowercase_name;
 	*class_entry = *orig_class_entry;

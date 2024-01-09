@@ -45,10 +45,12 @@ ZEND_API zend_class_entry *zend_ce_division_by_zero_error;
 ZEND_API zend_class_entry *zend_ce_unhandled_match_error;
 
 /* Internal pseudo-exception that is not exposed to userland. Throwing this exception *does not* execute finally blocks. */
-static zend_class_entry zend_ce_unwind_exit;
+static zend_class_entry_storage zend_ces_unwind_exit;
+#define zend_ce_unwind_exit ZEND_CES_TO_CE(zend_ces_unwind_exit)
 
 /* Internal pseudo-exception that is not exposed to userland. Throwing this exception *does* execute finally blocks. */
-static zend_class_entry zend_ce_graceful_exit;
+static zend_class_entry_storage zend_ces_graceful_exit;
+#define zend_ce_graceful_exit ZEND_CES_TO_CE(zend_ces_graceful_exit)
 
 ZEND_API void (*zend_throw_exception_hook)(zend_object *ex);
 
@@ -795,9 +797,11 @@ void zend_register_default_exception(void) /* {{{ */
 	zend_ce_unhandled_match_error = register_class_UnhandledMatchError(zend_ce_error);
 	zend_init_exception_class_entry(zend_ce_unhandled_match_error);
 
-	INIT_CLASS_ENTRY(zend_ce_unwind_exit, "UnwindExit", NULL);
+	INIT_CLASS_ENTRY((*zend_ce_unwind_exit), "UnwindExit", NULL);
+	zend_init_class_entry_header(&zend_ces_unwind_exit);
 
-	INIT_CLASS_ENTRY(zend_ce_graceful_exit, "GracefulExit", NULL);
+	INIT_CLASS_ENTRY((*zend_ce_graceful_exit), "GracefulExit", NULL);
+	zend_init_class_entry_header(&zend_ces_graceful_exit);
 }
 /* }}} */
 
@@ -958,7 +962,7 @@ ZEND_API ZEND_COLD zend_result zend_exception_error(zend_object *ex, int severit
 
 		zend_string_release_ex(str, 0);
 		zend_string_release_ex(file, 0);
-	} else if (ce_exception == &zend_ce_unwind_exit || ce_exception == &zend_ce_graceful_exit) {
+	} else if (ce_exception == zend_ce_unwind_exit || ce_exception == zend_ce_graceful_exit) {
 		/* We successfully unwound, nothing more to do.
 		 * We still return FAILURE in this case, as further execution should still be aborted. */
 	} else {
@@ -1006,12 +1010,12 @@ ZEND_API ZEND_COLD void zend_throw_exception_object(zval *exception) /* {{{ */
 
 ZEND_API ZEND_COLD zend_object *zend_create_unwind_exit(void)
 {
-	return zend_objects_new(&zend_ce_unwind_exit);
+	return zend_objects_new(zend_ce_unwind_exit);
 }
 
 ZEND_API ZEND_COLD zend_object *zend_create_graceful_exit(void)
 {
-	return zend_objects_new(&zend_ce_graceful_exit);
+	return zend_objects_new(zend_ce_graceful_exit);
 }
 
 ZEND_API ZEND_COLD void zend_throw_unwind_exit(void)
@@ -1032,10 +1036,10 @@ ZEND_API ZEND_COLD void zend_throw_graceful_exit(void)
 
 ZEND_API bool zend_is_unwind_exit(const zend_object *ex)
 {
-	return OBJ_CE(ex) == &zend_ce_unwind_exit;
+	return ex->cr == (zend_class_reference*) &zend_ces_unwind_exit;
 }
 
 ZEND_API bool zend_is_graceful_exit(const zend_object *ex)
 {
-	return OBJ_CE(ex) == &zend_ce_graceful_exit;
+	return ex->cr == (zend_class_reference*) &zend_ces_graceful_exit;
 }

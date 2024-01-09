@@ -909,7 +909,7 @@ ZEND_API void pass_two(zend_op_array *op_array);
 ZEND_API bool zend_is_compiling(void);
 ZEND_API char *zend_make_compiled_string_description(const char *name);
 ZEND_API void zend_initialize_class_data(zend_class_entry *ce, bool nullify_handlers);
-zend_class_entry *zend_init_class_entry_header(void *ptr);
+zend_class_entry *zend_init_class_entry_header(zend_class_entry_storage *ptr);
 uint32_t zend_get_class_fetch_type(const zend_string *name);
 ZEND_API uint8_t zend_get_call_op(const zend_op *init_op, zend_function *fbc);
 ZEND_API bool zend_is_smart_branch(const zend_op *opline);
