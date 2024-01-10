@@ -226,6 +226,9 @@ typedef struct {
 #define ZEND_TYPE_PNR_NAME(t) \
 	ZEND_PNR_GET_NAME(ZEND_TYPE_PNR(t))
 
+#define ZEND_TYPE_PNR_KEY(t) \
+	ZEND_PNR_GET_KEY(ZEND_TYPE_PNR(t))
+
 #define ZEND_TYPE_LITERAL_NAME(t) \
 	((const char *) (t).ptr)
 
@@ -377,6 +380,7 @@ typedef struct {
  * a zero-argument reference to itself. */
 typedef struct _zend_class_reference {
 	zend_class_entry *ce;
+	zend_string *key;
 	zend_type_list args;
 } zend_class_reference;
 
@@ -384,10 +388,11 @@ typedef struct _zend_class_reference {
  * This should be structurally the same zend_class_reference to permit in-place resolution. */
 typedef struct _zend_name_reference {
 	zend_string *name;
+	zend_string *key;
 	zend_type_list args;
 } zend_name_reference;
 
-#define ZEND_CLASS_ENTRY_HEADER_SIZE (2 * sizeof(void*))
+#define ZEND_CLASS_ENTRY_HEADER_SIZE (3 * sizeof(void*))
 
 #define ZEND_CE_TO_REF(ce) \
 	((zend_class_reference *) ((char *) (ce) - ZEND_CLASS_ENTRY_HEADER_SIZE))
@@ -410,6 +415,7 @@ static const zend_type_list zend_empty_type_list = {0};
 #define ZEND_PNR_SIMPLE_GET_NAME(pnr) ((zend_string *) (pnr))
 #define ZEND_PNR_COMPLEX_GET_REF(pnr) ((zend_name_reference *) (pnr - 1))
 #define ZEND_PNR_COMPLEX_GET_NAME(pnr) ZEND_PNR_COMPLEX_GET_REF(pnr)->name
+#define ZEND_PNR_COMPLEX_GET_KEY(pnr) ZEND_PNR_COMPLEX_GET_REF(pnr)->key
 
 #define ZEND_PNR_ENCODE_NAME(name) ((uintptr_t) (name))
 #define ZEND_PNR_ENCODE_REF(ref) ((uintptr_t) (ref) + 1)
@@ -431,6 +437,17 @@ static const zend_type_list zend_empty_type_list = {0};
 	} \
 } while (0)
 
+#define ZEND_PNR_UNPACK_NAME_KEY(pnr, name_var, key_var) do { \
+	if (ZEND_PNR_IS_COMPLEX(pnr)) { \
+		zend_name_reference *__ref = ZEND_PNR_COMPLEX_GET_REF(pnr); \
+		(name_var) = __ref->name; \
+		(key_var) = __ref->key; \
+	} else { \
+		(name_var) = ZEND_PNR_SIMPLE_GET_NAME(pnr); \
+		(key_var) = NULL; \
+	} \
+} while (0)
+
 typedef union _zend_value {
 	zend_long         lval;				/* long value */
 	double            dval;				/* double value */
@@ -444,6 +461,7 @@ typedef union _zend_value {
 	zval             *zv;
 	void             *ptr;
 	zend_class_entry *ce;
+	zend_class_reference *cr;
 	zend_packed_name_reference pnr;
 	zend_function    *func;
 	struct {
@@ -974,10 +992,10 @@ static zend_always_inline uint32_t zval_gc_info(uint32_t gc_type_info) {
 	} while (0)
 
 #define GET_CE_CACHE(ce_cache) \
-	(*(zend_class_entry **)ZEND_MAP_PTR_OFFSET2PTR(ce_cache))
+	(*(zend_class_reference **)ZEND_MAP_PTR_OFFSET2PTR(ce_cache))
 
 #define SET_CE_CACHE(ce_cache, ce) do { \
-		*((zend_class_entry **)ZEND_MAP_PTR_OFFSET2PTR(ce_cache)) = ce; \
+		*((zend_class_reference **)ZEND_MAP_PTR_OFFSET2PTR(ce_cache)) = ce; \
 	} while (0)
 
 /* Recursion protection macros must be used only for arrays and objects */
@@ -1157,6 +1175,9 @@ static zend_always_inline uint32_t zval_gc_info(uint32_t gc_type_info) {
 
 #define Z_CE(zval)					(zval).value.ce
 #define Z_CE_P(zval_p)				Z_CE(*(zval_p))
+
+#define Z_CR(zval)					(zval).value.cr
+#define Z_CR_P(zval_p)				Z_CR(*(zval_p))
 
 #define Z_PNR(zval)					(zval).value.pnr
 #define Z_PNR_P(zval_p)				Z_PNR(*(zval_p))

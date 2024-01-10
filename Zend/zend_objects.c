@@ -93,11 +93,6 @@ ZEND_API void zend_object_std_dtor(zend_object *object)
 	if (UNEXPECTED(GC_FLAGS(object) & IS_OBJ_WEAKLY_REFERENCED)) {
 		zend_weakrefs_notify(object);
 	}
-
-	if (UNEXPECTED(!ZEND_REF_IS_TRIVIAL(object->cr))) {
-		// TODO
-		efree(object->cr);
-	}
 }
 
 ZEND_API void zend_objects_destroy_object(zend_object *object)

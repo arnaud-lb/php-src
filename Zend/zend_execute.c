@@ -987,8 +987,11 @@ static zend_always_inline const zend_class_entry *zend_ce_from_type(
 	ZEND_ASSERT(ZEND_TYPE_HAS_PNR(*type));
 	zend_string *name = ZEND_TYPE_PNR_NAME(*type);
 	if (ZSTR_HAS_CE_CACHE(name)) {
-		zend_class_entry *ce = ZSTR_GET_CE_CACHE(name);
-		if (!ce) {
+		zend_class_entry *ce;
+		zend_class_reference *class_ref = ZSTR_GET_CE_CACHE(name);
+		if (class_ref) {
+			ce = class_ref->ce;
+		} else {
 			ce = zend_lookup_class_ex(name, NULL, ZEND_FETCH_CLASS_NO_AUTOLOAD);
 		}
 		return ce;
@@ -1230,9 +1233,12 @@ static zend_always_inline zend_class_entry *zend_fetch_ce_from_cache_slot(
 
 	zend_string *name = ZEND_TYPE_PNR_NAME(*type);
 	zend_class_entry *ce;
+
 	if (ZSTR_HAS_CE_CACHE(name)) {
-		ce = ZSTR_GET_CE_CACHE(name);
-		if (!ce) {
+		zend_class_reference *class_ref = ZSTR_GET_CE_CACHE(name);
+		if (class_ref) {
+			ce = class_ref->ce;
+		} else {
 			ce = zend_lookup_class_ex(name, NULL, ZEND_FETCH_CLASS_NO_AUTOLOAD);
 			if (UNEXPECTED(!ce)) {
 				/* Cannot resolve */

@@ -24,6 +24,8 @@
 #include "zend_builtin_functions.h"
 #include "zend_interfaces.h"
 #include "zend_exceptions.h"
+#include "zend_operators.h"
+#include "zend_string.h"
 #include "zend_types.h"
 #include "zend_vm.h"
 #include "zend_dtrace.h"
@@ -798,10 +800,12 @@ void zend_register_default_exception(void) /* {{{ */
 	zend_init_exception_class_entry(zend_ce_unhandled_match_error);
 
 	INIT_CLASS_ENTRY((*zend_ce_unwind_exit), "UnwindExit", NULL);
-	zend_init_class_entry_header(&zend_ces_unwind_exit);
+	zend_init_class_entry_header(&zend_ces_unwind_exit,
+			zend_new_interned_string(zend_string_tolower_ex(zend_ce_unwind_exit->name, true)));
 
 	INIT_CLASS_ENTRY((*zend_ce_graceful_exit), "GracefulExit", NULL);
-	zend_init_class_entry_header(&zend_ces_graceful_exit);
+	zend_init_class_entry_header(&zend_ces_graceful_exit,
+			zend_new_interned_string(zend_string_tolower_ex(zend_ce_graceful_exit->name, true)));
 }
 /* }}} */
 

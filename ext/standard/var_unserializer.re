@@ -1186,8 +1186,9 @@ object ":" uiv ":" ["]	{
 		zend_string *lc_name;
 
 		if (!(*var_hash)->allowed_classes && ZSTR_HAS_CE_CACHE(class_name)) {
-			ce = ZSTR_GET_CE_CACHE(class_name);
-			if (ce) {
+			zend_class_reference *class_ref = ZSTR_GET_CE_CACHE(class_name);
+			if (class_ref) {
+				ce = class_ref->ce;
 				break;
 			}
 		}
@@ -1205,8 +1206,8 @@ object ":" uiv ":" ["]	{
 		}
 
 		if ((*var_hash)->allowed_classes && ZSTR_HAS_CE_CACHE(class_name)) {
-			ce = ZSTR_GET_CE_CACHE(class_name);
-			if (ce) {
+			zend_class_reference *class_ref = ZSTR_GET_CE_CACHE(class_name);
+			if (class_ref) {
 				zend_string_release_ex(lc_name, 0);
 				break;
 			}

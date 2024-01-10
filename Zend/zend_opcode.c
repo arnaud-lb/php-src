@@ -29,6 +29,7 @@
 #include "zend_constants.h"
 #include "zend_observer.h"
 
+#include "zend_types.h"
 #include "zend_vm.h"
 
 static void zend_extension_op_array_ctor_handler(zend_extension *extension, zend_op_array *op_array)
@@ -309,6 +310,15 @@ ZEND_API void zend_cleanup_mutable_class_data(zend_class_entry *ce)
 	}
 }
 
+ZEND_API void destroy_zend_class_reference(zval *zv)
+{
+	zend_class_reference *class_ref = Z_CR_P(zv);
+
+	ZEND_ASSERT(!ZEND_REF_IS_TRIVIAL(class_ref));
+
+	efree(class_ref);
+}
+
 ZEND_API void destroy_zend_class(zval *zv)
 {
 	zend_property_info *prop_info;
@@ -352,6 +362,8 @@ ZEND_API void destroy_zend_class(zval *zv)
 	if (--ce->refcount > 0) {
 		return;
 	}
+
+	zend_string_release(ZEND_CE_TO_REF(ce)->key);
 
 	switch (ce->type) {
 		case ZEND_USER_CLASS:

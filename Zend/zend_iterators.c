@@ -59,7 +59,8 @@ ZEND_API void zend_register_iterator_wrapper(void)
 {
 	INIT_CLASS_ENTRY((*zend_iterator_class_entry), "__iterator_wrapper", NULL);
 	zend_iterator_class_entry->default_object_handlers = &iterator_object_handlers;
-	zend_init_class_entry_header(&zend_iterator_class_entry_storage);
+	zend_init_class_entry_header(&zend_iterator_class_entry_storage,
+			zend_new_interned_string(zend_string_tolower_ex(zend_iterator_class_entry->name, true)));
 }
 
 static void iter_wrapper_free(zend_object *object)

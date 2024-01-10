@@ -31,6 +31,7 @@
 #include "zend_accelerator_blacklist.h"
 #include "zend_list.h"
 #include "zend_execute.h"
+#include "zend_types.h"
 #include "zend_vm.h"
 #include "zend_inheritance.h"
 #include "zend_exceptions.h"
@@ -2290,7 +2291,7 @@ static zend_class_entry* zend_accel_inheritance_cache_get(zend_class_entry *ce, 
 				}
 				ce = entry->ce;
 				if (ZSTR_HAS_CE_CACHE(ce->name)) {
-					ZSTR_SET_CE_CACHE_EX(ce->name, ce, 0);
+					ZSTR_SET_CE_CACHE_EX(ce->name, ZEND_CE_TO_REF(ce), 0);
 				}
 				return ce;
 			}

@@ -1746,8 +1746,11 @@ ZEND_API void object_properties_load(zend_object *object, HashTable *properties)
 }
 /* }}} */
 
-ZEND_API zend_class_reference *zend_build_class_reference(zend_class_entry *ce, const zend_type_list *type_args)
+ZEND_API zend_class_reference *zend_build_class_reference(zend_name_reference *name_ref, zend_class_entry *ce)
 {
+	const zend_type_list *type_args = &name_ref->args;
+	zend_string *key = name_ref->key;
+
 	if (UNEXPECTED(type_args->num_types > ce->num_generic_params)) {
 		zend_throw_error(zend_ce_argument_count_error,
 				"Class %s expects %s %d generic argument%s, but %d provided",
@@ -1768,9 +1771,9 @@ ZEND_API zend_class_reference *zend_build_class_reference(zend_class_entry *ce, 
 		return NULL;
 	}
 
-	// TODO: re-use class references
 	zend_class_reference *class_ref = emalloc(ZEND_CLASS_REF_SIZE(ce->num_generic_params));
 	class_ref->ce = ce;
+	class_ref->key = key;
 
 	uint8_t param_id = 0;
 
@@ -1784,6 +1787,11 @@ ZEND_API zend_class_reference *zend_build_class_reference(zend_class_entry *ce, 
 	}
 
 	class_ref->args.num_types = param_id;
+
+	if (ZSTR_HAS_CE_CACHE(key) && ZSTR_VALID_CE_CACHE(key) &&
+			(!CG(in_compilation) || (ce->ce_flags & ZEND_ACC_IMMUTABLE))) {
+		ZSTR_SET_CE_CACHE(key, class_ref);
+	}
 
 	return class_ref;
 }
@@ -3360,8 +3368,11 @@ ZEND_API int zend_next_free_module(void) /* {{{ */
 static zend_class_entry *do_register_internal_class(zend_class_entry *orig_class_entry, uint32_t ce_flags) /* {{{ */
 {
 	zend_class_entry_storage *ref = (zend_class_entry_storage*) malloc(sizeof(zend_class_entry) + ZEND_CLASS_ENTRY_HEADER_SIZE);
-	zend_class_entry *class_entry = zend_init_class_entry_header(ref);
-	zend_string *lowercase_name;
+
+	zend_string *lowercase_name = zend_string_tolower_ex(orig_class_entry->name, EG(current_module)->type == MODULE_PERSISTENT);
+	lowercase_name = zend_new_interned_string(lowercase_name);
+
+	zend_class_entry *class_entry = zend_init_class_entry_header(ref, lowercase_name);
 	*class_entry = *orig_class_entry;
 
 	class_entry->type = ZEND_INTERNAL_CLASS;
@@ -3374,10 +3385,7 @@ static zend_class_entry *do_register_internal_class(zend_class_entry *orig_class
 		zend_register_functions(class_entry, class_entry->info.internal.builtin_functions, &class_entry->function_table, EG(current_module)->type);
 	}
 
-	lowercase_name = zend_string_tolower_ex(orig_class_entry->name, EG(current_module)->type == MODULE_PERSISTENT);
-	lowercase_name = zend_new_interned_string(lowercase_name);
 	zend_hash_update_ptr(CG(class_table), lowercase_name, class_entry);
-	zend_string_release_ex(lowercase_name, 1);
 
 	if (class_entry->__tostring && !zend_string_equals_literal(class_entry->name, "Stringable")
 			&& !(class_entry->ce_flags & ZEND_ACC_TRAIT)) {
@@ -3803,7 +3811,8 @@ static zend_always_inline bool zend_is_callable_check_func(zval *callable, zend_
 
 		cname = zend_string_init_interned(Z_STRVAL_P(callable), clen, 0);
 		if (ZSTR_HAS_CE_CACHE(cname) && ZSTR_GET_CE_CACHE(cname)) {
-			fcc->calling_scope = ZSTR_GET_CE_CACHE(cname);
+			zend_class_reference *class_ref = ZSTR_GET_CE_CACHE(cname);
+			fcc->calling_scope = class_ref->ce;
 			if (scope && !fcc->object) {
 				zend_object *object = zend_get_this_object(frame);
 

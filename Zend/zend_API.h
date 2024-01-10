@@ -538,7 +538,7 @@ ZEND_API zend_result object_and_properties_init(zval *arg, zend_class_reference 
 ZEND_API void object_properties_init(zend_object *object, zend_class_entry *class_type);
 ZEND_API void object_properties_init_ex(zend_object *object, HashTable *properties);
 ZEND_API void object_properties_load(zend_object *object, HashTable *properties);
-ZEND_API zend_class_reference *zend_build_class_reference(zend_class_entry *ce, const zend_type_list *type_args);
+ZEND_API zend_class_reference *zend_build_class_reference(zend_name_reference *name_ref, zend_class_entry *ce);
 
 ZEND_API void zend_merge_properties(zval *obj, HashTable *properties);
 

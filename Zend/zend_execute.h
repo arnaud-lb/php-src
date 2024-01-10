@@ -390,6 +390,8 @@ ZEND_API ZEND_NORETURN void ZEND_FASTCALL zend_timeout(void);
 ZEND_API zend_class_entry *zend_fetch_class(zend_string *class_name, uint32_t fetch_type);
 ZEND_API zend_class_entry *zend_fetch_class_with_scope(zend_string *class_name, uint32_t fetch_type, zend_class_entry *scope);
 ZEND_API zend_class_entry *zend_fetch_class_by_name(zend_string *class_name, zend_string *lcname, uint32_t fetch_type);
+ZEND_API zend_class_reference *zend_fetch_generic_class_by_ref(zend_name_reference *name_ref, zend_string *base_key, uint32_t fetch_type);
+ZEND_API zend_class_reference *zend_register_generic_class(zend_name_reference *name_ref, zend_class_entry *ce);
 
 ZEND_API zend_function * ZEND_FASTCALL zend_fetch_function(zend_string *name);
 ZEND_API zend_function * ZEND_FASTCALL zend_fetch_function_str(const char *name, size_t len);

@@ -307,8 +307,10 @@ ZEND_API zval *zend_get_class_constant_ex(zend_string *class_name, zend_string *
 	zval *ret_constant = NULL;
 
 	if (ZSTR_HAS_CE_CACHE(class_name)) {
-		ce = ZSTR_GET_CE_CACHE(class_name);
-		if (!ce) {
+		zend_class_reference *class_ref = ZSTR_GET_CE_CACHE(class_name);
+		if (class_ref) {
+			ce = class_ref->ce;
+		} else {
 			ce = zend_fetch_class(class_name, flags);
 		}
 	} else if (zend_string_equals_literal_ci(class_name, "self")) {

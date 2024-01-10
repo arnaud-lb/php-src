@@ -5774,28 +5774,40 @@ ZEND_VM_HANDLER(68, ZEND_NEW, UNUSED|CLASS_FETCH|CONST|VAR, UNUSED|CACHE_SLOT, N
 
 	SAVE_OPLINE();
 	if (OP1_TYPE == IS_CONST) {
-		zend_class_entry *ce = CACHED_PTR(opline->op2.num);
-		zend_string *name;
-		const zend_type_list *type_args;
-		ZEND_PNR_UNPACK(Z_PNR_P(RT_CONSTANT(opline, opline->op1)), name, type_args);
-		if (UNEXPECTED(ce == NULL)) {
-			// TODO: pre-compute lower case name
-			ce = zend_fetch_class_by_name(name, NULL, ZEND_FETCH_CLASS_DEFAULT | ZEND_FETCH_CLASS_EXCEPTION);
-			if (UNEXPECTED(ce == NULL)) {
-				ZVAL_UNDEF(EX_VAR(opline->result.var));
-				HANDLE_EXCEPTION();
-			}
-			CACHE_PTR(opline->op2.num, ce);
-		}
-
-		if (EXPECTED(ce->num_generic_params == 0 && type_args == &zend_empty_type_list)) {
-			class_ref = ZEND_CE_TO_REF(ce);
-		} else {
-			// TODO: re-use class references
-			class_ref = zend_build_class_reference(ce, type_args);
+		zend_packed_name_reference pnr = Z_PNR_P(RT_CONSTANT(opline, opline->op1));
+		// TODO: specialize handler?
+		if (EXPECTED(ZEND_PNR_IS_SIMPLE(pnr))) {
+			class_ref = CACHED_PTR(opline->op2.num);
 			if (UNEXPECTED(class_ref == NULL)) {
-				ZVAL_UNDEF(EX_VAR(opline->result.var));
-				HANDLE_EXCEPTION();
+				zend_class_entry *ce = zend_fetch_class_by_name(ZEND_PNR_SIMPLE_GET_NAME(pnr), Z_STR_P(RT_CONSTANT(opline, opline->op1) + 1), ZEND_FETCH_CLASS_DEFAULT | ZEND_FETCH_CLASS_EXCEPTION);
+				if (UNEXPECTED(ce == NULL)) {
+					ZVAL_UNDEF(EX_VAR(opline->result.var));
+					HANDLE_EXCEPTION();
+				}
+				if (UNEXPECTED(ce->num_generic_params != 0)) {
+					zend_name_reference ref = {
+						.name = ZEND_PNR_SIMPLE_GET_NAME(pnr),
+						.key = Z_STR_P(RT_CONSTANT(opline, opline->op1) + 1),
+					};
+					class_ref = zend_fetch_generic_class_by_ref(&ref, Z_STR_P(RT_CONSTANT(opline, opline->op1) + 1), ZEND_FETCH_CLASS_DEFAULT | ZEND_FETCH_CLASS_EXCEPTION);
+					if (UNEXPECTED(class_ref == NULL)) {
+						ZVAL_UNDEF(EX_VAR(opline->result.var));
+						HANDLE_EXCEPTION();
+					}
+				} else {
+					class_ref = ZEND_CE_TO_REF(ce);
+				}
+				CACHE_PTR(opline->op2.num, class_ref);
+			}
+		} else {
+			class_ref = CACHED_PTR(opline->op2.num);
+			if (UNEXPECTED(class_ref == NULL)) {
+				class_ref = zend_fetch_generic_class_by_ref(ZEND_PNR_COMPLEX_GET_REF(pnr), Z_STR_P(RT_CONSTANT(opline, opline->op1) + 1), ZEND_FETCH_CLASS_DEFAULT | ZEND_FETCH_CLASS_EXCEPTION);
+				if (UNEXPECTED(class_ref == NULL)) {
+					ZVAL_UNDEF(EX_VAR(opline->result.var));
+					HANDLE_EXCEPTION();
+				}
+				CACHE_PTR(opline->op2.num, class_ref);
 			}
 		}
 	} else if (OP1_TYPE == IS_UNUSED) {

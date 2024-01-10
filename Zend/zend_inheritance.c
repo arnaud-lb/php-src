@@ -30,6 +30,7 @@
 #include "zend_attributes.h"
 #include "zend_constants.h"
 #include "zend_observer.h"
+#include "zend_types.h"
 
 ZEND_API zend_class_entry* (*zend_inheritance_cache_get)(zend_class_entry *ce, zend_class_entry *parent, zend_class_entry **traits_and_interfaces) = NULL;
 ZEND_API zend_class_entry* (*zend_inheritance_cache_add)(zend_class_entry *ce, zend_class_entry *proto, zend_class_entry *parent, zend_class_entry **traits_and_interfaces, HashTable *dependencies) = NULL;
@@ -3422,7 +3423,7 @@ ZEND_API zend_class_entry *zend_do_link_class(zend_class_entry *ce, zend_string 
 	}
 
 	if (ZSTR_HAS_CE_CACHE(ce->name)) {
-		ZSTR_SET_CE_CACHE(ce->name, ce);
+		ZSTR_SET_CE_CACHE(ce->name, ZEND_CE_TO_REF(ce));
 	}
 
 	return ce;
@@ -3617,7 +3618,7 @@ ZEND_API zend_class_entry *zend_try_early_bind(zend_class_entry *ce, zend_class_
 		}
 
 		if (ZSTR_HAS_CE_CACHE(ce->name)) {
-			ZSTR_SET_CE_CACHE(ce->name, ce);
+			ZSTR_SET_CE_CACHE(ce->name, ZEND_CE_TO_REF(ce));
 		}
 		zend_observer_class_linked_notify(ce, lcname);
 

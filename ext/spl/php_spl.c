@@ -14,6 +14,7 @@
    +----------------------------------------------------------------------+
  */
 
+#include "zend_types.h"
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -449,7 +450,8 @@ static zend_class_entry *spl_perform_autoload(zend_string *class_name, zend_stri
 		}
 
 		if (ZSTR_HAS_CE_CACHE(class_name) &&  ZSTR_GET_CE_CACHE(class_name)) {
-			return (zend_class_entry*)ZSTR_GET_CE_CACHE(class_name);
+			zend_class_reference *class_ref = ZSTR_GET_CE_CACHE(class_name);
+			return class_ref ? class_ref->ce : NULL;
 		} else {
 			zend_class_entry *ce = zend_hash_find_ptr(EG(class_table), lc_name);
 			if (ce) {

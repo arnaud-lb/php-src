@@ -996,8 +996,9 @@ static inline void class_exists_impl(INTERNAL_FUNCTION_PARAMETERS, int flags, in
 	ZEND_PARSE_PARAMETERS_END();
 
 	if (ZSTR_HAS_CE_CACHE(name)) {
-		ce = ZSTR_GET_CE_CACHE(name);
-		if (ce) {
+		zend_class_reference *class_ref = ZSTR_GET_CE_CACHE(name);
+		if (class_ref) {
+			ce = class_ref->ce;
 			RETURN_BOOL(((ce->ce_flags & flags) == flags) && !(ce->ce_flags & skip_flags));
 		}
 	}

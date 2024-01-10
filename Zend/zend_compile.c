@@ -633,6 +633,24 @@ static int zend_add_class_name_literal(zend_string *name) /* {{{ */
 }
 /* }}} */
 
+static int zend_add_pnr_literal(zend_packed_name_reference pnr) /* {{{ */
+{
+	zend_string *name = ZEND_PNR_GET_NAME(pnr);
+
+	zval zpnr;
+	ZVAL_PNR(&zpnr, pnr);
+
+	/* Original PNR */
+	int ret = zend_add_literal(&zpnr);
+
+	/* Lowercased name */
+	zend_string *lc_name = zend_string_tolower(name);
+	zend_add_literal_string(&lc_name);
+
+	return ret;
+}
+/* }}} */
+
 static int zend_add_const_name_literal(zend_string *name, bool unqualified) /* {{{ */
 {
 	zend_string *tmp_name;
@@ -1517,6 +1535,105 @@ zend_string *zend_type_to_string_resolved(zend_type type, const zend_class_entry
 	return zend_type_to_string_impl(type, scope, 1);
 }
 
+#define zend_type_to_key_append_separator() \
+	if (smart_str_get_len(key) != orig_len) { \
+		smart_str_appendc(key, '|'); \
+	}
+
+static void zend_type_to_key_impl(smart_str *key, zend_type type) {
+	size_t orig_len = smart_str_get_len(key);
+
+	if (ZEND_TYPE_IS_INTERSECTION(type)) {
+		zend_type *list_type;
+		ZEND_TYPE_LIST_FOREACH(ZEND_TYPE_LIST(type), list_type) {
+			smart_str_appendc(key, '&');
+			zend_type_to_key_impl(key, *list_type);
+		} ZEND_TYPE_LIST_FOREACH_END();
+		ZEND_ASSERT(!ZEND_TYPE_PURE_MASK(type));
+		return;
+	} else if (ZEND_TYPE_HAS_LIST(type)) {
+		/* A union type might not be a list */
+		zend_type *list_type;
+		ZEND_TYPE_LIST_FOREACH(ZEND_TYPE_LIST(type), list_type) {
+			smart_str_appendc(key, '|');
+			zend_type_to_key_impl(key, *list_type);
+		} ZEND_TYPE_LIST_FOREACH_END();
+	} else if (ZEND_TYPE_HAS_PNR(type)) {
+		zend_packed_name_reference pnr = ZEND_TYPE_PNR(type);
+		if (ZEND_PNR_IS_SIMPLE(pnr)) {
+			zend_string *lcname = zend_string_tolower(ZEND_PNR_SIMPLE_GET_NAME(pnr));
+			smart_str_append(key, lcname);
+			zend_string_release(lcname);
+		} else {
+			smart_str_append(key, ZEND_PNR_COMPLEX_GET_KEY(pnr));
+		}
+	} else if (ZEND_TYPE_HAS_CLASS_REF(type)) {
+		zend_class_reference *ce_ref = ZEND_TYPE_CLASS_REF(type);
+		smart_str_append(key, ce_ref->key);
+	} else if (ZEND_TYPE_HAS_GENERIC_PARAM(type)) {
+		uint32_t generic_param_id = ZEND_TYPE_GENERIC_PARAM_ID(type);
+		smart_str_appendc(key, 0);
+		smart_str_appendl(key, (char*)&generic_param_id, sizeof(generic_param_id));
+	}
+
+	uint32_t type_mask = ZEND_TYPE_PURE_MASK(type);
+
+	if (type_mask == MAY_BE_ANY) {
+		smart_str_setl(key, ZSTR_VAL(ZSTR_KNOWN(ZEND_STR_MIXED)), ZSTR_LEN(ZSTR_KNOWN(ZEND_STR_MIXED)));
+		return;
+	}
+	if (type_mask & MAY_BE_STATIC) {
+		ZEND_ASSERT(0 && "Unsupported yet");
+	}
+	if (type_mask & MAY_BE_CALLABLE) {
+		zend_type_to_key_append_separator();
+		smart_str_append(key, ZSTR_KNOWN(ZEND_STR_CALLABLE));
+	}
+	if (type_mask & MAY_BE_OBJECT) {
+		zend_type_to_key_append_separator();
+		smart_str_append(key, ZSTR_KNOWN(ZEND_STR_OBJECT));
+	}
+	if (type_mask & MAY_BE_ARRAY) {
+		zend_type_to_key_append_separator();
+		smart_str_append(key, ZSTR_KNOWN(ZEND_STR_ARRAY));
+	}
+	if (type_mask & MAY_BE_STRING) {
+		zend_type_to_key_append_separator();
+		smart_str_append(key, ZSTR_KNOWN(ZEND_STR_STRING));
+	}
+	if (type_mask & MAY_BE_LONG) {
+		zend_type_to_key_append_separator();
+		smart_str_append(key, ZSTR_KNOWN(ZEND_STR_INT));
+	}
+	if (type_mask & MAY_BE_DOUBLE) {
+		zend_type_to_key_append_separator();
+		smart_str_append(key, ZSTR_KNOWN(ZEND_STR_FLOAT));
+	}
+	if ((type_mask & MAY_BE_BOOL) == MAY_BE_BOOL) {
+		zend_type_to_key_append_separator();
+		smart_str_append(key, ZSTR_KNOWN(ZEND_STR_BOOL));
+	} else if (type_mask & MAY_BE_FALSE) {
+		zend_type_to_key_append_separator();
+		smart_str_append(key, ZSTR_KNOWN(ZEND_STR_FALSE));
+	} else if (type_mask & MAY_BE_TRUE) {
+		zend_type_to_key_append_separator();
+		smart_str_append(key, ZSTR_KNOWN(ZEND_STR_TRUE));
+	}
+	if (type_mask & MAY_BE_VOID) {
+		zend_type_to_key_append_separator();
+		smart_str_append(key, ZSTR_KNOWN(ZEND_STR_VOID));
+	}
+	if (type_mask & MAY_BE_NEVER) {
+		zend_type_to_key_append_separator();
+		smart_str_append(key, ZSTR_KNOWN(ZEND_STR_NEVER));
+	}
+
+	if (type_mask & MAY_BE_NULL) {
+		zend_type_to_key_append_separator();
+		smart_str_append(key, ZSTR_KNOWN(ZEND_STR_NULL_LOWERCASE));
+	}
+}
+
 static bool is_generator_compatible_class_type(zend_string *name) {
 	return zend_string_equals_ci(name, ZSTR_KNOWN(ZEND_STR_TRAVERSABLE))
 		|| zend_string_equals_literal_ci(name, "Iterator")
@@ -1780,13 +1897,27 @@ static zend_name_reference *zend_compile_name_reference(
 	size_t alloc_size = ZEND_CLASS_REF_SIZE(num_types);
 	zend_name_reference *ref = zend_arena_alloc(&CG(arena), alloc_size);
 	ref->name = name;
-	ref->args.num_types = num_types;
-	if (list) {
+	if (num_types == 0) {
+		ref->key = zend_new_interned_string(zend_string_tolower(name));
+	} else {
+		ZEND_ASSERT(list);
+		smart_str key = {0};
+		zend_string *lcname = zend_string_tolower(name);
+		smart_str_append(&key, lcname);
+		zend_string_release(lcname);
+		smart_str_appendc(&key, '<');
 		for (uint32_t i = 0; i < num_types; i++) {
+			if (i != 0) {
+				smart_str_appendc(&key, ',');
+			}
 			zend_ast *type_ast = list->child[i];
 			ref->args.types[i] = zend_compile_typename(type_ast);
+			zend_type_to_key_impl(&key, ref->args.types[i]);
 		}
+		smart_str_appendc(&key, '>');
+		ref->key = zend_new_interned_string(smart_str_extract(&key));
 	}
+	ref->args.num_types = num_types;
 	return ref;
 }
 
@@ -4999,10 +5130,14 @@ static void zend_compile_new(znode *result, zend_ast *ast) /* {{{ */
 		zend_compile_class_ref_ex(&class_node, class_ast, ZEND_FETCH_CLASS_EXCEPTION);
 	}
 
-	opline = zend_emit_op(result, ZEND_NEW, &class_node, NULL);
+	opline = zend_emit_op(result, ZEND_NEW, NULL, NULL);
 
 	if (class_node.op_type == IS_CONST) {
+		opline->op1_type = IS_CONST;
+		opline->op1.constant = zend_add_pnr_literal(Z_PNR(class_node.u.constant));
 		opline->op2.num = zend_alloc_cache_slot();
+	} else {
+		SET_NODE(opline->op1, &class_node);
 	}
 
 	zend_compile_call_common(&ctor_result, args_ast, NULL, ast->lineno);
@@ -8270,10 +8405,11 @@ static void zend_compile_generic_params(zend_ast *params_ast)
 	}
 }
 
-zend_class_entry *zend_init_class_entry_header(zend_class_entry_storage *ptr) {
+zend_class_entry *zend_init_class_entry_header(zend_class_entry_storage *ptr, zend_string *key) {
 	zend_class_reference *ref = (zend_class_reference*) ptr;
 	zend_class_entry *ce = (zend_class_entry *) ((char *) ptr + ZEND_CLASS_ENTRY_HEADER_SIZE);
 	ref->ce = ce;
+	ref->key = key;
 	ref->args.num_types = 0;
 	return ce;
 }
@@ -8287,7 +8423,6 @@ static void zend_compile_class_decl(znode *result, zend_ast *ast, bool toplevel)
 	zend_string *name, *lcname;
 	void *ce_ref = zend_arena_alloc(&CG(arena),
 		sizeof(zend_class_entry) + ZEND_CLASS_ENTRY_HEADER_SIZE);
-	zend_class_entry *ce = zend_init_class_entry_header(ce_ref);
 	zend_op *opline;
 
 	zend_class_entry *original_ce = CG(active_class_entry);
@@ -8327,6 +8462,8 @@ static void zend_compile_class_decl(znode *result, zend_ast *ast, bool toplevel)
 	}
 	lcname = zend_new_interned_string(lcname);
 
+	zend_class_entry *ce = zend_init_class_entry_header(ce_ref, lcname);
+
 	ce->type = ZEND_USER_CLASS;
 	ce->name = name;
 	zend_initialize_class_data(ce, 1);
@@ -8360,6 +8497,11 @@ static void zend_compile_class_decl(znode *result, zend_ast *ast, bool toplevel)
 		zend_ast *generic_params_ast = decl->child[4];
 		if (generic_params_ast) {
 			zend_compile_generic_params(generic_params_ast);
+		}
+
+		if (!(decl->flags & ZEND_ACC_ANON_CLASS) &&
+				ce->num_generic_params > 0 && ce->num_required_generic_params == 0) {
+			zend_alloc_ce_cache(ZEND_CE_TO_REF(ce)->key);
 		}
 	}
 
