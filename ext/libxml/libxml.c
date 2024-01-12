@@ -15,6 +15,7 @@
    +----------------------------------------------------------------------+
  */
 
+#include "zend_API.h"
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -1258,10 +1259,7 @@ PHP_LIBXML_API xmlNodePtr php_libxml_import_node(zval *object)
 	php_libxml_func_handler *export_hnd;
 
 	if (Z_TYPE_P(object) == IS_OBJECT) {
-		ce = Z_OBJCE_P(object);
-		while (ce->parent != NULL) {
-			ce = ce->parent;
-		}
+		ce = zend_class_entry_get_root(Z_OBJCE_P(object));
 		if ((export_hnd = zend_hash_find_ptr(&php_libxml_exports, ce->name))) {
 			node = export_hnd->export_func(object);
 		}

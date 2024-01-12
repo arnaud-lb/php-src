@@ -18,6 +18,7 @@
    +----------------------------------------------------------------------+
 */
 
+#include "zend_portability.h"
 #include "zend_types.h"
 #define ZEND_INTENSIVE_DEBUGGING 0
 
@@ -1098,7 +1099,7 @@ static zend_never_inline bool check_property_type_generic(
 }
 #endif
 
-static zend_type zend_resolve_generic_type(zend_class_reference *scope, uint32_t param_id) {
+static zend_always_inline zend_type zend_resolve_generic_type(zend_class_reference *scope, uint32_t param_id) {
 	if (param_id >= scope->ce->num_bound_generic_args) {
 		ZEND_ASSERT(param_id - scope->ce->num_bound_generic_args < scope->args.num_types);
 		return scope->args.types[param_id - scope->ce->num_bound_generic_args];
@@ -1222,6 +1223,10 @@ static zend_always_inline bool zend_validate_generic_args(
 # define HAVE_CACHE_SLOT 1
 #endif
 
+// TODO: cache_slot may not be worth it since ZSTR_CE_CACHE
+#undef HAVE_CACHE_SLOT
+#define HAVE_CACHE_SLOT 0
+
 #define PROGRESS_CACHE_SLOT() if (HAVE_CACHE_SLOT) {cache_slot++;}
 
 static zend_always_inline zend_class_entry *zend_fetch_ce_from_cache_slot(
@@ -1305,6 +1310,11 @@ static bool zend_check_intersection_type_from_cache_slot(zend_type_list *interse
 	return status;
 }
 
+// TODO
+static bool zend_check_type_slow_recursive(
+		zend_type *type, zval *arg, zend_reference *ref, void **cache_slot,
+		zend_class_entry *scope, bool is_return_type, bool is_internal);
+
 static zend_always_inline bool zend_check_type_slow(
 		zend_type *type, zval *arg, zend_reference *ref, void **cache_slot,
 		zend_class_entry *scope, bool is_return_type, bool is_internal)
@@ -1342,8 +1352,14 @@ static zend_always_inline bool zend_check_type_slow(
 							if (ZEND_TYPE_CONTAINS_CODE(real_type, Z_TYPE_P(arg))) {
 								return true;
 							}
-							if (zend_check_type_slow(
-									&real_type, arg, ref, /* cache_slot */ NULL, scope, is_return_type, is_internal)) {
+							if (ZEND_TYPE_HAS_PNR(real_type) && Z_TYPE_P(arg) == IS_OBJECT) {
+								ce = zend_fetch_ce_from_cache_slot(cache_slot, &real_type);
+								if (ce && instanceof_function(Z_OBJCE_P(arg), ce)) {
+									return true;
+								}
+							}
+							if (zend_check_type_slow_recursive(
+									&real_type, arg, ref, cache_slot, scope, is_return_type, is_internal)) {
 								return true;
 							}
 						}
@@ -1368,7 +1384,13 @@ static zend_always_inline bool zend_check_type_slow(
 			if (ZEND_TYPE_CONTAINS_CODE(real_type, Z_TYPE_P(arg))) {
 				return true;
 			}
-			if (zend_check_type_slow(
+			if (ZEND_TYPE_HAS_PNR(real_type) && Z_TYPE_P(arg) == IS_OBJECT) {
+				ce = zend_fetch_ce_from_cache_slot(cache_slot, &real_type);
+				if (ce && instanceof_function(Z_OBJCE_P(arg), ce)) {
+					return true;
+				}
+			}
+			if (zend_check_type_slow_recursive(
 						&real_type, arg, ref, /* cache_slot */ NULL, scope, is_return_type, is_internal)) {
 				return true;
 			}
@@ -1400,6 +1422,13 @@ static zend_always_inline bool zend_check_type_slow(
 
 	/* Special handling for IS_VOID is not necessary (for return types),
 	 * because this case is already checked at compile-time. */
+}
+
+static bool zend_check_type_slow_recursive(
+		zend_type *type, zval *arg, zend_reference *ref, void **cache_slot,
+		zend_class_entry *scope, bool is_return_type, bool is_internal)
+{
+	return zend_check_type_slow(type, arg, ref, cache_slot, scope, is_return_type, is_internal);
 }
 
 static zend_always_inline bool zend_check_type(

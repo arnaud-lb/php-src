@@ -342,15 +342,15 @@ zval *dom_write_property(zend_object *object, zend_string *name, zval *value, vo
 
 	if (hnd) {
 		if (!hnd->write_func) {
-			zend_throw_error(NULL, "Cannot write read-only property %s::$%s", ZSTR_VAL(object->ce->name), ZSTR_VAL(name));
+			zend_throw_error(NULL, "Cannot write read-only property %s::$%s", ZSTR_VAL(OBJ_NAME(object)), ZSTR_VAL(name));
 			return &EG(error_zval);
 		}
 
-		zend_property_info *prop = zend_get_property_info(object->ce, name, /* silent */ true);
+		zend_property_info *prop = zend_get_property_info(OBJ_CE(object), name, /* silent */ true);
 		if (prop && ZEND_TYPE_IS_SET(prop->type)) {
 			zval tmp;
 			ZVAL_COPY(&tmp, value);
-			if (!zend_verify_property_type(prop, &tmp, ZEND_CALL_USES_STRICT_TYPES(EG(current_execute_data)))) {
+			if (!zend_verify_property_type(object, prop, &tmp, ZEND_CALL_USES_STRICT_TYPES(EG(current_execute_data)))) {
 				zval_ptr_dtor(&tmp);
 				return &EG(error_zval);
 			}
@@ -510,11 +510,11 @@ static void dom_update_refcount_after_clone(dom_object *original, xmlNodePtr ori
 static zend_object *dom_objects_store_clone_obj(zend_object *zobject) /* {{{ */
 {
 	dom_object *intern = php_dom_obj_from_obj(zobject);
-	dom_object *clone = dom_objects_set_class(intern->std.ce);
+	dom_object *clone = dom_objects_set_class(OBJ_CE(&intern->std));
 
 	clone->std.handlers = dom_get_obj_handlers();
 
-	if (instanceof_function(intern->std.ce, dom_node_class_entry)) {
+	if (instanceof_function(OBJ_CE(&intern->std), dom_node_class_entry)) {
 		xmlNodePtr node = (xmlNodePtr)dom_object_get_node(intern);
 		if (node != NULL) {
 			xmlNodePtr cloned_node = xmlDocCopyNode(node, node->doc, 1);
@@ -534,7 +534,7 @@ static zend_object *dom_objects_store_clone_obj(zend_object *zobject) /* {{{ */
 static zend_object *dom_object_namespace_node_clone_obj(zend_object *zobject)
 {
 	dom_object_namespace_node *intern = php_dom_namespace_node_obj_from_obj(zobject);
-	zend_object *clone = dom_objects_namespace_node_new(intern->dom.std.ce);
+	zend_object *clone = dom_objects_namespace_node_new(OBJ_CE(&intern->dom.std));
 	dom_object_namespace_node *clone_intern = php_dom_namespace_node_obj_from_obj(clone);
 
 	xmlNodePtr original_node = dom_object_get_node(&intern->dom);
@@ -1087,8 +1087,8 @@ void dom_namednode_iter(dom_object *basenode, int ntype, dom_object *intern, xml
 static void dom_objects_set_class_ex(zend_class_entry *class_type, dom_object *intern)
 {
 	zend_class_entry *base_class = class_type;
-	while ((base_class->type != ZEND_INTERNAL_CLASS || base_class->info.internal.module->module_number != dom_module_entry.module_number) && base_class->parent != NULL) {
-		base_class = base_class->parent;
+	while ((base_class->type != ZEND_INTERNAL_CLASS || base_class->info.internal.module->module_number != dom_module_entry.module_number) && base_class->num_parents != 0) {
+		base_class = base_class->parents[0]->ce;
 	}
 
 	intern->prop_handler = zend_hash_find_ptr(&classes, base_class->name);

@@ -1184,6 +1184,7 @@ object ":" uiv ":" ["]	{
 
 	do {
 		zend_string *lc_name;
+		ce = NULL;
 
 		if (!(*var_hash)->allowed_classes && ZSTR_HAS_CE_CACHE(class_name)) {
 			zend_class_reference *class_ref = ZSTR_GET_CE_CACHE(class_name);
