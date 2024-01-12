@@ -868,6 +868,7 @@ ZEND_API void zend_cleanup_mutable_class_data(zend_class_entry *ce);
 ZEND_API void zend_cleanup_internal_class_data(zend_class_entry *ce);
 ZEND_API void zend_type_release(zend_type type, bool persistent);
 ZEND_API zend_string *zend_create_member_string(zend_string *class_name, zend_string *member_name);
+ZEND_API void zend_pnr_destroy(zend_packed_name_reference pnr);
 
 void zend_packed_name_reference_release(zend_packed_name_reference ref, bool persistent);
 

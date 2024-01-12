@@ -1930,6 +1930,16 @@ static zend_packed_name_reference zend_compile_pnr(
 	}
 }
 
+ZEND_API void zend_pnr_destroy(zend_packed_name_reference pnr) {
+	if (ZEND_PNR_IS_SIMPLE(pnr)) {
+		zend_string_release(ZEND_PNR_SIMPLE_GET_NAME(pnr));
+	} else {
+		zend_name_reference *name_ref = ZEND_PNR_COMPLEX_GET_REF(pnr);
+		zend_string_release(name_ref->name);
+		zend_string_release(name_ref->key);
+	}
+}
+
 static zend_packed_name_reference zend_compile_default_pnr(
 		zend_ast *class_ast, const char *type) {
 	zend_ast *name_ast = class_ast->child[0];
@@ -8410,6 +8420,7 @@ zend_class_entry *zend_init_class_entry_header(zend_class_entry_storage *ptr, ze
 	zend_class_entry *ce = (zend_class_entry *) ((char *) ptr + ZEND_CLASS_ENTRY_HEADER_SIZE);
 	ref->ce = ce;
 	ref->key = key;
+	zend_string_addref(key);
 	ref->args.num_types = 0;
 	return ce;
 }

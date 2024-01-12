@@ -1123,19 +1123,6 @@ ZEND_API bool zend_is_valid_class_name(zend_string *name) {
 	return 1;
 }
 
-ZEND_API zend_class_reference *zend_register_generic_class(zend_name_reference *name_ref, zend_class_entry *ce)
-{
-	zend_class_reference *class_ref = zend_build_class_reference(name_ref, ce);
-	if (!UNEXPECTED(class_ref)) {
-		return NULL;
-	}
-
-	void *ptr = zend_hash_add_ptr(&EG(generic_class_table), name_ref->key, class_ref);
-	ZEND_ASSERT(ptr);
-
-	return class_ref;
-}
-
 ZEND_API zend_class_reference *zend_lookup_generic_class(zend_name_reference *name_ref, zend_string *base_key, uint32_t flags) /* {{{ */
 {
 	zend_class_entry *ce = NULL;
@@ -1169,7 +1156,15 @@ ZEND_API zend_class_reference *zend_lookup_generic_class(zend_name_reference *na
 		return NULL;
 	}
 
-	return zend_register_generic_class(name_ref, ce);
+	zend_class_reference *class_ref = zend_build_class_reference(name_ref, ce);
+	if (!UNEXPECTED(class_ref)) {
+		return NULL;
+	}
+
+	void *ptr = zend_hash_add_ptr(&EG(generic_class_table), name_ref->key, class_ref);
+	ZEND_ASSERT(ptr);
+
+	return class_ref;
 }
 
 ZEND_API zend_class_entry *zend_lookup_class_ex(zend_string *name, zend_string *key, uint32_t flags) /* {{{ */

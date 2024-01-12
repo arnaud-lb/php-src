@@ -371,16 +371,6 @@ ZEND_API void destroy_zend_class(zval *zv)
 				if (ce->num_parents) {
 					if (!(ce->ce_flags & ZEND_ACC_RESOLVED_PARENT)) {
 						zend_pnr_release(ce->parent_name, /* uses_arena */ 1, /* persistent */ 0);
-					} else {
-						for (uint32_t i = 0; i < ce->num_parents; i++) {
-							zend_class_reference *ref = ce->parents[i];
-							if (!ZEND_REF_IS_TRIVIAL(ref)) {
-								/* The type arguments are owned by bound_generic_args,
-								 * and will be destroyed there. */
-								efree(ref);
-							}
-						}
-						efree(ce->parents);
 					}
 				}
 
@@ -425,6 +415,19 @@ ZEND_API void destroy_zend_class(zval *zv)
 					}
 					efree(ce->bound_generic_args);
 				}
+			}
+
+			if (ce->num_parents && (ce->ce_flags & ZEND_ACC_RESOLVED_PARENT)) {
+				for (uint32_t i = 0; i < ce->num_parents; i++) {
+					zend_class_reference *ref = ce->parents[i];
+					if (!ZEND_REF_IS_TRIVIAL(ref)) {
+						/* The type arguments are owned by bound_generic_args,
+						 * and will be destroyed there. */
+						zend_string_release(ref->key);
+						efree(ref);
+					}
+				}
+				efree(ce->parents);
 			}
 
 			if (ce->default_properties_table) {

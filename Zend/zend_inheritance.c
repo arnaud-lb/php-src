@@ -30,6 +30,7 @@
 #include "zend_attributes.h"
 #include "zend_constants.h"
 #include "zend_observer.h"
+#include "zend_string.h"
 #include "zend_types.h"
 
 ZEND_API zend_class_entry* (*zend_inheritance_cache_get)(zend_class_entry *ce, zend_class_entry *parent, zend_class_entry **traits_and_interfaces) = NULL;
@@ -1625,17 +1626,23 @@ static void update_parents(zend_class_entry *ce, zend_class_entry *parent_ce) {
 		pemalloc(sizeof(zend_class_reference *) * (parent_ce->num_parents + 1),
 			ce->type == ZEND_INTERNAL_CLASS);
 	if (ce->parent_name) {
+		zend_string *key;
 		if (ZEND_PNR_IS_COMPLEX(ce->parent_name)) {
 			/* Ownership of the type arguments has been taken by generic arg binding. */
 			zend_name_reference *ref = ZEND_PNR_COMPLEX_GET_REF(ce->parent_name);
 			zend_string_release(ref->name);
+			key = ZEND_PNR_COMPLEX_GET_KEY(ce->parent_name);
+			zend_string_addref(key);
 			// efree(ref);
 		} else {
 			zend_string_release(ZEND_PNR_SIMPLE_GET_NAME(ce->parent_name));
+			key = ZEND_CE_TO_REF(ce)->key;
+			zend_string_addref(key);
 		}
 
 		zend_class_reference *ref = emalloc(ZEND_CLASS_REF_SIZE(parent_ce->num_generic_params));
 		ref->ce = parent_ce;
+		ref->key = key;
 		ref->args.num_types = parent_ce->num_generic_params;
 		generic_args -= ref->args.num_types;
 		memcpy(ref->args.types, generic_args, sizeof(zend_type) * ref->args.num_types);
@@ -1652,6 +1659,8 @@ static void update_parents(zend_class_entry *ce, zend_class_entry *parent_ce) {
 		} else {
 			zend_class_reference *new_ref = emalloc(ZEND_CLASS_REF_SIZE(ref->args.num_types));
 			new_ref->ce = ref->ce;
+			new_ref->key = ref->key;
+			zend_string_addref(new_ref->key);
 			new_ref->args.num_types = ref->args.num_types;
 			generic_args -= ref->args.num_types;
 			memcpy(new_ref->args.types, generic_args, sizeof(zend_type) * ref->args.num_types);
@@ -3048,11 +3057,14 @@ static void check_unrecoverable_load_failure(zend_class_entry *ce) {
 
 static zend_class_entry *zend_lazy_class_load(zend_class_entry *pce)
 {
+	zend_class_reference *class_ref;
 	zend_class_entry *ce;
 	Bucket *p, *end;
 
-	ce = zend_arena_alloc(&CG(arena), sizeof(zend_class_entry));
-	memcpy(ce, pce, sizeof(zend_class_entry));
+	class_ref = zend_arena_alloc(&CG(arena), sizeof(zend_class_entry_storage));
+	memcpy(class_ref, ZEND_CE_TO_REF(pce), sizeof(zend_class_entry_storage));
+	ce = (zend_class_entry*)((char*)class_ref + ZEND_CLASS_ENTRY_HEADER_SIZE);
+	class_ref->ce = ce;
 	ce->ce_flags &= ~ZEND_ACC_IMMUTABLE;
 	ce->refcount = 1;
 	ce->inheritance_cache = NULL;

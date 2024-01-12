@@ -291,6 +291,9 @@ typedef struct {
 #define ZEND_TYPE_SET_PTR(t, _ptr) \
 	((t).ptr = (_ptr))
 
+#define ZEND_TYPE_SET_PNR(t, _pnr) \
+	ZEND_TYPE_SET_PTR((t), (void *) (uintptr_t) (_pnr))
+
 #define ZEND_TYPE_SET_GENERIC_PARAM_ID(t, _id) \
 	((t).ptr = (void *) (uintptr_t) (_id))
 
@@ -445,6 +448,19 @@ static const zend_type_list zend_empty_type_list = {0};
 	} else { \
 		(name_var) = ZEND_PNR_SIMPLE_GET_NAME(pnr); \
 		(key_var) = NULL; \
+	} \
+} while (0)
+
+#define ZEND_PNR_UNPACK_NAME_KEY_ARGS(pnr, name_var, key_var) do { \
+	if (ZEND_PNR_IS_COMPLEX(pnr)) { \
+		zend_name_reference *__ref = ZEND_PNR_COMPLEX_GET_REF(pnr); \
+		(name_var) = __ref->name; \
+		(key_var) = __ref->key; \
+		(args_var) = &__ref->args; \
+	} else { \
+		(name_var) = ZEND_PNR_SIMPLE_GET_NAME(pnr); \
+		(key_var) = NULL; \
+		(args_var) = &zend_empty_type_list; \
 	} \
 } while (0)
 
@@ -760,7 +776,8 @@ struct _zend_ast_ref {
 #define IS_INDIRECT             	12
 #define IS_PTR						13
 #define IS_ALIAS_PTR				14
-#define _IS_ERROR					15
+#define IS_PNR						15
+#define _IS_ERROR					16
 
 /* used for casts */
 #define _IS_BOOL					18
@@ -1401,7 +1418,7 @@ static zend_always_inline uint32_t zval_gc_info(uint32_t gc_type_info) {
 
 #define ZVAL_PNR(z, c) do {										\
 		Z_PNR_P(z) = (c);										\
-		Z_TYPE_INFO_P(z) = IS_PTR;								\
+		Z_TYPE_INFO_P(z) = IS_PNR;								\
 	} while (0)
 
 #define ZVAL_ALIAS_PTR(z, p) do {								\

@@ -24,8 +24,11 @@
 #include "Optimizer/zend_optimizer.h"
 #include "Optimizer/zend_optimizer_internal.h"
 #include "zend_API.h"
+#include "zend_compile.h"
 #include "zend_constants.h"
 #include "zend_execute.h"
+#include "zend_string.h"
+#include "zend_types.h"
 #include "zend_vm.h"
 #include "zend_extensions.h"
 
@@ -34,6 +37,9 @@
 #define LITERAL_CLASS_CONST 1
 #define LITERAL_STATIC_METHOD 2
 #define LITERAL_STATIC_PROPERTY 3
+
+// TODO: temp hack
+#define LITERAL_PNR_AND_KEY (1<<7)
 
 typedef struct _literal_info {
 	uint8_t num_related;
@@ -245,7 +251,7 @@ void zend_optimizer_compact_literals(zend_op_array *op_array, zend_optimizer_ctx
 					break;
 				case ZEND_NEW:
 					if (opline->op1_type == IS_CONST) {
-						LITERAL_INFO(opline->op1.constant, 2);
+						LITERAL_INFO(opline->op1.constant, 2 | LITERAL_PNR_AND_KEY);
 					}
 					break;
 				case ZEND_DECLARE_CLASS:
@@ -312,6 +318,10 @@ void zend_optimizer_compact_literals(zend_op_array *op_array, zend_optimizer_ctx
 		memset(map, 0, op_array->last_literal * sizeof(int));
 		for (i = 0; i < op_array->last_literal; i++) {
 			if (!info[i].num_related) {
+				// TODO: temp hack
+				if (Z_TYPE(op_array->literals[i]) == IS_PNR) {
+					zend_pnr_destroy(Z_PNR(op_array->literals[i]));
+				}
 				/* unset literal */
 				zval_ptr_dtor_nogc(&op_array->literals[i]);
 				continue;
@@ -441,6 +451,67 @@ void zend_optimizer_compact_literals(zend_op_array *op_array, zend_optimizer_ctx
 							n--;
 						}
 					}
+					break;
+				}
+				case IS_PNR: {
+					ZEND_ASSERT(info[i].num_related & LITERAL_PNR_AND_KEY);
+					ZEND_ASSERT(Z_TYPE(op_array->literals[i+1]) == IS_STRING);
+
+					uint8_t num_related = info[i].num_related & ~LITERAL_PNR_AND_KEY;
+					ZEND_ASSERT(num_related == 2);
+
+					zend_packed_name_reference pnr = Z_PNR(op_array->literals[i]);
+					zend_string *base_key = Z_STR(op_array->literals[i+1]);
+					zend_string *key;
+					if (ZEND_PNR_IS_COMPLEX(pnr)) {
+						key = ZEND_PNR_COMPLEX_GET_KEY(pnr);
+					} else {
+						key = ZEND_PNR_SIMPLE_GET_NAME(pnr);
+					}
+					key = zend_string_concat2(
+							ZSTR_VAL(key), ZSTR_LEN(key)+1,
+							ZSTR_VAL(base_key), ZSTR_LEN(base_key));
+					bias_key(key, 300 + num_related - 1);
+
+					if ((pos = zend_hash_find(&hash, key)) != NULL) {
+						ZEND_ASSERT(Z_TYPE(op_array->literals[Z_LVAL_P(pos)]) == IS_PNR &&
+							Z_TYPE(op_array->literals[Z_LVAL_P(pos)+1]) == IS_STRING &&
+							info[i].num_related == info[Z_LVAL_P(pos)].num_related);
+						zend_string_release_ex(key, 0);
+						map[i] = Z_LVAL_P(pos);
+						zend_packed_name_reference pnr2 = Z_PNR(op_array->literals[i]);
+						if (ZEND_PNR_IS_SIMPLE(pnr2)) {
+							zend_string_release(ZEND_PNR_SIMPLE_GET_NAME(pnr2));
+						} else {
+							zend_name_reference *class_ref = ZEND_PNR_COMPLEX_GET_REF(pnr2);
+							zend_string_release(class_ref->name);
+							zend_string_release(class_ref->key);
+						}
+						n = num_related;
+						while (n > 1) {
+							i++;
+							zval_ptr_dtor_nogc(&op_array->literals[i]);
+							n--;
+						}
+					} else {
+						map[i] = j;
+						ZVAL_LONG(&zv, j);
+						zend_hash_add_new(&hash, key, &zv);
+						zend_string_release_ex(key, 0);
+						if (i != j) {
+							op_array->literals[j] = op_array->literals[i];
+							info[j] = info[i];
+						}
+						j++;
+						n = num_related;
+						while (n > 1) {
+							i++;
+							if (i != j) op_array->literals[j] = op_array->literals[i];
+							j++;
+							n--;
+						}
+					}
+
 					break;
 				}
 				case IS_ARRAY:

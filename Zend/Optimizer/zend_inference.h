@@ -148,6 +148,8 @@ END_EXTERN_C()
 static zend_always_inline uint32_t _const_op_type(const zval *zv) {
 	if (Z_TYPE_P(zv) == IS_CONSTANT_AST) {
 		return MAY_BE_RC1 | MAY_BE_RCN | MAY_BE_ANY | MAY_BE_ARRAY_KEY_ANY | MAY_BE_ARRAY_OF_ANY;
+	} else if (Z_TYPE_P(zv) == IS_PNR) {
+		return MAY_BE_STRING;
 	} else if (Z_TYPE_P(zv) == IS_ARRAY) {
 		return zend_array_type_info(zv);
 	} else {

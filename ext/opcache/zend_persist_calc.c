@@ -26,6 +26,7 @@
 #include "zend_shared_alloc.h"
 #include "zend_operators.h"
 #include "zend_attributes.h"
+#include "zend_types.h"
 
 #define ADD_DUP_SIZE(m,s)  ZCG(current_persistent_script)->size += zend_shared_memdup_size((void*)m, s)
 #define ADD_SIZE(m)        ZCG(current_persistent_script)->size += ZEND_ALIGNED_SIZE(m)
@@ -45,8 +46,50 @@
 		} \
 	} while (0)
 
+# define ADD_PNR(pnr) do { \
+		if (ZEND_PNR_IS_SIMPLE(pnr)) { \
+			zend_string *_name = ZEND_PNR_SIMPLE_GET_NAME(pnr); \
+			ADD_INTERNED_STRING(_name); \
+			if (ZEND_PNR_ENCODE_NAME(_name) != (pnr)) { \
+				(pnr) = ZEND_PNR_ENCODE_NAME(_name); \
+			} \
+		} else if (ZEND_PNR_IS_COMPLEX(pnr)) { \
+			zend_name_reference *_name_ref = ZEND_PNR_COMPLEX_GET_REF(pnr); \
+			if (!ZCG(current_persistent_script)->corrupted \
+			 && zend_accel_in_shm(_name_ref)) { \
+				break; \
+			} \
+			size_t _size = zend_shared_memdup_size(_name_ref, ZEND_CLASS_REF_SIZE(_name_ref->args.num_types)); \
+			if (_size) { \
+				ADD_SIZE(_size); \
+				ADD_INTERNED_STRING(_name_ref->name); \
+				ADD_INTERNED_STRING(_name_ref->key); \
+				zend_persist_type_list_calc(&_name_ref->args); \
+			} \
+		} \
+	} while (0)
+
+# define ADD_TYPE_PNR(type) do { \
+		ZEND_ASSERT(ZEND_TYPE_HAS_PNR(type)); \
+		zend_packed_name_reference pnr = ZEND_TYPE_PNR(type); \
+		ADD_PNR(pnr); \
+		if (ZEND_TYPE_PNR(type) != pnr) { \
+			ZEND_TYPE_SET_PNR((type), pnr); \
+		} \
+	} while (0)
+
+# define ADD_ZV_PNR(zv) do { \
+		ZEND_ASSERT(Z_TYPE_P(zv) == IS_PNR); \
+		zend_packed_name_reference pnr = Z_PNR_P(zv); \
+		ADD_PNR(pnr); \
+		if (Z_PNR_P(zv) != pnr) { \
+			Z_PNR_P(zv) = pnr; \
+		} \
+	} while (0)
+
 static void zend_persist_zval_calc(zval *z);
 static void zend_persist_op_array_calc(zval *zv);
+static void zend_persist_type_list_calc(zend_type_list *type_list);
 
 static void zend_hash_persist_calc(HashTable *ht)
 {
@@ -146,6 +189,10 @@ static void zend_persist_zval_calc(zval *z)
 				}
 			}
 			break;
+		case IS_PNR: {
+			ADD_ZV_PNR(z);
+			break;
+		}
 		default:
 			ZEND_ASSERT(Z_TYPE_P(z) < IS_STRING);
 			break;
@@ -191,12 +238,20 @@ static void zend_persist_type_calc(zend_type *type)
 			zend_persist_type_calc(single_type);
 			continue;
 		}
-		if (ZEND_TYPE_HAS_NAME(*single_type)) {
-			zend_string *type_name = ZEND_TYPE_NAME(*single_type);
-			ADD_INTERNED_STRING(type_name);
-			ZEND_TYPE_SET_PTR(*single_type, type_name);
+		if (ZEND_TYPE_HAS_PNR(*single_type)) {
+			ADD_TYPE_PNR(*single_type);
 		}
 	} ZEND_TYPE_FOREACH_END();
+}
+
+static void zend_persist_type_list_calc(zend_type_list *type_list)
+{
+	ADD_SIZE(ZEND_TYPE_LIST_SIZE(type_list->num_types));
+
+	zend_type *single_type;
+	ZEND_TYPE_LIST_FOREACH(type_list, single_type) {
+		zend_persist_type_calc(single_type);
+	} ZEND_TYPE_LIST_FOREACH_END();
 }
 
 static void zend_persist_op_array_calc_ex(zend_op_array *op_array)
@@ -408,18 +463,32 @@ void zend_persist_class_entry_calc(zend_class_entry *ce)
 	Bucket *p;
 
 	if (ce->type == ZEND_USER_CLASS) {
-		/* The same zend_class_entry may be reused by class_alias */
-		if (zend_shared_alloc_get_xlat_entry(ce)) {
-			return;
-		}
+		ZEND_ASSERT(!zend_shared_alloc_get_xlat_entry(ce));
 		zend_shared_alloc_register_xlat_entry(ce, ce);
+		zend_shared_alloc_register_xlat_entry(ZEND_CE_TO_REF(ce), ZEND_CE_TO_REF(ce));
 
-		ADD_SIZE(sizeof(zend_class_entry));
+		ADD_SIZE(sizeof(zend_class_entry_storage));
+		ADD_INTERNED_STRING(ZEND_CE_TO_REF(ce)->key);
 
 		if (!(ce->ce_flags & ZEND_ACC_CACHED)) {
 			ADD_INTERNED_STRING(ce->name);
 			if (ce->parent_name && !(ce->ce_flags & ZEND_ACC_LINKED)) {
-				ADD_INTERNED_STRING(ce->parent_name);
+				ADD_PNR(ce->parent_name);
+			}
+		}
+		if (ce->ce_flags & ZEND_ACC_LINKED) {
+			if (ce->num_parents) {
+				ADD_SIZE(sizeof(zend_class_reference *) * ce->num_parents);
+				for (uint32_t i = 0; i < ce->num_parents; i++) {
+					zend_class_reference *parent_ref = ce->parents[i];
+					if (zend_shared_alloc_get_xlat_entry(parent_ref)) {
+						continue;
+					}
+					ZEND_ASSERT(!ZEND_REF_IS_TRIVIAL(parent_ref));
+					ADD_SIZE(ZEND_CLASS_REF_SIZE(parent_ref->args.num_types));
+					ADD_INTERNED_STRING(parent_ref->key);
+					zend_persist_type_list_calc(&parent_ref->args);
+				}
 			}
 		}
 
@@ -563,7 +632,9 @@ static void zend_accel_persist_class_table_calc(HashTable *class_table)
 	ZEND_HASH_MAP_FOREACH_BUCKET(class_table, p) {
 		ZEND_ASSERT(p->key != NULL);
 		ADD_INTERNED_STRING(p->key);
-		zend_persist_class_entry_calc(Z_CE(p->val));
+		if (EXPECTED(Z_TYPE(p->val) != IS_ALIAS_PTR)) {
+			zend_persist_class_entry_calc(Z_CE(p->val));
+		}
 	} ZEND_HASH_FOREACH_END();
 }
 

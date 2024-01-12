@@ -619,8 +619,18 @@ static inline void accel_copy_permanent_list_types(
 			ZEND_ASSERT(ZEND_TYPE_IS_INTERSECTION(*single_type));
 			accel_copy_permanent_list_types(new_interned_string, *single_type);
 		}
-		if (ZEND_TYPE_HAS_NAME(*single_type)) {
-			ZEND_TYPE_SET_PTR(*single_type, new_interned_string(ZEND_TYPE_NAME(*single_type)));
+		if (ZEND_TYPE_HAS_PNR(*single_type)) {
+			zend_packed_name_reference pnr = ZEND_TYPE_PNR(*single_type);
+			if (ZEND_PNR_IS_SIMPLE(pnr)) {
+				ZEND_TYPE_SET_PTR(*single_type, new_interned_string(ZEND_PNR_SIMPLE_GET_NAME(pnr)));
+			} else {
+				zend_name_reference *name_ref = ZEND_PNR_COMPLEX_GET_REF(pnr);
+				name_ref->name = new_interned_string(name_ref->name);
+				name_ref->key = new_interned_string(name_ref->key);
+				for (uint32_t i = 0; i < name_ref->args.num_types; i++) {
+					accel_copy_permanent_list_types(new_interned_string, name_ref->args.types[i]);
+				}
+			}
 		}
 	} ZEND_TYPE_FOREACH_END();
 }
@@ -667,8 +677,10 @@ static void accel_copy_permanent_strings(zend_new_interned_string_func_t new_int
 	/* class table hash keys, class names, properties, methods, constants, etc */
 	ZEND_HASH_MAP_FOREACH_BUCKET(CG(class_table), p) {
 		zend_class_entry *ce;
+		zend_class_reference *class_ref;
 
 		ce = (zend_class_entry*)Z_PTR(p->val);
+		class_ref = ZEND_CE_TO_REF(ce);
 
 		if (p->key) {
 			p->key = new_interned_string(p->key);
@@ -678,6 +690,8 @@ static void accel_copy_permanent_strings(zend_new_interned_string_func_t new_int
 			ce->name = new_interned_string(ce->name);
 			ZEND_ASSERT(ZSTR_HAS_CE_CACHE(ce->name));
 		}
+
+		class_ref->key = new_interned_string(class_ref->key);
 
 		ZEND_HASH_MAP_FOREACH_BUCKET(&ce->properties_info, q) {
 			zend_property_info *info;
@@ -3647,8 +3661,8 @@ static void preload_sort_classes(void *base, size_t count, size_t siz, compare_f
 	while (b1 < end) {
 try_again:
 		ce = (zend_class_entry*)Z_PTR(b1->val);
-		if (ce->parent && (ce->ce_flags & ZEND_ACC_LINKED)) {
-			p = ce->parent;
+		if (ce->num_parents && (ce->ce_flags & ZEND_ACC_LINKED)) {
+			p = ce->parents[0]->ce;
 			if (p->type == ZEND_USER_CLASS) {
 				b2 = b1 + 1;
 				while (b2 < end) {
@@ -3694,12 +3708,12 @@ static zend_result preload_resolve_deps(preload_error *error, const zend_class_e
 	memset(error, 0, sizeof(preload_error));
 
 	if (ce->parent_name) {
-		zend_string *key = zend_string_tolower(ce->parent_name);
+		zend_string *key = zend_string_tolower(ZEND_PNR_GET_NAME(ce->parent_name));
 		zend_class_entry *parent = zend_hash_find_ptr(EG(class_table), key);
 		zend_string_release(key);
 		if (!parent) {
 			error->kind = "Unknown parent ";
-			error->name = ZSTR_VAL(ce->parent_name);
+			error->name = ZSTR_VAL(ZEND_PNR_GET_NAME(ce->parent_name));
 			return FAILURE;
 		}
 	}
@@ -3773,7 +3787,7 @@ static bool preload_try_resolve_constants(zend_class_entry *ce)
 			}
 		}
 		if (ce->default_static_members_count) {
-			uint32_t count = ce->parent ? ce->default_static_members_count - ce->parent->default_static_members_count : ce->default_static_members_count;
+			uint32_t count = ce->num_parents ? ce->default_static_members_count - ce->parents[0]->ce->default_static_members_count : ce->default_static_members_count;
 			bool resolved = true;
 
 			val = ce->default_static_members_table + ce->default_static_members_count - 1;
@@ -3916,7 +3930,7 @@ static void preload_link(void)
 			uint32_t temporary_flags = ZEND_ACC_FILE_CACHED|ZEND_ACC_CACHED;
 			ce->ce_flags |= temporary_flags;
 			if (ce->parent_name) {
-				zend_string_addref(ce->parent_name);
+				zend_string_addref(ZEND_PNR_GET_NAME(ce->parent_name));
 			}
 
 			/* Record and suppress errors during inheritance. */
