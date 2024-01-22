@@ -6748,6 +6748,11 @@ static zend_type zend_compile_single_typename(zend_ast *ast)
 			zend_string *orig_name = zend_ast_get_str(name_ast);
 			uint32_t generic_param_id = lookup_generic_param_id(orig_name);
 			if (name_ast->attr == ZEND_NAME_NOT_FQ && generic_param_id != (uint32_t) -1) {
+				if (CG(in_static_class_member)) {
+					zend_error_noreturn(E_COMPILE_ERROR,
+						"Cannot use type parameter \"%s\" in static context",
+						ZSTR_VAL(orig_name));
+				}
 				return (zend_type) ZEND_TYPE_INIT_GENERIC_PARAM(generic_param_id, 0);
 			}
 
@@ -7875,6 +7880,11 @@ static void zend_compile_func_decl(znode *result, zend_ast *ast, bool toplevel) 
 	closure_info info;
 	memset(&info, 0, sizeof(closure_info));
 
+	bool orig_in_static_class_member = CG(in_static_class_member);
+	if (orig_class_entry && (decl->flags & ZEND_ACC_STATIC)) {
+		CG(in_static_class_member) = true;
+	}
+
 	init_op_array(op_array, ZEND_USER_FUNCTION, INITIAL_OP_ARRAY_SIZE);
 
 	if (CG(compiler_options) & ZEND_COMPILE_PRELOAD) {
@@ -8007,6 +8017,7 @@ static void zend_compile_func_decl(znode *result, zend_ast *ast, bool toplevel) 
 
 	CG(active_op_array) = orig_op_array;
 	CG(active_class_entry) = orig_class_entry;
+	CG(in_static_class_member) = orig_in_static_class_member;
 }
 /* }}} */
 
@@ -8022,6 +8033,10 @@ static void zend_compile_prop_decl(zend_ast *ast, zend_ast *type_ast, uint32_t f
 
 	if (ce->ce_flags & ZEND_ACC_ENUM) {
 		zend_error_noreturn(E_COMPILE_ERROR, "Enum %s cannot include properties", ZSTR_VAL(ce->name));
+	}
+
+	if (flags & ZEND_ACC_STATIC) {
+		CG(in_static_class_member) = true;
 	}
 
 	for (i = 0; i < children; ++i) {
@@ -8110,6 +8125,8 @@ static void zend_compile_prop_decl(zend_ast *ast, zend_ast *type_ast, uint32_t f
 			zend_compile_attributes(&info->attributes, attr_ast, 0, ZEND_ATTRIBUTE_TARGET_PROPERTY, 0);
 		}
 	}
+
+	CG(in_static_class_member) = false;
 }
 /* }}} */
 
@@ -8138,6 +8155,8 @@ static void zend_compile_class_const_decl(zend_ast *ast, uint32_t flags, zend_as
 	zend_ast_list *list = zend_ast_get_list(ast);
 	zend_class_entry *ce = CG(active_class_entry);
 	uint32_t i, children = list->children;
+
+	CG(in_static_class_member) = true;
 
 	for (i = 0; i < children; ++i) {
 		zend_class_constant *c;
@@ -8185,6 +8204,8 @@ static void zend_compile_class_const_decl(zend_ast *ast, uint32_t flags, zend_as
 			zend_compile_attributes(&c->attributes, attr_ast, 0, ZEND_ATTRIBUTE_TARGET_CLASS_CONST, 0);
 		}
 	}
+
+	CG(in_static_class_member) = false;
 }
 
 static void zend_compile_class_const_group(zend_ast *ast) /* {{{ */

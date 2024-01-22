@@ -83,6 +83,7 @@ struct _zend_compiler_globals {
 	zend_stack loop_var_stack;
 
 	zend_class_entry *active_class_entry;
+	bool in_static_class_member; /* compiling a static prop, static method, or class const */
 
 	zend_string *compiled_filename;
 
