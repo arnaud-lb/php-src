@@ -8382,6 +8382,21 @@ static void zend_compile_enum_backing_type(zend_class_entry *ce, zend_ast *enum_
 	zend_type_release(type, 0);
 }
 
+static zend_generic_param_variance zend_compile_generic_param_variance(zend_string *str)
+{
+	if (str == NULL) {
+		return ZEND_GENERIC_PARAM_INVARIANT;
+	}
+	if (zend_binary_strcasecmp(ZSTR_VAL(str), ZSTR_LEN(str), "in", 2) == 0) {
+		return ZEND_GENERIC_PARAM_IN;
+	}
+	if (zend_binary_strcasecmp(ZSTR_VAL(str), ZSTR_LEN(str), "out", 3) == 0) {
+		return ZEND_GENERIC_PARAM_OUT;
+	}
+	zend_error_noreturn(E_COMPILE_ERROR,
+		"Unexpected \"%s\", expected \"in\" or \"out\"", ZSTR_VAL(str));
+}
+
 static void zend_compile_generic_params(zend_ast *params_ast)
 {
 	zend_ast_list *list = zend_ast_get_list(params_ast);
@@ -8391,9 +8406,15 @@ static void zend_compile_generic_params(zend_ast *params_ast)
 	bool have_optional = 0;
 	for (uint32_t i = 0; i < list->children; i++) {
 		zend_ast *param_ast = list->child[i];
-		zend_string *name = zend_ast_get_str(param_ast->child[0]);
+		zend_string *name = zend_ast_get_str(param_ast->child[1]);
 		zend_type bound_type = ZEND_TYPE_INIT_NONE(0);
 		zend_type default_type = ZEND_TYPE_INIT_NONE(0);
+		zend_generic_param_variance variance = ZEND_GENERIC_PARAM_INVARIANT;
+
+		if (param_ast->child[0] != NULL) {
+			variance = zend_compile_generic_param_variance(
+				zend_ast_get_str(param_ast->child[0]));
+		}
 
 		if (zend_string_equals(name, CG(active_class_entry)->name)) {
 			zend_error_noreturn(E_COMPILE_ERROR,
@@ -8407,11 +8428,11 @@ static void zend_compile_generic_params(zend_ast *params_ast)
 			}
 		}
 
-		if (param_ast->child[1]) {
-			bound_type = zend_compile_typename(param_ast->child[1]);
-		}
 		if (param_ast->child[2]) {
-			default_type = zend_compile_typename(param_ast->child[2]);
+			bound_type = zend_compile_typename(param_ast->child[2]);
+		}
+		if (param_ast->child[3]) {
+			default_type = zend_compile_typename(param_ast->child[3]);
 		}
 
 		if (ZEND_TYPE_IS_SET(default_type)) {
@@ -8424,6 +8445,7 @@ static void zend_compile_generic_params(zend_ast *params_ast)
 		generic_params[i].name = zend_string_copy(name);
 		generic_params[i].bound_type = bound_type;
 		generic_params[i].default_type = default_type;
+		generic_params[i].variance = variance;
 		// TODO: Validate potential additional constraints on the types.
 		// For example, can "void" be used?
 

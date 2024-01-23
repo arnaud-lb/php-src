@@ -144,10 +144,17 @@ struct _zend_inheritance_cache_entry {
 	zend_class_entry             *traits_and_interfaces[1];
 };
 
+typedef enum _zend_generic_param_variance {
+	ZEND_GENERIC_PARAM_INVARIANT,
+	ZEND_GENERIC_PARAM_IN,
+	ZEND_GENERIC_PARAM_OUT,
+} zend_generic_param_variance;
+
 typedef struct _zend_generic_param {
 	zend_string *name;
 	zend_type bound_type;
 	zend_type default_type;
+	zend_generic_param_variance variance;
 } zend_generic_param;
 
 struct _zend_class_entry {

@@ -283,7 +283,7 @@ static YYSIZE_T zend_yytnamerr(char*, const char*);
 %type <ast> match match_arm_list non_empty_match_arm_list match_arm match_arm_cond_list
 %type <ast> enum_declaration_statement enum_backing_type enum_case enum_case_expr
 %type <ast> function_name non_empty_member_modifiers
-%type <ast> optional_generic_params generic_params generic_param
+%type <ast> optional_generic_params generic_params generic_param generic_param_variance
 
 %type <num> returns_ref function fn is_reference is_variadic property_modifiers
 %type <num> method_modifiers class_const_modifiers member_modifier optional_cpp_modifiers
@@ -603,13 +603,21 @@ generic_params:
 			{ $$ = zend_ast_list_add($1, $3); }
 ;
 
-/* TODO: in/out indicator */
 generic_param:
-		T_STRING				{ $$ = zend_ast_create(ZEND_AST_GENERIC_PARAM, $1, NULL, NULL); }
-	|	T_STRING ':' type_expr	{ $$ = zend_ast_create(ZEND_AST_GENERIC_PARAM, $1, $3, NULL); }
-	|	T_STRING '=' type_expr	{ $$ = zend_ast_create(ZEND_AST_GENERIC_PARAM, $1, NULL, $3); }
-	|	T_STRING ':' type_expr '=' type_expr
-			{ $$ = zend_ast_create(ZEND_AST_GENERIC_PARAM, $1, $3, $5); }
+		T_STRING										{ $$ = zend_ast_create(ZEND_AST_GENERIC_PARAM, NULL, $1, NULL, NULL); }
+	|	generic_param_variance T_STRING					{ $$ = zend_ast_create(ZEND_AST_GENERIC_PARAM, $1, $2, NULL, NULL); }
+	|	T_STRING ':' type_expr							{ $$ = zend_ast_create(ZEND_AST_GENERIC_PARAM, NULL, $1, $3, NULL); }
+	|	generic_param_variance T_STRING ':' type_expr	{ $$ = zend_ast_create(ZEND_AST_GENERIC_PARAM, $1, $2, $4, NULL); }
+	|	T_STRING '=' type_expr							{ $$ = zend_ast_create(ZEND_AST_GENERIC_PARAM, NULL, $1, NULL, $3); }
+	|	generic_param_variance T_STRING '=' type_expr	{ $$ = zend_ast_create(ZEND_AST_GENERIC_PARAM, $1, $2, NULL, $4); }
+	|	T_STRING ':' type_expr '=' type_expr			{ $$ = zend_ast_create(ZEND_AST_GENERIC_PARAM, NULL, $1, $3, $5); }
+	|	generic_param_variance T_STRING ':' type_expr '=' type_expr
+			{ $$ = zend_ast_create(ZEND_AST_GENERIC_PARAM, $1, $2, $4, $6); }
+;
+
+generic_param_variance:
+	/* TODO: maybe introduce actual tokens */
+	T_STRING	{ $$ = $1; }
 ;
 
 class_declaration_statement:
