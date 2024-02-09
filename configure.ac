@@ -1767,6 +1767,7 @@ PHP_ADD_SOURCES(Zend, \
 	Optimizer/escape_analysis.c \
 	Optimizer/compact_vars.c \
 	Optimizer/zend_dump.c \
+	Optimizer/zend_scc.c \
     , -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1)
 
 PHP_ADD_BUILD_DIR(main main/streams)

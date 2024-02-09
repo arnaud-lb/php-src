@@ -325,4 +325,54 @@ static zend_always_inline void zend_ssa_rename_defs_of_instr(zend_ssa *ssa, zend
 	} FOREACH_BLOCK_END(); \
 } while (0)
 
+#define FOR_EACH_DEFINED_VAR(line, MACRO) \
+	do { \
+		if (ssa->ops[line].op1_def >= 0) { \
+			MACRO(ssa->ops[line].op1_def); \
+		} \
+		if (ssa->ops[line].op2_def >= 0) { \
+			MACRO(ssa->ops[line].op2_def); \
+		} \
+		if (ssa->ops[line].result_def >= 0) { \
+			MACRO(ssa->ops[line].result_def); \
+		} \
+		if (op_array->opcodes[line].opcode == ZEND_OP_DATA) { \
+			if (ssa->ops[line-1].op1_def >= 0) { \
+				MACRO(ssa->ops[line-1].op1_def); \
+			} \
+			if (ssa->ops[line-1].op2_def >= 0) { \
+				MACRO(ssa->ops[line-1].op2_def); \
+			} \
+			if (ssa->ops[line-1].result_def >= 0) { \
+				MACRO(ssa->ops[line-1].result_def); \
+			} \
+		} else if ((uint32_t)line+1 < op_array->last && \
+		           op_array->opcodes[line+1].opcode == ZEND_OP_DATA) { \
+			if (ssa->ops[line+1].op1_def >= 0) { \
+				MACRO(ssa->ops[line+1].op1_def); \
+			} \
+			if (ssa->ops[line+1].op2_def >= 0) { \
+				MACRO(ssa->ops[line+1].op2_def); \
+			} \
+			if (ssa->ops[line+1].result_def >= 0) { \
+				MACRO(ssa->ops[line+1].result_def); \
+			} \
+		} \
+	} while (0)
+
+#define FOR_EACH_VAR_USAGE(_var, MACRO) \
+	do { \
+		zend_ssa_phi *p = ssa->vars[_var].phi_use_chain; \
+		int use = ssa->vars[_var].use_chain; \
+		while (use >= 0) { \
+			FOR_EACH_DEFINED_VAR(use, MACRO); \
+			use = zend_ssa_next_use(ssa->ops, _var, use); \
+		} \
+		p = ssa->vars[_var].phi_use_chain; \
+		while (p) { \
+			MACRO(p->ssa_var); \
+			p = zend_ssa_next_use_phi(ssa, _var, p); \
+		} \
+	} while (0)
+
 #endif /* ZEND_SSA_H */

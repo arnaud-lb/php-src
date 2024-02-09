@@ -29,6 +29,7 @@
 #include "zend_call_graph.h"
 #include "zend_inference.h"
 #include "zend_dump.h"
+#include "zend_scc.h"
 
 #ifndef ZEND_DEBUG_DFA
 # define ZEND_DEBUG_DFA ZEND_DEBUG
