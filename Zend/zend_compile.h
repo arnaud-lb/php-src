@@ -870,6 +870,8 @@ ZEND_API void zend_type_release(zend_type type, bool persistent);
 ZEND_API zend_string *zend_create_member_string(zend_string *class_name, zend_string *member_name);
 ZEND_API void zend_pnr_destroy(zend_packed_name_reference pnr);
 
+void zend_compile_name_reference_key(zend_name_reference *ref, zend_string *lcname);
+void zend_name_reference_release(zend_name_reference *name_ref, bool uses_arena, bool persistent);
 void zend_packed_name_reference_release(zend_packed_name_reference ref, bool persistent);
 
 ZEND_API ZEND_COLD void zend_user_exception_handler(void);

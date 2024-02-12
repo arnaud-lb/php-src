@@ -18,6 +18,7 @@
    +----------------------------------------------------------------------+
 */
 
+#include "zend_types.h"
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -3087,7 +3088,8 @@ ZEND_METHOD(ReflectionNamedType, isBuiltin)
 	}
 
 	/* Treat "static" as a class type for the purposes of reflection. */
-	RETVAL_BOOL(ZEND_TYPE_IS_ONLY_MASK(param->type)
+	RETVAL_BOOL(!ZEND_TYPE_IS_COMPLEX(param->type)
+		&& ZEND_TYPE_FULL_MASK(param->type)
 		&& !(ZEND_TYPE_FULL_MASK(param->type) & MAY_BE_STATIC));
 }
 /* }}} */

@@ -21,7 +21,11 @@
 #include <ctype.h>
 
 #include "zend.h"
+#include "zend_execute.h"
+#include "zend_extensions.h"
 #include "zend_operators.h"
+#include "zend_portability.h"
+#include "zend_types.h"
 #include "zend_variables.h"
 #include "zend_globals.h"
 #include "zend_list.h"
@@ -2490,40 +2494,62 @@ ZEND_API bool ZEND_FASTCALL instanceof_function_slow(const zend_class_entry *ins
 /* }}} */
 
 static zend_always_inline bool zend_type_lists_compatible(
-		const zend_type_list *list1, const zend_type_list *list2, const zend_class_entry *ce) {
+		const zend_type_list *list1,
+		const zend_class_reference *list1_scope,
+		const zend_type_list *list2,
+		const zend_class_reference *list2_scope,
+		const zend_class_entry *ce) {
 	/* list1 is complete, while list2 may have defaulted arguments. */
 	uint32_t i = 0;
-	for (; i < list2->num_types; i++) {
-		const zend_type *type1 = &list1->types[i];
-		const zend_type *type2 = &list2->types[i];
-		// TODO: Implement proper type comparison.
-		if (type1->type_mask != type2->type_mask || type1->ptr != type2->ptr) {
-			return 0;
-		}
-	}
 	for (; i < list1->num_types; i++) {
 		const zend_type *type1 = &list1->types[i];
-		const zend_type *type2 = &ce->generic_params[i].default_type;
-		// TODO: Implement proper type comparison.
-		if (type1->type_mask != type2->type_mask || type1->ptr != type2->ptr) {
-			return 0;
+		const zend_type *type2;
+		if (i < list2->num_types) {
+			type2 = &list2->types[i];
+		} else {
+			type2 = &ce->generic_params[i].default_type;
+		}
+		switch (ce->generic_params[i].variance) {
+			case ZEND_GENERIC_PARAM_OUT:
+				if (!zend_type_accepts(type2, list2_scope, type1, list1_scope, NULL)) {
+					return 0;
+				}
+				break;
+			case ZEND_GENERIC_PARAM_IN:
+				if (!zend_type_accepts(type1, list1_scope, type2, list2_scope, NULL)) {
+					return 0;
+				}
+				break;
+			case ZEND_GENERIC_PARAM_INVARIANT:
+				// TODO: variance-aware zend_types_compatible()
+				if (!zend_type_accepts(type1, list1_scope, type2, list2_scope, NULL)
+						|| !zend_type_accepts(type2, list2_scope, type1, list1_scope, NULL)) {
+					return 0;
+				}
+				break;
+			EMPTY_SWITCH_DEFAULT_CASE();
 		}
 	}
+
 	return 1;
 }
 
-ZEND_API bool ZEND_FASTCALL instanceof_unpacked_slow(
-		const zend_class_reference *instance_ref, const zend_class_entry *ce, const zend_type_list *args) {
+ZEND_API bool ZEND_FASTCALL instanceof_ref_slow(
+		const zend_class_reference *instance_ref,
+		const zend_class_reference *instance_scope,
+		const zend_class_reference *ref,
+		const zend_class_reference *ref_scope) {
 	zend_class_entry *instance_ce = instance_ref->ce;
+	zend_class_entry *ce = ref->ce;
 	if (ce->ce_flags & ZEND_ACC_INTERFACE) {
 		return instanceof_function(instance_ce, ce);
 	} else {
-		if (instance_ce == ce && zend_type_lists_compatible(&instance_ref->args, args, ce)) {
+		if (instance_ce == ce && zend_type_lists_compatible(&instance_ref->args, instance_scope, &ref->args, ref_scope, ce)) {
 			return 1;
 		}
 		for (uint32_t i = 0; i < instance_ce->num_parents; i++) {
 			zend_class_reference *parent_ref = instance_ce->parents[i];
-			if (parent_ref->ce == ce && zend_type_lists_compatible(&parent_ref->args, args, ce)) {
+			if (parent_ref->ce == ce && zend_type_lists_compatible(&parent_ref->args, instance_scope, &ref->args, ref_scope, ce)) {
 				return 1;
 			}
 		}

@@ -28,6 +28,8 @@
 #include "zend_API.h"
 #include "zend_exceptions.h"
 #include "zend_interfaces.h"
+#include "zend_operators.h"
+#include "zend_portability.h"
 #include "zend_types.h"
 #include "zend_virtual_cwd.h"
 #include "zend_multibyte.h"
@@ -38,6 +40,8 @@
 #include "zend_observer.h"
 #include "zend_call_stack.h"
 #include "zend_smart_str.h"
+#include "zend_symbolic_inference.h"
+#include "Optimizer/zend_optimizer.h" // TODO: for revert_pass_two
 
 #define SET_NODE(target, src) do { \
 		target ## _type = (src)->op_type; \
@@ -1393,12 +1397,24 @@ static zend_string *add_intersection_type(zend_string *str,
 	zend_string *intersection_str = NULL;
 
 	ZEND_TYPE_LIST_FOREACH(intersection_type_list, single_type) {
-		ZEND_ASSERT(!ZEND_TYPE_HAS_LIST(*single_type));
-		ZEND_ASSERT(ZEND_TYPE_HAS_PNR(*single_type));
-		zend_string *name = ZEND_TYPE_PNR_NAME(*single_type);
-		zend_string *resolved = resolve_class_name(name, scope, resolve);
-		intersection_str = add_type_string(intersection_str, resolved, /* is_intersection */ true);
-		zend_string_release(resolved);
+		if (ZEND_TYPE_HAS_PNR(*single_type)) {
+			zend_string *name = ZEND_TYPE_PNR_NAME(*single_type);
+			zend_string *resolved = resolve_class_name(name, scope, resolve);
+			intersection_str = add_type_string(intersection_str, resolved, /* is_intersection */ true);
+			zend_string_release(resolved);
+		} else {
+			ZEND_ASSERT(ZEND_TYPE_HAS_GENERIC_PARAM(*single_type));
+			uint32_t generic_param_id = ZEND_TYPE_GENERIC_PARAM_ID(*single_type);
+			if (scope) {
+				generic_param_id -= scope->num_bound_generic_args;
+				zend_generic_param *param = &scope->generic_params[generic_param_id];
+				intersection_str = add_type_string(intersection_str, param->name, /* is_intersection */ true);
+			} else {
+				zend_string *id_str = zend_long_to_str(generic_param_id);
+				intersection_str = add_type_string(intersection_str, id_str, /* is_intersection */ true);
+				zend_string_release(id_str);
+			}
+		}
 	} ZEND_TYPE_LIST_FOREACH_END();
 
 	ZEND_ASSERT(intersection_str);
@@ -1444,9 +1460,15 @@ static zend_string *zend_type_to_string_impl(
 			} else {
 				ZEND_ASSERT(ZEND_TYPE_HAS_GENERIC_PARAM(*list_type));
 				uint32_t generic_param_id = ZEND_TYPE_GENERIC_PARAM_ID(*list_type);
-				generic_param_id -= scope->num_bound_generic_args;
-				zend_generic_param *param = &scope->generic_params[generic_param_id];
-				str = add_type_string(str, param->name, /* is_intersection */ false);
+				if (scope) {
+					generic_param_id -= scope->num_bound_generic_args;
+					zend_generic_param *param = &scope->generic_params[generic_param_id];
+					str = add_type_string(str, param->name, /* is_intersection */ false);
+				} else {
+					zend_string *id_str = zend_long_to_str(generic_param_id);
+					str = add_type_string(str, id_str, /* is_intersection */ false);
+					zend_string_release(id_str);
+				}
 			}
 		} ZEND_TYPE_LIST_FOREACH_END();
 	} else if (ZEND_TYPE_HAS_PNR(type)) {
@@ -1458,9 +1480,15 @@ static zend_string *zend_type_to_string_impl(
 		str = zend_class_ref_to_string(ce_ref);
 	} else if (ZEND_TYPE_HAS_GENERIC_PARAM(type)) {
 		uint32_t generic_param_id = ZEND_TYPE_GENERIC_PARAM_ID(type);
-		generic_param_id -= scope->num_bound_generic_args;
-		zend_generic_param *param = &scope->generic_params[generic_param_id];
-		str = zend_string_copy(param->name);
+		if (scope) {
+			generic_param_id -= scope->num_bound_generic_args;
+			zend_generic_param *param = &scope->generic_params[generic_param_id];
+			str = zend_string_copy(param->name);
+		} else {
+			zend_string *id_str = zend_long_to_str(generic_param_id);
+			str = add_type_string(str, id_str, /* is_intersection */ false);
+			zend_string_release(id_str);
+		}
 	}
 
 	uint32_t type_mask = ZEND_TYPE_PURE_MASK(type);
@@ -1890,6 +1918,59 @@ static zend_string *zend_resolve_const_class_name_reference(zend_ast *class_ast,
 
 static zend_type zend_compile_typename(zend_ast *ast);
 
+static zend_always_inline void zend_name_reference_key_start(smart_str *key, zend_string *class_name)
+{
+	zend_string *lcname = zend_string_tolower(class_name);
+	smart_str_append(key, lcname);
+	zend_string_release(lcname);
+
+	smart_str_appendc(key, '<');
+}
+
+static zend_always_inline void zend_name_reference_key_start_lc(smart_str *key, zend_string *lcname)
+{
+	smart_str_append(key, lcname);
+	smart_str_appendc(key, '<');
+}
+
+static zend_always_inline void zend_name_reference_key_add_type(smart_str *key, uint32_t nth_type, zend_type type)
+{
+	if (nth_type != 0) {
+		smart_str_appendc(key, ',');
+	}
+
+	zend_type_to_key_impl(key, type);
+}
+
+static zend_always_inline void zend_name_reference_key_end(smart_str *key)
+{
+	smart_str_appendc(key, '>');
+}
+
+void zend_compile_name_reference_key(zend_name_reference *ref, zend_string *lcname) {
+	if (ref->args.num_types == 0) {
+		if (lcname) {
+			ref->key = zend_new_interned_string(lcname);
+		} else {
+			lcname = zend_string_tolower(ref->name);
+			ref->key = zend_new_interned_string(lcname);
+			zend_string_release(lcname);
+		}
+	} else {
+		smart_str key = {0};
+		if (lcname) {
+			zend_name_reference_key_start_lc(&key, lcname);
+		} else {
+			zend_name_reference_key_start(&key, ref->name);
+		}
+		for (uint32_t i = 0; i < ref->args.num_types; i++) {
+			zend_name_reference_key_add_type(&key, i, ref->args.types[i]);
+		}
+		zend_name_reference_key_end(&key);
+		ref->key = zend_new_interned_string(smart_str_extract(&key));
+	}
+}
+
 static zend_name_reference *zend_compile_name_reference(
 		zend_string *name, zend_ast *args_ast) {
 	zend_ast_list *list = args_ast ? zend_ast_get_list(args_ast) : NULL;
@@ -1902,19 +1983,13 @@ static zend_name_reference *zend_compile_name_reference(
 	} else {
 		ZEND_ASSERT(list);
 		smart_str key = {0};
-		zend_string *lcname = zend_string_tolower(name);
-		smart_str_append(&key, lcname);
-		zend_string_release(lcname);
-		smart_str_appendc(&key, '<');
+		zend_name_reference_key_start(&key, name);
 		for (uint32_t i = 0; i < num_types; i++) {
-			if (i != 0) {
-				smart_str_appendc(&key, ',');
-			}
 			zend_ast *type_ast = list->child[i];
 			ref->args.types[i] = zend_compile_typename(type_ast);
-			zend_type_to_key_impl(&key, ref->args.types[i]);
+			zend_name_reference_key_add_type(&key, i, ref->args.types[i]);
 		}
-		smart_str_appendc(&key, '>');
+		zend_name_reference_key_end(&key);
 		ref->key = zend_new_interned_string(smart_str_extract(&key));
 	}
 	ref->args.num_types = num_types;
@@ -5145,10 +5220,19 @@ static void zend_compile_new(znode *result, zend_ast *ast) /* {{{ */
 	if (class_node.op_type == IS_CONST) {
 		opline->op1_type = IS_CONST;
 		opline->op1.constant = zend_add_pnr_literal(Z_PNR(class_node.u.constant));
+
+		if (ZEND_PNR_IS_SIMPLE(Z_PNR(class_node.u.constant))) {
+			/* literal placeholder for type inference */
+			zval zv;
+			ZVAL_NULL(&zv);
+			zend_add_literal(&zv);
+		}
+
 		opline->op2.num = zend_alloc_cache_slot();
 	} else {
 		SET_NODE(opline->op1, &class_node);
 	}
+
 
 	zend_compile_call_common(&ctor_result, args_ast, NULL, ast->lineno);
 	zend_do_free(&ctor_result);
@@ -6975,7 +7059,6 @@ static zend_type zend_compile_typename_ex(
 					type = single_type;
 					ZEND_TYPE_FULL_MASK(type) |= extra_type_mask;
 				} else {
-					ZEND_ASSERT(!ZEND_TYPE_HAS_GENERIC_PARAM(single_type) && "Not implemented");
 					if (type_list->num_types == 0) {
 
 						/* Switch from single name to name list. */
@@ -7037,15 +7120,16 @@ static zend_type zend_compile_typename_ex(
 				zend_string_release_ex(standard_type_str, false);
 			}
 			/* An intersection of standard types cannot exist so invalidate it */
-			if (ZEND_TYPE_IS_ONLY_MASK(single_type)) {
+			if (!ZEND_TYPE_IS_COMPLEX(single_type)) {
 				zend_string *standard_type_str = zend_type_to_string(single_type, CG(active_class_entry));
 				zend_error_noreturn(E_COMPILE_ERROR,
 					"Type %s cannot be part of an intersection type", ZSTR_VAL(standard_type_str));
 				zend_string_release_ex(standard_type_str, false);
 			}
 			/* Check for "self" and "parent" too */
-			if (zend_string_equals_literal_ci(ZEND_TYPE_PNR_NAME(single_type), "self")
-					|| zend_string_equals_literal_ci(ZEND_TYPE_PNR_NAME(single_type), "parent")) {
+			if (ZEND_TYPE_HAS_PNR(single_type)
+					&& (zend_string_equals_literal_ci(ZEND_TYPE_PNR_NAME(single_type), "self")
+					|| zend_string_equals_literal_ci(ZEND_TYPE_PNR_NAME(single_type), "parent"))) {
 				zend_error_noreturn(E_COMPILE_ERROR,
 					"Type %s cannot be part of an intersection type", ZSTR_VAL(ZEND_TYPE_PNR_NAME(single_type)));
 			}
@@ -8004,6 +8088,11 @@ static void zend_compile_func_decl(znode *result, zend_ast *ast, bool toplevel) 
 	zend_emit_final_return(0);
 
 	pass_two(CG(active_op_array));
+
+	zend_revert_pass_two(op_array); /* TODO */
+	zend_symbolic_inference(op_array, &CG(arena));
+	zend_redo_pass_two(op_array);
+
 	zend_oparray_context_end(&orig_oparray_context);
 
 	/* Pop the loop variable stack separator */

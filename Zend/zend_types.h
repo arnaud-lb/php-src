@@ -214,9 +214,6 @@ typedef struct {
 #define ZEND_TYPE_USES_ARENA(t) \
 	((((t).type_mask) & _ZEND_TYPE_ARENA_BIT) != 0)
 
-#define ZEND_TYPE_IS_ONLY_MASK(t) \
-	(ZEND_TYPE_IS_SET(t) && (t).ptr == NULL)
-
 #define ZEND_TYPE_PNR(t) \
 	((zend_packed_name_reference) (t).ptr)
 
@@ -287,6 +284,23 @@ typedef struct {
 #define ZEND_TYPE_FOREACH_END() \
 	} while (++_cur < _end); \
 } while (0)
+
+/* Same as ZEND_TYPE_FOREACH, but visit the list only if
+ * (type.type_mask & mask) is non zero. */
+#define ZEND_TYPE_FOREACH_EX(type, type_ptr, mask) do { \
+	zend_type *_cur, *_end; \
+	uint32_t _mask = (mask); \
+	zend_type _type = (type); \
+	if (ZEND_TYPE_HAS_LIST(_type) && !(ZEND_TYPE_FULL_MASK(_type) & ~_mask)) { \
+		zend_type_list *_list = ZEND_TYPE_LIST(_type); \
+		_cur = _list->types; \
+		_end = _cur + _list->num_types; \
+	} else { \
+		_cur = &_type; \
+		_end = _cur + 1; \
+	} \
+	do { \
+		type_ptr = _cur;
 
 #define ZEND_TYPE_SET_PTR(t, _ptr) \
 	((t).ptr = (_ptr))
@@ -776,7 +790,7 @@ struct _zend_ast_ref {
 #define IS_INDIRECT             	12
 #define IS_PTR						13
 #define IS_ALIAS_PTR				14
-#define IS_PNR						15
+#define IS_PNR						15 /* TODO: reuse same bit as _ZEND_TYPE_PNR_BIT? */
 #define _IS_ERROR					16
 
 /* used for casts */

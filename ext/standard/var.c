@@ -23,11 +23,14 @@
 #include "php.h"
 #include "php_string.h"
 #include "php_var.h"
+#include "zend_compile.h"
 #include "zend_smart_str.h"
 #include "basic_functions.h"
 #include "php_incomplete_class.h"
 #include "zend_enum.h"
 #include "zend_exceptions.h"
+#include "zend_string.h"
+#include "zend_types.h"
 /* }}} */
 
 struct php_serialize_data {
@@ -163,8 +166,27 @@ again:
 
 			myht = zend_get_properties_for(struc, ZEND_PROP_PURPOSE_DEBUG);
 			class_name = Z_OBJ_HANDLER_P(struc, get_class_name)(Z_OBJ_P(struc));
-			php_printf("%sobject(%s)#%d (%d) {\n", COMMON, ZSTR_VAL(class_name), Z_OBJ_HANDLE_P(struc), myht ? zend_array_count(myht) : 0);
+
+			zend_string *types = zend_empty_string;
+			if (Z_OBJ_P(struc)->cr->args.num_types) {
+				zend_type_list *args = &Z_OBJ_P(struc)->cr->args;
+				smart_str str = {0};
+				smart_str_appendc(&str, '<');
+				for (uint32_t i = 0; i < args->num_types; i++) {
+					if (i > 0) {
+						smart_str_appendc(&str, ',');
+					}
+					zend_string *t = zend_type_to_string(args->types[i], NULL);
+					smart_str_append(&str, t);
+					zend_string_release(t);
+				}
+				smart_str_appendc(&str, '>');
+				types = smart_str_extract(&str);
+			}
+
+			php_printf("%sobject(%s%s)#%d (%d) {\n", COMMON, ZSTR_VAL(class_name), ZSTR_VAL(types), Z_OBJ_HANDLE_P(struc), myht ? zend_array_count(myht) : 0);
 			zend_string_release_ex(class_name, 0);
+			zend_string_release(types);
 
 			if (myht) {
 				zend_ulong num;

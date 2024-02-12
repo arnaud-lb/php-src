@@ -1078,7 +1078,7 @@ static void zend_optimize(zend_op_array      *op_array,
 	}
 }
 
-static void zend_revert_pass_two(zend_op_array *op_array)
+void zend_revert_pass_two(zend_op_array *op_array)
 {
 	zend_op *opline, *end;
 
@@ -1110,7 +1110,7 @@ static void zend_revert_pass_two(zend_op_array *op_array)
 	op_array->fn_flags &= ~ZEND_ACC_DONE_PASS_TWO;
 }
 
-static void zend_redo_pass_two(zend_op_array *op_array)
+void zend_redo_pass_two(zend_op_array *op_array)
 {
 	zend_op *opline, *end;
 #if ZEND_USE_ABS_JMP_ADDR && !ZEND_USE_ABS_CONST_ADDR

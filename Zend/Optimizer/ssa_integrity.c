@@ -123,7 +123,6 @@ void ssa_verify_integrity(zend_op_array *op_array, zend_ssa *ssa, const char *ex
 	for (i = 0; i < ssa->vars_count; i++) {
 		zend_ssa_var *var = &ssa->vars[i];
 		int use;
-		uint32_t type = ssa->var_info[i].type;
 
 		if (var->definition < 0 && !var->definition_phi && i > op_array->last_var) {
 			if (var->use_chain >= 0) {
@@ -192,14 +191,17 @@ void ssa_verify_integrity(zend_op_array *op_array, zend_ssa *ssa, const char *ex
 			}
 		} FOREACH_PHI_USE_END();
 
-		if ((type & (MAY_BE_ARRAY_KEY_ANY-MAY_BE_ARRAY_EMPTY)) && !(type & MAY_BE_ARRAY_OF_ANY)) {
-			FAIL("var " VARFMT " has array key type but not value type\n", VAR(i));
-		}
-		if ((type & MAY_BE_ARRAY_OF_ANY) && !(type & (MAY_BE_ARRAY_KEY_ANY-MAY_BE_ARRAY_EMPTY))) {
-			FAIL("var " VARFMT " has array value type but not key type\n", VAR(i));
-		}
-		if ((type & MAY_BE_REF) && ssa->var_info[i].ce) {
-			FAIL("var " VARFMT " may be ref but has ce\n", VAR(i));
+		if (ssa->var_info) {
+			uint32_t type = ssa->var_info[i].type;
+			if ((type & (MAY_BE_ARRAY_KEY_ANY-MAY_BE_ARRAY_EMPTY)) && !(type & MAY_BE_ARRAY_OF_ANY)) {
+				FAIL("var " VARFMT " has array key type but not value type\n", VAR(i));
+			}
+			if ((type & MAY_BE_ARRAY_OF_ANY) && !(type & (MAY_BE_ARRAY_KEY_ANY-MAY_BE_ARRAY_EMPTY))) {
+				FAIL("var " VARFMT " has array value type but not key type\n", VAR(i));
+			}
+			if ((type & MAY_BE_REF) && ssa->var_info[i].ce) {
+				FAIL("var " VARFMT " may be ref but has ce\n", VAR(i));
+			}
 		}
 	}
 

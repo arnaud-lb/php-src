@@ -51,6 +51,8 @@ ZEND_API void execute_internal(zend_execute_data *execute_data, zval *return_val
 ZEND_API bool zend_is_valid_class_name(zend_string *name);
 ZEND_API zend_class_entry *zend_lookup_class(zend_string *name);
 ZEND_API zend_class_entry *zend_lookup_class_ex(zend_string *name, zend_string *lcname, uint32_t flags);
+ZEND_API zend_class_reference *zend_lookup_generic_class(zend_name_reference *name_ref, zend_string *base_key, uint32_t flags);
+ZEND_API zend_class_reference *zend_lookup_class_by_pnr(zend_packed_name_reference pnr, zend_string *base_key, uint32_t flags);
 ZEND_API zend_class_reference *zend_get_called_scope(zend_execute_data *ex);
 ZEND_API zend_object *zend_get_this_object(zend_execute_data *ex);
 ZEND_API zend_result zend_eval_string(const char *str, zval *retval_ptr, const char *string_name);
@@ -103,6 +105,10 @@ ZEND_API bool zend_verify_ref_array_assignable(zend_reference *ref);
 ZEND_API bool zend_check_user_type_slow(
 		zend_type *type, zval *arg, zend_reference *ref, void **cache_slot,
 		zend_class_entry *scope, bool is_return_type);
+ZEND_API bool zend_type_accepts(
+	const zend_type *accepted_type, const zend_class_reference *accepted_scope,
+	const zend_type *instance_type, const zend_class_reference *instance_scope,
+	void **cache_slot);
 
 #if ZEND_DEBUG
 ZEND_API bool zend_internal_call_should_throw(zend_function *fbc, zend_execute_data *call);
@@ -531,6 +537,10 @@ static zend_always_inline void *zend_get_bad_ptr(void)
 	ZEND_UNREACHABLE();
 	return NULL;
 }
+
+zend_name_reference *zend_infer_instantiation_name_reference(
+		zend_class_entry *ce, zend_string *lcname, zend_type_list *args,
+		zend_class_reference *scope);
 
 END_EXTERN_C()
 

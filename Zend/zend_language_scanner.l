@@ -46,6 +46,8 @@
 #include "zend_strtod.h"
 #include "zend_exceptions.h"
 #include "zend_virtual_cwd.h"
+#include "zend_symbolic_inference.h"
+#include "Optimizer/zend_optimizer.h" /* TODO: for zend_revert_pass_two */
 
 #define YYCTYPE   unsigned char
 #define YYFILL(n) { if ((YYCURSOR + n) >= (YYLIMIT + ZEND_MMAP_AHEAD)) { return 0; } }
@@ -621,6 +623,11 @@ static zend_op_array *zend_compile(int type)
 		op_array->line_start = 1;
 		op_array->line_end = last_lineno;
 		pass_two(op_array);
+
+		zend_revert_pass_two(op_array); /* TODO */
+		zend_symbolic_inference(op_array, &CG(arena));
+		zend_redo_pass_two(op_array);
+
 		zend_oparray_context_end(&original_oparray_context);
 		zend_file_context_end(&original_file_context);
 

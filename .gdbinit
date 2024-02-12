@@ -208,7 +208,7 @@ define ____printzv_contents
 		set $handle = $zvalue->value.obj.handle
 		set $handlers = $zvalue->value.obj.handlers
 		set $zobj = $zvalue->value.obj
-		set $cname = $zobj->ce->name->val
+		set $cname = $zobj->cr->ce->name->val
 		printf "(%s) #%d", $cname, $handle
 		if ! $arg1
 			if $handlers->get_properties == &zend_std_get_properties
@@ -225,7 +225,7 @@ define ____printzv_contents
 					end
 				else
 					printf " {\n"
-					set $ht = &$zobj->ce->properties_info
+					set $ht = &$zobj->cr->ce->properties_info
 					set $k = 0
 					set $num = $ht->nNumUsed
 					while $k < $num
@@ -652,4 +652,9 @@ end
 document lookup_root
 	lookup a refcounted in root
 	usage: lookup_root [ptr].
+end
+
+define print_opcode
+    set $opcode = $arg0
+    print zend_get_opcode_name($opcode)
 end

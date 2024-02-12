@@ -17,12 +17,14 @@
    +----------------------------------------------------------------------+
 */
 
+#include "zend_arena.h"
 #include "zend_compile.h"
 #include "zend_dfg.h"
 #include "zend_ssa.h"
 #include "zend_dump.h"
 #include "zend_inference.h"
 #include "Optimizer/zend_optimizer_internal.h"
+#include "zend_vm_opcodes.h"
 
 static bool dominates(const zend_basic_block *blocks, int a, int b) {
 	while (blocks[b].level > blocks[a].level) {
@@ -540,6 +542,81 @@ static void place_essa_pis(
 }
 /* }}} */
 
+static const zend_op *zend_ssa_find_prev_send_op(const zend_op_array *op_array, const zend_op *opline)
+{
+	int depth = 1;
+
+	for (opline--; opline >= op_array->opcodes; opline--) {
+		switch (opline->opcode) {
+			case ZEND_INIT_FCALL:
+			case ZEND_INIT_FCALL_BY_NAME:
+			case ZEND_INIT_NS_FCALL_BY_NAME:
+			case ZEND_INIT_DYNAMIC_CALL:
+			case ZEND_INIT_USER_CALL:
+			case ZEND_INIT_METHOD_CALL:
+			case ZEND_INIT_STATIC_METHOD_CALL:
+			case ZEND_NEW:
+				depth--;
+				if (depth == 0) {
+					return NULL;
+				}
+				break;
+			case ZEND_SEND_VAR_NO_REF:
+			case ZEND_SEND_VAR_NO_REF_EX:
+			case ZEND_SEND_VAR_EX:
+			case ZEND_SEND_FUNC_ARG:
+			case ZEND_SEND_REF:
+			case ZEND_SEND_UNPACK:
+			case ZEND_SEND_VAL:
+			case ZEND_SEND_VAL_EX:
+			case ZEND_SEND_VAR:
+				if (depth == 1) {
+					return opline;
+				}
+				break;
+			case ZEND_DO_FCALL:
+			case ZEND_DO_ICALL:
+			case ZEND_DO_UCALL:
+			case ZEND_DO_FCALL_BY_NAME:
+				depth++;
+				break;
+		}
+	}
+
+	ZEND_UNREACHABLE();
+}
+
+static const zend_op *zend_ssa_find_fcall_init_op(const zend_op_array *op_array, const zend_op *opline)
+{
+	int depth = 1;
+
+	for (opline--; opline >= op_array->opcodes; opline--) {
+		switch (opline->opcode) {
+			case ZEND_INIT_FCALL:
+			case ZEND_INIT_FCALL_BY_NAME:
+			case ZEND_INIT_NS_FCALL_BY_NAME:
+			case ZEND_INIT_DYNAMIC_CALL:
+			case ZEND_INIT_USER_CALL:
+			case ZEND_INIT_METHOD_CALL:
+			case ZEND_INIT_STATIC_METHOD_CALL:
+			case ZEND_NEW:
+				depth--;
+				if (depth == 0) {
+					return opline;
+				}
+				break;
+			case ZEND_DO_FCALL:
+			case ZEND_DO_ICALL:
+			case ZEND_DO_UCALL:
+			case ZEND_DO_FCALL_BY_NAME:
+				depth++;
+				break;
+		}
+	}
+
+	ZEND_UNREACHABLE();
+}
+
 static zend_always_inline int _zend_ssa_rename_op(const zend_op_array *op_array, const zend_op *opline, uint32_t k, uint32_t build_flags, int ssa_vars_count, zend_ssa_op *ssa_ops, int *var) /* {{{ */
 {
 	const zend_op *next;
@@ -680,12 +757,6 @@ add_op1_def:
 		case ZEND_BIND_GLOBAL:
 		case ZEND_BIND_STATIC:
 		case ZEND_BIND_INIT_STATIC_OR_JMP:
-		case ZEND_SEND_VAR_NO_REF:
-		case ZEND_SEND_VAR_NO_REF_EX:
-		case ZEND_SEND_VAR_EX:
-		case ZEND_SEND_FUNC_ARG:
-		case ZEND_SEND_REF:
-		case ZEND_SEND_UNPACK:
 		case ZEND_FE_RESET_RW:
 		case ZEND_MAKE_REF:
 		case ZEND_PRE_INC_OBJ:
@@ -703,7 +774,67 @@ add_op1_def:
 				goto add_op1_def;
 			}
 			break;
+		case ZEND_SEND_VAR_NO_REF:
+		case ZEND_SEND_VAR_NO_REF_EX:
+		case ZEND_SEND_VAR_EX:
+		case ZEND_SEND_FUNC_ARG:
+		case ZEND_SEND_REF:
+		case ZEND_SEND_UNPACK:
+		case ZEND_SEND_VAL:
+		case ZEND_SEND_VAL_EX:
 		case ZEND_SEND_VAR:
+			if (build_flags & ZEND_SSA_CALL_CHAINS) {
+				// TODO: this is inefficient
+				const zend_op *init_op = zend_ssa_find_fcall_init_op(op_array, opline);
+				ssa_ops[k].result_def = ssa_vars_count;
+				ssa_vars_count++;
+				if (opline->extended_value == 0) {
+					if (init_op->opcode != ZEND_NEW) {
+						const zend_ssa_op *init_ssa_op = &ssa_ops[init_op-op_array->opcodes];
+						ssa_ops[k].result_use = init_ssa_op->result_def;
+					}
+				} else {
+					// TODO: this is inefficient
+					const zend_op *prev_send_op = zend_ssa_find_prev_send_op(op_array, opline);
+					ssa_ops[k].result_use = ssa_ops[prev_send_op-op_array->opcodes].result_def;
+				}
+			} else if (opline->op1_type == IS_CV) {
+				if (opline->opcode != ZEND_SEND_VAR || (build_flags & ZEND_SSA_RC_INFERENCE)) {
+					goto add_op1_def;
+				}
+			}
+			break;
+		case ZEND_INIT_METHOD_CALL:
+		case ZEND_INIT_STATIC_METHOD_CALL:
+			if (build_flags & ZEND_SSA_CALL_CHAINS) {
+				ssa_ops[k].result_def = ssa_vars_count;
+				ssa_vars_count++;
+			}
+			break;
+		case ZEND_DO_FCALL:
+		case ZEND_DO_ICALL:
+		case ZEND_DO_UCALL:
+		case ZEND_DO_FCALL_BY_NAME:
+		case ZEND_CALLABLE_CONVERT:
+			if (build_flags & ZEND_SSA_CALL_CHAINS) {
+				// TODO: this is inefficient
+				const zend_op *init_op = zend_ssa_find_fcall_init_op(op_array, opline);
+				const zend_op *prev_send_op = zend_ssa_find_prev_send_op(op_array, opline);
+				if (init_op->opcode == ZEND_NEW) {
+					if (prev_send_op) {
+						zend_ssa_op *init_ssa_op = &ssa_ops[init_op-op_array->opcodes];
+						init_ssa_op->result_use = ssa_ops[prev_send_op-op_array->opcodes].result_def;
+					}
+				} else {
+					if (prev_send_op) {
+						ssa_ops[k].result_use = ssa_ops[prev_send_op-op_array->opcodes].result_def;
+					} else {
+						const zend_ssa_op *init_ssa_op = &ssa_ops[init_op-op_array->opcodes];
+						ssa_ops[k].result_use = init_ssa_op->result_def;
+					}
+				}
+			}
+			break;
 		case ZEND_CAST:
 		case ZEND_QM_ASSIGN:
 		case ZEND_JMP_SET:
@@ -787,7 +918,7 @@ ZEND_API int zend_ssa_rename_op(const zend_op_array *op_array, const zend_op *op
 }
 /* }}} */
 
-static zend_result zend_ssa_rename(const zend_op_array *op_array, uint32_t build_flags, zend_ssa *ssa, int *var, int n) /* {{{ */
+static zend_result zend_ssa_rename(zend_arena **arena, const zend_op_array *op_array, uint32_t build_flags, zend_ssa *ssa, int *var, int n) /* {{{ */
 {
 	zend_basic_block *blocks = ssa->cfg.blocks;
 	zend_ssa_block *ssa_blocks = ssa->blocks;
@@ -891,7 +1022,7 @@ static zend_result zend_ssa_rename(const zend_op_array *op_array, uint32_t build
 	j = blocks[n].children;
 	while (j >= 0) {
 		// FIXME: Tail call optimization?
-		if (zend_ssa_rename(op_array, build_flags, ssa, var, j) == FAILURE)
+		if (zend_ssa_rename(arena, op_array, build_flags, ssa, var, j) == FAILURE)
 			return FAILURE;
 		j = blocks[j].next_child;
 	}
@@ -1039,7 +1170,7 @@ ZEND_API zend_result zend_build_ssa(zend_arena **arena, const zend_script *scrip
 		var[j] = j;
 	}
 	ssa->vars_count = op_array->last_var;
-	if (zend_ssa_rename(op_array, build_flags, ssa, var, 0) == FAILURE) {
+	if (zend_ssa_rename(arena, op_array, build_flags, ssa, var, 0) == FAILURE) {
 		free_alloca(var, var_use_heap);
 		free_alloca(dfg.tmp, dfg_use_heap);
 		return FAILURE;
@@ -1091,15 +1222,21 @@ ZEND_API void zend_ssa_compute_use_def_chains(zend_arena **arena, const zend_op_
 			ssa_vars[op->result_use].use_chain = i;
 		}
 		if (op->op1_def >= 0) {
-			ssa_vars[op->op1_def].var = EX_VAR_TO_NUM(op_array->opcodes[i].op1.var);
+			if (op_array->opcodes[i].op1_type & (IS_TMP_VAR|IS_VAR|IS_CV)) {
+				ssa_vars[op->op1_def].var = EX_VAR_TO_NUM(op_array->opcodes[i].op1.var);
+			}
 			ssa_vars[op->op1_def].definition = i;
 		}
 		if (op->op2_def >= 0) {
-			ssa_vars[op->op2_def].var = EX_VAR_TO_NUM(op_array->opcodes[i].op2.var);
+			if (op_array->opcodes[i].op2_type & (IS_TMP_VAR|IS_VAR|IS_CV)) {
+				ssa_vars[op->op2_def].var = EX_VAR_TO_NUM(op_array->opcodes[i].op2.var);
+			}
 			ssa_vars[op->op2_def].definition = i;
 		}
 		if (op->result_def >= 0) {
-			ssa_vars[op->result_def].var = EX_VAR_TO_NUM(op_array->opcodes[i].result.var);
+			if (op_array->opcodes[i].result_type & (IS_TMP_VAR|IS_VAR|IS_CV)) {
+				ssa_vars[op->result_def].var = EX_VAR_TO_NUM(op_array->opcodes[i].result.var);
+			}
 			ssa_vars[op->result_def].definition = i;
 		}
 	}
@@ -1164,7 +1301,10 @@ ZEND_API void zend_ssa_compute_use_def_chains(zend_arena **arena, const zend_op_
 	}
 	for (i = op_array->last_var; i < ssa->vars_count; i++) {
 		if (ssa_vars[i].var < op_array->last_var) {
-			ssa_vars[i].alias = ssa_vars[ssa_vars[i].var].alias;
+			int var = ssa_vars[i].var;
+			if (var >= 0) {
+				ssa_vars[i].alias = ssa_vars[var].alias;
+			}
 		}
 	}
 }

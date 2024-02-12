@@ -21,6 +21,7 @@
 #ifndef ZEND_OPERATORS_H
 #define ZEND_OPERATORS_H
 
+#include "zend_types.h"
 #include <errno.h>
 #include <math.h>
 #include <assert.h>
@@ -66,18 +67,23 @@ ZEND_API zend_result ZEND_FASTCALL is_smaller_or_equal_function(zval *result, zv
 
 ZEND_API bool ZEND_FASTCALL zend_class_implements_interface(const zend_class_entry *class_ce, const zend_class_entry *interface_ce);
 ZEND_API bool ZEND_FASTCALL instanceof_function_slow(const zend_class_entry *instance_ce, const zend_class_entry *ce);
-ZEND_API bool ZEND_FASTCALL instanceof_unpacked_slow(const zend_class_reference *ce_ref, const zend_class_entry *ce, const zend_type_list *args);
+ZEND_API bool ZEND_FASTCALL instanceof_ref_slow(
+		const zend_class_reference *instance_ref,
+		const zend_class_reference *instance_scope,
+		const zend_class_reference *ref,
+		const zend_class_reference *ref_scope);
 
 static zend_always_inline bool instanceof_function(
 		const zend_class_entry *instance_ce, const zend_class_entry *ce) {
 	return instance_ce == ce || instanceof_function_slow(instance_ce, ce);
 }
 
-static zend_always_inline bool instanceof_unpacked(
-		const zend_class_reference *ce_ref, const zend_class_entry *ce,
-		const zend_type_list *args) {
-	return (ce_ref->ce == ce && ce_ref->args.num_types == 0 && args->num_types == 0)
-		|| instanceof_unpacked_slow(ce_ref, ce, args);
+static zend_always_inline bool instanceof_ref(
+		const zend_class_reference *instance_ref,
+		const zend_class_reference *instance_scope,
+		const zend_class_reference *ref,
+		const zend_class_reference *ref_scope) {
+	return instance_ref == ref || instanceof_ref_slow(instance_ref, instance_scope, ref, ref_scope);
 }
 
 ZEND_API bool zend_string_only_has_ascii_alphanumeric(const zend_string *str);

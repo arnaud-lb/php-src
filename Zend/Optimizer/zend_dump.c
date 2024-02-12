@@ -408,7 +408,11 @@ ZEND_API void zend_dump_ssa_var(const zend_op_array *op_array, const zend_ssa *s
 	} else {
 		fprintf(stderr, "#?.");
 	}
-	zend_dump_var(op_array, (var_num < op_array->last_var ? IS_CV : var_type), var_num);
+	if (var_num >= 0) {
+		zend_dump_var(op_array, (var_num < op_array->last_var ? IS_CV : var_type), var_num);
+	} else {
+		fprintf(stderr, "?");
+	}
 
 	if (ssa_var_num >= 0 && ssa->vars) {
 		if (ssa->vars[ssa_var_num].no_val) {
@@ -481,13 +485,14 @@ ZEND_API void zend_dump_op(const zend_op_array *op_array, const zend_basic_block
 	uint32_t n = 0;
 
 	if (!ssa_op || ssa_op->result_use < 0) {
-		if (opline->result_type & (IS_CV|IS_VAR|IS_TMP_VAR)) {
-			if (ssa_op && ssa_op->result_def >= 0) {
-				int ssa_var_num = ssa_op->result_def;
-				zend_dump_ssa_var(op_array, ssa, ssa_var_num, opline->result_type, EX_VAR_TO_NUM(opline->result.var), dump_flags);
-			} else {
-				zend_dump_var(op_array, opline->result_type, EX_VAR_TO_NUM(opline->result.var));
-			}
+		if (ssa_op && ssa_op->result_def >= 0) {
+			int ssa_var_num = ssa_op->result_def;
+			zend_dump_ssa_var(op_array, ssa, ssa_var_num, opline->result_type,
+					(opline->result_type & (IS_CV|IS_VAR|IS_TMP_VAR)) ? EX_VAR_TO_NUM(opline->result.var) : -1,
+					dump_flags);
+			fprintf(stderr, " = ");
+		} else if (opline->result_type & (IS_CV|IS_VAR|IS_TMP_VAR)) {
+			zend_dump_var(op_array, opline->result_type, EX_VAR_TO_NUM(opline->result.var));
 			fprintf(stderr, " = ");
 		}
 	}

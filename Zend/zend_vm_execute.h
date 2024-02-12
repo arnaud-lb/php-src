@@ -10536,15 +10536,22 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_NEW_SPEC_CONST_UNUSED_HANDLER(
 					HANDLE_EXCEPTION();
 				}
 				if (UNEXPECTED(ce->num_generic_params != 0)) {
-					zend_name_reference ref = {
-						.name = ZEND_PNR_SIMPLE_GET_NAME(pnr),
-						.key = Z_STR_P(RT_CONSTANT(opline, opline->op1) + 1),
-					};
-					class_ref = zend_fetch_generic_class_by_ref(&ref, Z_STR_P(RT_CONSTANT(opline, opline->op1) + 1), ZEND_FETCH_CLASS_DEFAULT | ZEND_FETCH_CLASS_EXCEPTION);
-					if (UNEXPECTED(class_ref == NULL)) {
+					zval *ztypes = RT_CONSTANT(opline, opline->op1) + 2;
+					ZEND_ASSERT(Z_TYPE_P(ztypes) != IS_NULL);
+					zend_type_list *types = Z_PTR_P(ztypes);
+					zend_name_reference *ref = zend_infer_instantiation_name_reference(ce, Z_STR_P(RT_CONSTANT(opline, opline->op1) + 1), types);
+					if (UNEXPECTED(EG(exception))) {
+						zend_name_reference_release(ref, false, false);
 						ZVAL_UNDEF(EX_VAR(opline->result.var));
 						HANDLE_EXCEPTION();
 					}
+					class_ref = zend_fetch_generic_class_by_ref(ref, Z_STR_P(RT_CONSTANT(opline, opline->op1) + 1), ZEND_FETCH_CLASS_DEFAULT | ZEND_FETCH_CLASS_EXCEPTION);
+					if (UNEXPECTED(class_ref == NULL)) {
+						zend_name_reference_release(ref, false, false);
+						ZVAL_UNDEF(EX_VAR(opline->result.var));
+						HANDLE_EXCEPTION();
+					}
+					efree(ref); /* members are owned by class_ref */
 				} else {
 					class_ref = ZEND_CE_TO_REF(ce);
 				}
@@ -29717,15 +29724,22 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_NEW_SPEC_VAR_UNUSED_HANDLER(ZE
 					HANDLE_EXCEPTION();
 				}
 				if (UNEXPECTED(ce->num_generic_params != 0)) {
-					zend_name_reference ref = {
-						.name = ZEND_PNR_SIMPLE_GET_NAME(pnr),
-						.key = Z_STR_P(RT_CONSTANT(opline, opline->op1) + 1),
-					};
-					class_ref = zend_fetch_generic_class_by_ref(&ref, Z_STR_P(RT_CONSTANT(opline, opline->op1) + 1), ZEND_FETCH_CLASS_DEFAULT | ZEND_FETCH_CLASS_EXCEPTION);
-					if (UNEXPECTED(class_ref == NULL)) {
+					zval *ztypes = RT_CONSTANT(opline, opline->op1) + 2;
+					ZEND_ASSERT(Z_TYPE_P(ztypes) != IS_NULL);
+					zend_type_list *types = Z_PTR_P(ztypes);
+					zend_name_reference *ref = zend_infer_instantiation_name_reference(ce, Z_STR_P(RT_CONSTANT(opline, opline->op1) + 1), types);
+					if (UNEXPECTED(EG(exception))) {
+						zend_name_reference_release(ref, false, false);
 						ZVAL_UNDEF(EX_VAR(opline->result.var));
 						HANDLE_EXCEPTION();
 					}
+					class_ref = zend_fetch_generic_class_by_ref(ref, Z_STR_P(RT_CONSTANT(opline, opline->op1) + 1), ZEND_FETCH_CLASS_DEFAULT | ZEND_FETCH_CLASS_EXCEPTION);
+					if (UNEXPECTED(class_ref == NULL)) {
+						zend_name_reference_release(ref, false, false);
+						ZVAL_UNDEF(EX_VAR(opline->result.var));
+						HANDLE_EXCEPTION();
+					}
+					efree(ref); /* members are owned by class_ref */
 				} else {
 					class_ref = ZEND_CE_TO_REF(ce);
 				}
@@ -36908,15 +36922,22 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_NEW_SPEC_UNUSED_UNUSED_HANDLER
 					HANDLE_EXCEPTION();
 				}
 				if (UNEXPECTED(ce->num_generic_params != 0)) {
-					zend_name_reference ref = {
-						.name = ZEND_PNR_SIMPLE_GET_NAME(pnr),
-						.key = Z_STR_P(RT_CONSTANT(opline, opline->op1) + 1),
-					};
-					class_ref = zend_fetch_generic_class_by_ref(&ref, Z_STR_P(RT_CONSTANT(opline, opline->op1) + 1), ZEND_FETCH_CLASS_DEFAULT | ZEND_FETCH_CLASS_EXCEPTION);
-					if (UNEXPECTED(class_ref == NULL)) {
+					zval *ztypes = RT_CONSTANT(opline, opline->op1) + 2;
+					ZEND_ASSERT(Z_TYPE_P(ztypes) != IS_NULL);
+					zend_type_list *types = Z_PTR_P(ztypes);
+					zend_name_reference *ref = zend_infer_instantiation_name_reference(ce, Z_STR_P(RT_CONSTANT(opline, opline->op1) + 1), types);
+					if (UNEXPECTED(EG(exception))) {
+						zend_name_reference_release(ref, false, false);
 						ZVAL_UNDEF(EX_VAR(opline->result.var));
 						HANDLE_EXCEPTION();
 					}
+					class_ref = zend_fetch_generic_class_by_ref(ref, Z_STR_P(RT_CONSTANT(opline, opline->op1) + 1), ZEND_FETCH_CLASS_DEFAULT | ZEND_FETCH_CLASS_EXCEPTION);
+					if (UNEXPECTED(class_ref == NULL)) {
+						zend_name_reference_release(ref, false, false);
+						ZVAL_UNDEF(EX_VAR(opline->result.var));
+						HANDLE_EXCEPTION();
+					}
+					efree(ref); /* members are owned by class_ref */
 				} else {
 					class_ref = ZEND_CE_TO_REF(ce);
 				}

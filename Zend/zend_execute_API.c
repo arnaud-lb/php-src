@@ -1291,6 +1291,21 @@ ZEND_API zend_class_entry *zend_lookup_class(zend_string *name) /* {{{ */
 }
 /* }}} */
 
+ZEND_API zend_class_reference *zend_lookup_class_by_pnr(zend_packed_name_reference pnr, zend_string *base_key, uint32_t flags) /* {{{ */
+{
+	if (ZEND_PNR_IS_SIMPLE(pnr)) {
+		zend_class_entry *ce = zend_lookup_class_ex(
+				ZEND_PNR_SIMPLE_GET_NAME(pnr), base_key, flags);
+		if (!ce) {
+			return NULL;
+		}
+		return ZEND_CE_TO_REF(ce);
+	}
+
+	return zend_lookup_generic_class(ZEND_PNR_COMPLEX_GET_REF(pnr), base_key, flags);
+}
+/* }}} */
+
 ZEND_API zend_class_reference *zend_get_called_scope(zend_execute_data *ex) /* {{{ */
 {
 	while (ex) {

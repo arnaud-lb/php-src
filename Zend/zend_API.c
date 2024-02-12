@@ -20,6 +20,7 @@
 */
 
 #include "zend.h"
+#include "zend_compile.h"
 #include "zend_execute.h"
 #include "zend_API.h"
 #include "zend_modules.h"
@@ -1778,7 +1779,25 @@ ZEND_API zend_class_reference *zend_build_class_reference(zend_name_reference *n
 	uint8_t param_id = 0;
 
 	for (; param_id < type_args->num_types; param_id++) {
-		// TODO: check ce->generic_params[param_id].bound_type
+		if (ZEND_TYPE_IS_SET(ce->generic_params[param_id].bound_type)) {
+			if (UNEXPECTED(!zend_type_accepts(&ce->generic_params[param_id].bound_type,
+					NULL, &type_args->types[param_id], NULL, NULL))) {
+				zend_string *bound_type_name = zend_type_to_string(
+						ce->generic_params[param_id].bound_type, ce);
+				zend_string *actual_type_name = zend_type_to_string(
+						type_args->types[param_id], ce);
+				zend_throw_error(zend_ce_type_error,
+						"Class %s: Generic type argument #%d (%s) must be of type %s, %s given",
+						ZSTR_VAL(ce->name), param_id,
+						ZSTR_VAL(ce->generic_params[param_id].name),
+						ZSTR_VAL(bound_type_name),
+						ZSTR_VAL(actual_type_name));
+				zend_string_release(bound_type_name);
+				zend_string_release(actual_type_name);
+				efree(class_ref);
+				return NULL;
+			}
+		}
 		class_ref->args.types[param_id] = type_args->types[param_id];
 	}
 

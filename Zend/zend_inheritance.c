@@ -32,6 +32,7 @@
 #include "zend_observer.h"
 #include "zend_string.h"
 #include "zend_types.h"
+#include "zend_type_tools.h"
 
 ZEND_API zend_class_entry* (*zend_inheritance_cache_get)(zend_class_entry *ce, zend_class_entry *parent, zend_class_entry **traits_and_interfaces) = NULL;
 ZEND_API zend_class_entry* (*zend_inheritance_cache_add)(zend_class_entry *ce, zend_class_entry *proto, zend_class_entry *parent, zend_class_entry **traits_and_interfaces, HashTable *dependencies) = NULL;
@@ -61,39 +62,6 @@ static void ZEND_COLD emit_incompatible_method_error(
 		const zend_function *child, zend_class_entry *child_scope,
 		const zend_function *parent, zend_class_entry *parent_scope,
 		inheritance_status status);
-
-static void zend_type_copy_ctor(zend_type *const type, bool use_arena, bool persistent);
-
-static void zend_type_list_copy_ctor(
-	zend_type *const parent_type,
-	bool use_arena,
-	bool persistent
-) {
-	const zend_type_list *const old_list = ZEND_TYPE_LIST(*parent_type);
-	size_t size = ZEND_TYPE_LIST_SIZE(old_list->num_types);
-	zend_type_list *new_list = use_arena
-		? zend_arena_alloc(&CG(arena), size) : pemalloc(size, persistent);
-
-	memcpy(new_list, old_list, size);
-	ZEND_TYPE_SET_LIST(*parent_type, new_list);
-	if (use_arena) {
-		ZEND_TYPE_FULL_MASK(*parent_type) |= _ZEND_TYPE_ARENA_BIT;
-	}
-
-	zend_type *list_type;
-	ZEND_TYPE_LIST_FOREACH(new_list, list_type) {
-		zend_type_copy_ctor(list_type, use_arena, persistent);
-	} ZEND_TYPE_LIST_FOREACH_END();
-}
-
-static void zend_type_copy_ctor(zend_type *const type, bool use_arena, bool persistent) {
-	if (ZEND_TYPE_HAS_LIST(*type)) {
-		zend_type_list_copy_ctor(type, use_arena, persistent);
-	} else if (ZEND_TYPE_HAS_PNR(*type)) {
-		// TODO: Duplicate name reference...
-		zend_string_addref(ZEND_TYPE_PNR_NAME(*type));
-	}
-}
 
 static zend_function *zend_duplicate_internal_function(zend_function *func, zend_class_entry *ce) /* {{{ */
 {

@@ -116,9 +116,7 @@ void zend_name_reference_release(
 	zend_type *arg_type;
 	zend_string_release(name_ref->name);
 	ZEND_TYPE_LIST_FOREACH(&name_ref->args, arg_type) {
-		if (ZEND_TYPE_HAS_PNR(*arg_type)) {
-			zend_pnr_release(ZEND_TYPE_PNR(*arg_type), uses_arena, persistent);
-		}
+		zend_type_release(*arg_type, persistent);
 	} ZEND_TYPE_LIST_FOREACH_END();
 	if (!uses_arena) {
 		pefree(name_ref, persistent);
