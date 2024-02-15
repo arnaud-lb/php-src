@@ -24,6 +24,7 @@
 #include "zend_API.h"
 #include "zend_constants.h"
 #include "zend_execute.h"
+#include "zend_types.h"
 #include "zend_vm.h"
 #include "zend_cfg.h"
 #include "zend_func_info.h"
@@ -323,11 +324,13 @@ bool zend_optimizer_update_op1_const(zend_op_array *op_array,
 			zend_optimizer_add_literal_string(op_array, zend_string_tolower(Z_STR_P(val)));
 			break;
 		case ZEND_NEW:
-			REQUIRES_STRING(val);
-			drop_leading_backslash(val);
+			if (Z_TYPE_P(val) != IS_PNR) {
+				return 0;
+			}
+			// TODO drop_leading_backslash(val);
 			opline->op1.constant = zend_optimizer_add_literal(op_array, val);
 			opline->op2.num = alloc_cache_slots(op_array, 1);
-			zend_optimizer_add_literal_string(op_array, zend_string_tolower(Z_STR_P(val)));
+			zend_optimizer_add_literal_string(op_array, zend_string_tolower(ZEND_PNR_GET_NAME(Z_PNR_P(val))));
 			break;
 		case ZEND_INIT_STATIC_METHOD_CALL:
 			REQUIRES_STRING(val);
@@ -816,9 +819,9 @@ zend_class_entry *zend_optimizer_get_class_entry_from_op1(
 		const zend_script *script, const zend_op_array *op_array, const zend_op *opline) {
 	if (opline->op1_type == IS_CONST) {
 		zval *op1 = CRT_CONSTANT(opline->op1);
-		if (Z_TYPE_P(op1) == IS_STRING) {
-			return zend_optimizer_get_class_entry(script, op_array, Z_STR_P(op1 + 1));
-		}
+		ZEND_ASSERT(Z_TYPE_P(op1) == IS_PNR || Z_TYPE_P(op1) == IS_STRING);
+		ZEND_ASSERT(Z_TYPE_P(op1 + 1) == IS_STRING);
+		return zend_optimizer_get_class_entry(script, op_array, Z_STR_P(op1 + 1));
 	} else if (opline->op1_type == IS_UNUSED && op_array->scope
 			&& !(op_array->scope->ce_flags & ZEND_ACC_TRAIT)
 			&& (opline->op1.num & ZEND_FETCH_CLASS_MASK) == ZEND_FETCH_CLASS_SELF) {
@@ -1075,7 +1078,7 @@ static void zend_optimize(zend_op_array      *op_array,
 	}
 }
 
-static void zend_revert_pass_two(zend_op_array *op_array)
+void zend_revert_pass_two(zend_op_array *op_array)
 {
 	zend_op *opline, *end;
 
@@ -1107,7 +1110,7 @@ static void zend_revert_pass_two(zend_op_array *op_array)
 	op_array->fn_flags &= ~ZEND_ACC_DONE_PASS_TWO;
 }
 
-static void zend_redo_pass_two(zend_op_array *op_array)
+void zend_redo_pass_two(zend_op_array *op_array)
 {
 	zend_op *opline, *end;
 #if ZEND_USE_ABS_JMP_ADDR && !ZEND_USE_ABS_CONST_ADDR

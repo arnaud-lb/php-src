@@ -634,7 +634,6 @@ EMPTY_SWITCH_DEFAULT_CASE()
 	_(ZEND_STR_SENSITIVEPARAMETER,     "SensitiveParameter") \
 	_(ZEND_STR_CONST_EXPR_PLACEHOLDER, "[constant expression]") \
 
-
 typedef enum _zend_known_string_id {
 #define _ZEND_STR_ID(id, str) id,
 ZEND_KNOWN_STRINGS(_ZEND_STR_ID)

@@ -39,6 +39,7 @@
 #include "ext/standard/php_dns.h"
 #include "ext/standard/php_uuencode.h"
 #include "ext/standard/crc32_x86.h"
+#include "zend_types.h"
 
 #ifdef PHP_WIN32
 #include "win32/php_win32_globals.h"
@@ -1518,7 +1519,7 @@ PHP_FUNCTION(forward_static_call)
 	zval retval;
 	zend_fcall_info fci;
 	zend_fcall_info_cache fci_cache;
-	zend_class_entry *called_scope;
+	zend_class_reference *called_scope;
 
 	ZEND_PARSE_PARAMETERS_START(1, -1)
 		Z_PARAM_FUNC(fci, fci_cache)
@@ -1534,8 +1535,8 @@ PHP_FUNCTION(forward_static_call)
 
 	called_scope = zend_get_called_scope(execute_data);
 	if (called_scope && fci_cache.calling_scope &&
-		instanceof_function(called_scope, fci_cache.calling_scope)) {
-			fci_cache.called_scope = called_scope;
+		instanceof_function(called_scope->ce, fci_cache.calling_scope)) {
+			fci_cache.called_scope = called_scope->ce;
 	}
 
 	if (zend_call_function(&fci, &fci_cache) == SUCCESS && Z_TYPE(retval) != IS_UNDEF) {
@@ -1554,7 +1555,7 @@ PHP_FUNCTION(forward_static_call_array)
 	HashTable *params;
 	zend_fcall_info fci;
 	zend_fcall_info_cache fci_cache;
-	zend_class_entry *called_scope;
+	zend_class_reference *called_scope;
 
 	ZEND_PARSE_PARAMETERS_START(2, 2)
 		Z_PARAM_FUNC(fci, fci_cache)
@@ -1567,8 +1568,8 @@ PHP_FUNCTION(forward_static_call_array)
 
 	called_scope = zend_get_called_scope(execute_data);
 	if (called_scope && fci_cache.calling_scope &&
-		instanceof_function(called_scope, fci_cache.calling_scope)) {
-			fci_cache.called_scope = called_scope;
+		instanceof_function(called_scope->ce, fci_cache.calling_scope)) {
+			fci_cache.called_scope = called_scope->ce;
 	}
 
 	if (zend_call_function(&fci, &fci_cache) == SUCCESS && Z_TYPE(retval) != IS_UNDEF) {

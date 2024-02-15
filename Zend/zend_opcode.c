@@ -29,6 +29,7 @@
 #include "zend_constants.h"
 #include "zend_observer.h"
 
+#include "zend_types.h"
 #include "zend_vm.h"
 
 static void zend_extension_op_array_ctor_handler(zend_extension *extension, zend_op_array *op_array)
@@ -108,17 +109,41 @@ ZEND_API void destroy_zend_function(zend_function *function)
 	zend_function_dtor(&tmp);
 }
 
+void zend_pnr_release(zend_packed_name_reference pnr, bool uses_arena, bool persistent);
+
+void zend_name_reference_release(
+		zend_name_reference *name_ref, bool uses_arena, bool persistent) {
+	zend_type *arg_type;
+	zend_string_release(name_ref->name);
+	ZEND_TYPE_LIST_FOREACH(&name_ref->args, arg_type) {
+		zend_type_release(*arg_type, persistent);
+	} ZEND_TYPE_LIST_FOREACH_END();
+	if (!uses_arena) {
+		pefree(name_ref, persistent);
+	}
+}
+
+void zend_pnr_release(zend_packed_name_reference pnr, bool uses_arena, bool persistent) {
+	if (ZEND_PNR_IS_COMPLEX(pnr)) {
+		zend_name_reference_release(ZEND_PNR_COMPLEX_GET_REF(pnr), uses_arena, persistent);
+	} else {
+		zend_string_release(ZEND_PNR_SIMPLE_GET_NAME(pnr));
+	}
+}
+
+
 ZEND_API void zend_type_release(zend_type type, bool persistent) {
+	bool uses_arena = ZEND_TYPE_USES_ARENA(type);
 	if (ZEND_TYPE_HAS_LIST(type)) {
 		zend_type *list_type;
 		ZEND_TYPE_LIST_FOREACH(ZEND_TYPE_LIST(type), list_type) {
 			zend_type_release(*list_type, persistent);
 		} ZEND_TYPE_LIST_FOREACH_END();
-		if (!ZEND_TYPE_USES_ARENA(type)) {
+		if (!uses_arena) {
 			pefree(ZEND_TYPE_LIST(type), persistent);
 		}
-	} else if (ZEND_TYPE_HAS_NAME(type)) {
-		zend_string_release(ZEND_TYPE_NAME(type));
+	} else if (ZEND_TYPE_HAS_PNR(type)) {
+		zend_pnr_release(ZEND_TYPE_PNR(type), uses_arena, persistent);
 	}
 }
 
@@ -283,6 +308,15 @@ ZEND_API void zend_cleanup_mutable_class_data(zend_class_entry *ce)
 	}
 }
 
+ZEND_API void destroy_zend_class_reference(zval *zv)
+{
+	zend_class_reference *class_ref = Z_CR_P(zv);
+
+	ZEND_ASSERT(!ZEND_REF_IS_TRIVIAL(class_ref));
+
+	efree(class_ref);
+}
+
 ZEND_API void destroy_zend_class(zval *zv)
 {
 	zend_property_info *prop_info;
@@ -327,11 +361,15 @@ ZEND_API void destroy_zend_class(zval *zv)
 		return;
 	}
 
+	zend_string_release(ZEND_CE_TO_REF(ce)->key);
+
 	switch (ce->type) {
 		case ZEND_USER_CLASS:
 			if (!(ce->ce_flags & ZEND_ACC_CACHED)) {
-				if (ce->parent_name && !(ce->ce_flags & ZEND_ACC_RESOLVED_PARENT)) {
-					zend_string_release_ex(ce->parent_name, 0);
+				if (ce->num_parents) {
+					if (!(ce->ce_flags & ZEND_ACC_RESOLVED_PARENT)) {
+						zend_pnr_release(ce->parent_name, /* uses_arena */ 1, /* persistent */ 0);
+					}
 				}
 
 				zend_string_release_ex(ce->name, 0);
@@ -358,6 +396,36 @@ ZEND_API void destroy_zend_class(zval *zv)
 				if (ce->num_traits > 0) {
 					_destroy_zend_class_traits_info(ce);
 				}
+
+				if (ce->num_generic_params > 0) {
+					for (uint32_t i = 0; i < ce->num_generic_params; i++) {
+						zend_generic_param *param = &ce->generic_params[i];
+						zend_string_release(param->name);
+						zend_type_release(param->bound_type, /* persistent */ 0);
+						zend_type_release(param->default_type, /* persistent */ 0);
+					}
+					efree(ce->generic_params);
+				}
+				if (ce->num_bound_generic_args > 0) {
+					for (uint32_t i = 0; i < ce->num_bound_generic_args; i++) {
+						zend_type *type = &ce->bound_generic_args[i];
+						zend_type_release(*type, /* persistent */ 0);
+					}
+					efree(ce->bound_generic_args);
+				}
+			}
+
+			if (ce->num_parents && (ce->ce_flags & ZEND_ACC_RESOLVED_PARENT)) {
+				for (uint32_t i = 0; i < ce->num_parents; i++) {
+					zend_class_reference *ref = ce->parents[i];
+					if (!ZEND_REF_IS_TRIVIAL(ref)) {
+						/* The type arguments are owned by bound_generic_args,
+						 * and will be destroyed there. */
+						zend_string_release(ref->key);
+						efree(ref);
+					}
+				}
+				efree(ce->parents);
 			}
 
 			if (ce->default_properties_table) {
@@ -421,6 +489,9 @@ ZEND_API void destroy_zend_class(zval *zv)
 		case ZEND_INTERNAL_CLASS:
 			if (ce->backed_enum_table) {
 				zend_hash_release(ce->backed_enum_table);
+			}
+			if (ce->num_parents) {
+				free(ce->parents);
 			}
 			if (ce->default_properties_table) {
 				zval *p = ce->default_properties_table;
@@ -510,7 +581,7 @@ ZEND_API void destroy_zend_class(zval *zv)
 			if (ce->attributes) {
 				zend_hash_release(ce->attributes);
 			}
-			free(ce);
+			free((char *) ce - ZEND_CLASS_ENTRY_HEADER_SIZE);
 			break;
 	}
 }

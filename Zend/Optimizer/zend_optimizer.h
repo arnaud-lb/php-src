@@ -98,6 +98,8 @@ ZEND_API int zend_optimizer_register_pass(zend_optimizer_pass_t pass);
 ZEND_API void zend_optimizer_unregister_pass(int idx);
 zend_result zend_optimizer_startup(void);
 zend_result zend_optimizer_shutdown(void);
+void zend_revert_pass_two(zend_op_array *op_array);
+void zend_redo_pass_two(zend_op_array *op_array);
 END_EXTERN_C()
 
 #endif

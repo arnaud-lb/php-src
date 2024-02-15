@@ -638,7 +638,7 @@ PHPDBG_API bool phpdbg_check_caught_ex(zend_execute_data *execute_data, zend_obj
 					CACHE_PTR(cur->extended_value & ~ZEND_LAST_CATCH, ce);
 				}
 
-				if (ce == exception->ce || (ce && instanceof_function(exception->ce, ce))) {
+				if (ce == OBJ_CE(exception) || (ce && instanceof_function(OBJ_CE(exception), ce))) {
 					return 1;
 				}
 

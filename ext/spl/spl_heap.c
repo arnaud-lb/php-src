@@ -124,7 +124,7 @@ static void spl_ptr_heap_pqueue_elem_ctor(void *elem) { /* {{{ */
 static zend_result spl_ptr_heap_cmp_cb_helper(zval *object, spl_heap_object *heap_object, zval *a, zval *b, zend_long *result) { /* {{{ */
 	zval zresult;
 
-	zend_call_method_with_2_params(Z_OBJ_P(object), heap_object->std.ce, &heap_object->fptr_cmp, "compare", &zresult, a, b);
+	zend_call_method_with_2_params(Z_OBJ_P(object), OBJ_CE(&heap_object->std), &heap_object->fptr_cmp, "compare", &zresult, a, b);
 
 	if (EG(exception)) {
 		return FAILURE;
@@ -406,10 +406,10 @@ static void spl_heap_object_free_storage(zend_object *object) /* {{{ */
 static zend_object *spl_heap_object_new_ex(zend_class_entry *class_type, zend_object *orig, int clone_orig) /* {{{ */
 {
 	spl_heap_object   *intern;
-	zend_class_entry  *parent = class_type;
+	zend_class_entry  *parent;
 	int                inherited = 0;
 
-	intern = zend_object_alloc(sizeof(spl_heap_object), parent);
+	intern = zend_object_alloc(sizeof(spl_heap_object), class_type);
 
 	zend_object_std_init(&intern->std, class_type);
 	object_properties_init(&intern->std, class_type);
@@ -430,23 +430,23 @@ static zend_object *spl_heap_object_new_ex(zend_class_entry *class_type, zend_ob
 		return &intern->std;
 	}
 
-	while (parent) {
-		if (parent == spl_ce_SplPriorityQueue) {
-			intern->heap = spl_ptr_heap_init(spl_ptr_pqueue_elem_cmp, spl_ptr_heap_pqueue_elem_ctor, spl_ptr_heap_pqueue_elem_dtor, sizeof(spl_pqueue_elem));
-			intern->flags = SPL_PQUEUE_EXTR_DATA;
-			break;
+	parent = zend_class_entry_get_root(class_type);
+	inherited = class_type != spl_ce_SplPriorityQueue
+		&& class_type != spl_ce_SplMinHeap && spl_ce_SplMaxHeap;
+	if (parent == spl_ce_SplPriorityQueue) {
+		intern->heap = spl_ptr_heap_init(spl_ptr_pqueue_elem_cmp, spl_ptr_heap_pqueue_elem_ctor, spl_ptr_heap_pqueue_elem_dtor, sizeof(spl_pqueue_elem));
+		intern->flags = SPL_PQUEUE_EXTR_DATA;
+	} else {
+		ZEND_ASSERT(parent == spl_ce_SplHeap);
+		if (instanceof_function(class_type, spl_ce_SplMinHeap)) {
+			parent = spl_ce_SplMinHeap;
+		} else if (instanceof_function(class_type, spl_ce_SplMaxHeap)) {
+			parent = spl_ce_SplMaxHeap;
 		}
 
-		if (parent == spl_ce_SplMinHeap || parent == spl_ce_SplMaxHeap
-				|| parent == spl_ce_SplHeap) {
-			intern->heap = spl_ptr_heap_init(
-				parent == spl_ce_SplMinHeap ? spl_ptr_heap_zval_min_cmp : spl_ptr_heap_zval_max_cmp,
-				spl_ptr_heap_zval_ctor, spl_ptr_heap_zval_dtor, sizeof(zval));
-			break;
-		}
-
-		parent = parent->parent;
-		inherited = 1;
+		intern->heap = spl_ptr_heap_init(
+			parent == spl_ce_SplMinHeap ? spl_ptr_heap_zval_min_cmp : spl_ptr_heap_zval_max_cmp,
+			spl_ptr_heap_zval_ctor, spl_ptr_heap_zval_dtor, sizeof(zval));
 	}
 
 	ZEND_ASSERT(parent);
@@ -475,7 +475,7 @@ static zend_object *spl_heap_object_new(zend_class_entry *class_type) /* {{{ */
 
 static zend_object *spl_heap_object_clone(zend_object *old_object) /* {{{ */
 {
-	zend_object *new_object = spl_heap_object_new_ex(old_object->ce, old_object, 1);
+	zend_object *new_object = spl_heap_object_new_ex(OBJ_CE(old_object), old_object, 1);
 
 	zend_objects_clone_members(new_object, old_object);
 
@@ -489,7 +489,7 @@ static zend_result spl_heap_object_count_elements(zend_object *object, zend_long
 
 	if (intern->fptr_count) {
 		zval rv;
-		zend_call_method_with_0_params(object, intern->std.ce, &intern->fptr_count, "count", &rv);
+		zend_call_method_with_0_params(object, OBJ_CE(&intern->std), &intern->fptr_count, "count", &rv);
 		if (!Z_ISUNDEF(rv)) {
 			*count = zval_get_long(&rv);
 			zval_ptr_dtor(&rv);

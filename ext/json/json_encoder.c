@@ -124,7 +124,7 @@ static zend_result php_json_encode_array(smart_str *buf, zval *val, int options,
 	 && Z_OBJ_HT_P(val)->get_properties == zend_std_get_properties) {
 		/* Optimized version without rebuilding properties HashTable */
 		zend_object *obj = Z_OBJ_P(val);
-		zend_class_entry *ce = obj->ce;
+		zend_class_entry *ce = OBJ_CE(obj);
 		zend_property_info *prop_info;
 		zval *prop;
 		int i;

@@ -21,6 +21,7 @@
 #include "zend_constants.h"
 #include "zend_exceptions.h"
 #include "zend_execute.h"
+#include "zend_types.h"
 #include "zend_variables.h"
 #include "zend_operators.h"
 #include "zend_globals.h"
@@ -306,8 +307,10 @@ ZEND_API zval *zend_get_class_constant_ex(zend_string *class_name, zend_string *
 	zval *ret_constant = NULL;
 
 	if (ZSTR_HAS_CE_CACHE(class_name)) {
-		ce = ZSTR_GET_CE_CACHE(class_name);
-		if (!ce) {
+		zend_class_reference *class_ref = ZSTR_GET_CE_CACHE(class_name);
+		if (class_ref) {
+			ce = class_ref->ce;
+		} else {
 			ce = zend_fetch_class(class_name, flags);
 		}
 	} else if (zend_string_equals_literal_ci(class_name, "self")) {
@@ -320,18 +323,19 @@ ZEND_API zval *zend_get_class_constant_ex(zend_string *class_name, zend_string *
 		if (UNEXPECTED(!scope)) {
 			zend_throw_error(NULL, "Cannot access \"parent\" when no class scope is active");
 			goto failure;
-		} else if (UNEXPECTED(!scope->parent)) {
+		} else if (UNEXPECTED(!scope->num_parents)) {
 			zend_throw_error(NULL, "Cannot access \"parent\" when current class scope has no parent");
 			goto failure;
 		} else {
-			ce = scope->parent;
+			ce = scope->parents[0]->ce;
 		}
 	} else if (zend_string_equals_ci(class_name, ZSTR_KNOWN(ZEND_STR_STATIC))) {
-		ce = zend_get_called_scope(EG(current_execute_data));
-		if (UNEXPECTED(!ce)) {
+		zend_class_reference *class_ref = zend_get_called_scope(EG(current_execute_data));
+		if (UNEXPECTED(!class_ref)) {
 			zend_throw_error(NULL, "Cannot access \"static\" when no class scope is active");
 			goto failure;
 		}
+		ce = class_ref->ce;
 	} else {
 		ce = zend_fetch_class(class_name, flags);
 	}
@@ -433,11 +437,11 @@ ZEND_API zval *zend_get_constant_ex(zend_string *cname, zend_class_entry *scope,
 			if (UNEXPECTED(!scope)) {
 				zend_throw_error(NULL, "Cannot access \"parent\" when no class scope is active");
 				goto failure;
-			} else if (UNEXPECTED(!scope->parent)) {
+			} else if (UNEXPECTED(!scope->num_parents)) {
 				zend_throw_error(NULL, "Cannot access \"parent\" when current class scope has no parent");
 				goto failure;
 			} else {
-				ce = scope->parent;
+				ce = scope->parents[0]->ce;
 			}
 		} else if (zend_string_equals_ci(class_name, ZSTR_KNOWN(ZEND_STR_STATIC))) {
 			ce = zend_get_called_scope(EG(current_execute_data));

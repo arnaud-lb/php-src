@@ -26,6 +26,7 @@
 #include "zend_persist.h"
 #include "zend_shared_alloc.h"
 #include "zend_observer.h"
+#include "zend_types.h"
 
 #ifdef __SSE2__
 /* For SSE2 adler32 */
@@ -239,7 +240,7 @@ static zend_always_inline void _zend_accel_class_hash_copy(HashTable *target, Ha
 			_zend_hash_append_ptr_ex(target, p->key, Z_PTR(p->val), 1);
 			if ((ce->ce_flags & ZEND_ACC_LINKED) && ZSTR_VAL(p->key)[0]) {
 				if (ZSTR_HAS_CE_CACHE(ce->name)) {
-					ZSTR_SET_CE_CACHE_EX(ce->name, ce, 0);
+					ZSTR_SET_CE_CACHE_EX(ce->name, ZEND_CE_TO_REF(ce), 0);
 				}
 				if (UNEXPECTED(call_observers)) {
 					_zend_observer_class_linked_notify(ce, p->key);

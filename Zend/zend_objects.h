@@ -21,9 +21,11 @@
 #define ZEND_OBJECTS_H
 
 #include "zend.h"
+#include "zend_types.h"
 
 BEGIN_EXTERN_C()
 ZEND_API void ZEND_FASTCALL zend_object_std_init(zend_object *object, zend_class_entry *ce);
+ZEND_API zend_object* ZEND_FASTCALL zend_objects_new_ref(zend_class_reference *class_ref);
 ZEND_API zend_object* ZEND_FASTCALL zend_objects_new(zend_class_entry *ce);
 ZEND_API void ZEND_FASTCALL zend_objects_clone_members(zend_object *new_object, zend_object *old_object);
 

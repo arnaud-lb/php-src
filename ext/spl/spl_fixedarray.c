@@ -42,7 +42,7 @@ ZEND_GET_MODULE(spl_fixedarray)
 
 /* Check if the object is an instance of a subclass of SplFixedArray that overrides method's implementation.
  * Expect subclassing SplFixedArray to be rare and check that first. */
-#define HAS_FIXEDARRAY_ARRAYACCESS_OVERRIDE(object, method) UNEXPECTED((object)->ce != spl_ce_SplFixedArray && (object)->ce->arrayaccess_funcs_ptr->method->common.scope != spl_ce_SplFixedArray)
+#define HAS_FIXEDARRAY_ARRAYACCESS_OVERRIDE(object, method) UNEXPECTED(OBJ_CE(object) != spl_ce_SplFixedArray && OBJ_CE(object)->arrayaccess_funcs_ptr->method->common.scope != spl_ce_SplFixedArray)
 
 typedef struct _spl_fixedarray {
 	zend_long size;
@@ -237,7 +237,7 @@ static HashTable* spl_fixedarray_object_get_properties_for(zend_object *obj, zen
 	 * SplFixedArray can be subclassed or have dynamic properties (With or without AllowDynamicProperties in subclasses).
 	 * Instances of subclasses with declared properties may have properties but not yet have a property table.
 	 */
-	HashTable *source_properties = obj->properties ? obj->properties : (obj->ce->default_properties_count ? zend_std_get_properties(obj) : NULL);
+	HashTable *source_properties = obj->properties ? obj->properties : (OBJ_CE(obj)->default_properties_count ? zend_std_get_properties(obj) : NULL);
 
 	const zend_long size = intern->array.size;
 	if (size == 0 && (!source_properties || !zend_hash_num_elements(source_properties))) {
@@ -277,10 +277,9 @@ static void spl_fixedarray_object_free_storage(zend_object *object)
 static zend_object *spl_fixedarray_object_new_ex(zend_class_entry *class_type, zend_object *orig, bool clone_orig)
 {
 	spl_fixedarray_object *intern;
-	zend_class_entry      *parent = class_type;
 	bool                   inherited = false;
 
-	intern = zend_object_alloc(sizeof(spl_fixedarray_object), parent);
+	intern = zend_object_alloc(sizeof(spl_fixedarray_object), class_type);
 
 	zend_object_std_init(&intern->std, class_type);
 	object_properties_init(&intern->std, class_type);
@@ -290,21 +289,12 @@ static zend_object *spl_fixedarray_object_new_ex(zend_class_entry *class_type, z
 		spl_fixedarray_copy_ctor(&intern->array, &other->array);
 	}
 
-	while (parent) {
-		if (parent == spl_ce_SplFixedArray) {
-			break;
-		}
-
-		parent = parent->parent;
-		inherited = true;
-	}
-
-	ZEND_ASSERT(parent);
+	inherited = class_type != spl_ce_SplFixedArray;
 
 	if (UNEXPECTED(inherited)) {
 		/* Find count() method */
 		zend_function *fptr_count = zend_hash_find_ptr(&class_type->function_table, ZSTR_KNOWN(ZEND_STR_COUNT));
-		if (fptr_count->common.scope == parent) {
+		if (fptr_count->common.scope == spl_ce_SplFixedArray) {
 			fptr_count = NULL;
 		}
 		intern->fptr_count = fptr_count;
@@ -320,7 +310,7 @@ static zend_object *spl_fixedarray_new(zend_class_entry *class_type)
 
 static zend_object *spl_fixedarray_object_clone(zend_object *old_object)
 {
-	zend_object *new_object = spl_fixedarray_object_new_ex(old_object->ce, old_object, 1);
+	zend_object *new_object = spl_fixedarray_object_new_ex(OBJ_CE(old_object), old_object, 1);
 
 	zend_objects_clone_members(new_object, old_object);
 
@@ -397,7 +387,7 @@ static zval *spl_fixedarray_object_read_dimension(zend_object *object, zval *off
 			ZVAL_NULL(&tmp);
 			offset = &tmp;
 		}
-		zend_call_known_instance_method_with_1_params(object->ce->arrayaccess_funcs_ptr->zf_offsetget, object, rv, offset);
+		zend_call_known_instance_method_with_1_params(OBJ_CE(object)->arrayaccess_funcs_ptr->zf_offsetget, object, rv, offset);
 		if (!Z_ISUNDEF_P(rv)) {
 			return rv;
 		}
@@ -445,7 +435,7 @@ static void spl_fixedarray_object_write_dimension(zend_object *object, zval *off
 			ZVAL_NULL(&tmp);
 			offset = &tmp;
 		}
-		zend_call_known_instance_method_with_2_params(object->ce->arrayaccess_funcs_ptr->zf_offsetset, object, NULL, offset, value);
+		zend_call_known_instance_method_with_2_params(OBJ_CE(object)->arrayaccess_funcs_ptr->zf_offsetset, object, NULL, offset, value);
 		return;
 	}
 
@@ -474,7 +464,7 @@ static void spl_fixedarray_object_unset_dimension_helper(spl_fixedarray_object *
 static void spl_fixedarray_object_unset_dimension(zend_object *object, zval *offset)
 {
 	if (UNEXPECTED(HAS_FIXEDARRAY_ARRAYACCESS_OVERRIDE(object, zf_offsetunset))) {
-		zend_call_known_instance_method_with_1_params(object->ce->arrayaccess_funcs_ptr->zf_offsetunset, object, NULL, offset);
+		zend_call_known_instance_method_with_1_params(OBJ_CE(object)->arrayaccess_funcs_ptr->zf_offsetunset, object, NULL, offset);
 		return;
 	}
 
@@ -507,7 +497,7 @@ static int spl_fixedarray_object_has_dimension(zend_object *object, zval *offset
 	if (HAS_FIXEDARRAY_ARRAYACCESS_OVERRIDE(object, zf_offsetexists)) {
 		zval rv;
 
-		zend_call_known_instance_method_with_1_params(object->ce->arrayaccess_funcs_ptr->zf_offsetexists, object, &rv, offset);
+		zend_call_known_instance_method_with_1_params(OBJ_CE(object)->arrayaccess_funcs_ptr->zf_offsetexists, object, &rv, offset);
 		bool result = zend_is_true(&rv);
 		zval_ptr_dtor(&rv);
 		return result;

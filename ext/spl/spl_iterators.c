@@ -929,7 +929,7 @@ static zend_function *spl_recursive_it_get_method(zend_object **zobject, zend_st
 	zval                    *zobj;
 
 	if (!object->iterators) {
-		zend_throw_error(NULL, "The %s instance wasn't initialized properly", ZSTR_VAL((*zobject)->ce->name));
+		zend_throw_error(NULL, "The %s instance wasn't initialized properly", ZSTR_VAL(OBJ_CE(*zobject)->name));
 		return NULL;
 	}
 	zobj = &object->iterators[level].zobject;
@@ -1656,7 +1656,7 @@ static inline void spl_filter_it_fetch(zval *zthis, spl_dual_it_object *intern)
 	zval retval;
 
 	while (spl_dual_it_fetch(intern, 1) == SUCCESS) {
-		zend_call_method_with_0_params(Z_OBJ_P(zthis), intern->std.ce, NULL, "accept", &retval);
+		zend_call_method_with_0_params(Z_OBJ_P(zthis), OBJ_CE(&intern->std), NULL, "accept", &retval);
 		if (Z_TYPE(retval) != IS_UNDEF) {
 			if (zend_is_true(&retval)) {
 				zval_ptr_dtor(&retval);
@@ -1887,7 +1887,7 @@ PHP_METHOD(RegexIterator, accept)
 			break;
 
 		case REGIT_MODE_REPLACE: {
-			zval *replacement = zend_read_property(intern->std.ce, Z_OBJ_P(ZEND_THIS), "replacement", sizeof("replacement")-1, 1, &rv);
+			zval *replacement = zend_read_property(OBJ_CE(&intern->std), Z_OBJ_P(ZEND_THIS), "replacement", sizeof("replacement")-1, 1, &rv);
 			zend_string *replacement_str = zval_try_get_string(replacement);
 
 			if (UNEXPECTED(!replacement_str)) {

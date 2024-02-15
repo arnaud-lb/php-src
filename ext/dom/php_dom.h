@@ -194,7 +194,7 @@ void dom_mark_namespaces_for_copy_based_on_copy(xmlNodePtr copy, const xmlNode *
 #define DOM_GET_INTERN(__id, __intern) { \
 	__intern = Z_DOMOBJ_P(__id); \
 	if (UNEXPECTED(__intern->ptr == NULL)) { \
-		zend_throw_error(NULL, "Couldn't fetch %s", ZSTR_VAL(__intern->std.ce->name));\
+		zend_throw_error(NULL, "Couldn't fetch %s", ZSTR_VAL(OBJ_NAME(&__intern->std)));\
 		RETURN_THROWS();\
   	} \
 }

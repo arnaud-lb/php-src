@@ -24,6 +24,7 @@
 #include "zend_persist.h"
 #include "zend_extensions.h"
 #include "zend_shared_alloc.h"
+#include "zend_types.h"
 #include "zend_vm.h"
 #include "zend_constants.h"
 #include "zend_operators.h"
@@ -81,10 +82,52 @@
 		} \
 	} while (0)
 
+# define zend_accel_store_pnr(pnr) do { \
+		if (ZEND_PNR_IS_SIMPLE(pnr)) { \
+			zend_string *_name =  ZEND_PNR_SIMPLE_GET_NAME(pnr); \
+			zend_accel_store_interned_string(_name); \
+			if (ZEND_PNR_ENCODE_NAME(_name) != (pnr)) { \
+				(pnr) = ZEND_PNR_ENCODE_NAME(_name); \
+			} \
+		} else if (ZEND_PNR_IS_COMPLEX(pnr)) { \
+			zend_name_reference *_name_ref = ZEND_PNR_COMPLEX_GET_REF(pnr); \
+			zend_string *_new_name_ref = zend_shared_alloc_get_xlat_entry(_name_ref); \
+			if (_new_name_ref) { \
+				(pnr) = ZEND_PNR_ENCODE_REF(_new_name_ref); \
+			} else { \
+				_name_ref = zend_shared_memdup_put((void*)_name_ref, ZEND_CLASS_REF_SIZE(_name_ref->args.num_types)); \
+				zend_accel_store_interned_string(_name_ref->name); \
+				zend_accel_store_interned_string(_name_ref->key); \
+				zend_persist_type_list(&_name_ref->args); \
+				(pnr) = ZEND_PNR_ENCODE_REF(_name_ref); \
+			} \
+		} \
+	} while (0)
+
+# define zend_accel_store_zv_pnr(zv) do { \
+		ZEND_ASSERT(Z_TYPE_P(zv) == IS_PNR); \
+		zend_packed_name_reference _pnr = Z_PNR_P(zv); \
+		zend_accel_store_pnr(_pnr); \
+		if (Z_PNR_P(zv) != _pnr) { \
+			Z_PNR_P(zv) = _pnr; \
+		} \
+	} while (0)
+
+# define zend_accel_store_type_pnr(type) do { \
+		ZEND_ASSERT(ZEND_TYPE_HAS_PNR(type)); \
+		zend_packed_name_reference _pnr = ZEND_TYPE_PNR(type); \
+		zend_accel_store_pnr(_pnr); \
+		if (ZEND_TYPE_PNR(type) != _pnr) { \
+			ZEND_TYPE_SET_PNR((type), _pnr); \
+		} \
+	} while (0)
+
 typedef void (*zend_persist_func_t)(zval*);
 
 static void zend_persist_zval(zval *z);
 static void zend_persist_op_array(zval *zv);
+static void zend_persist_type_list(zend_type_list *type_list);
+
 
 static const uint32_t uninitialized_bucket[-HT_MIN_MASK] =
 	{HT_INVALID_IDX, HT_INVALID_IDX};
@@ -265,6 +308,9 @@ static void zend_persist_zval(zval *z)
 				efree(old_ref);
 			}
 			break;
+		case IS_PNR:
+			zend_accel_store_zv_pnr(z);
+			break;
 		default:
 			ZEND_ASSERT(Z_TYPE_P(z) < IS_STRING);
 			break;
@@ -357,15 +403,20 @@ static void zend_persist_type(zend_type *type) {
 			zend_persist_type(single_type);
 			continue;
 		}
-		if (ZEND_TYPE_HAS_NAME(*single_type)) {
-			zend_string *type_name = ZEND_TYPE_NAME(*single_type);
-			zend_accel_store_interned_string(type_name);
-			ZEND_TYPE_SET_PTR(*single_type, type_name);
+		if (ZEND_TYPE_HAS_PNR(*single_type)) {
+			zend_accel_store_type_pnr(*single_type);
 			if (!ZCG(current_persistent_script)->corrupted) {
-				zend_accel_get_class_name_map_ptr(type_name);
+				zend_accel_get_class_name_map_ptr(ZEND_TYPE_PNR_NAME(*single_type));
 			}
 		}
 	} ZEND_TYPE_FOREACH_END();
+}
+
+static void zend_persist_type_list(zend_type_list *type_list) {
+	zend_type *single_type;
+	ZEND_TYPE_LIST_FOREACH(type_list, single_type) {
+		zend_persist_type(single_type);
+	} ZEND_TYPE_LIST_FOREACH_END();
 }
 
 static void zend_persist_op_array_ex(zend_op_array *op_array, zend_persistent_script* main_persistent_script)
@@ -855,7 +906,14 @@ zend_class_entry *zend_persist_class_entry(zend_class_entry *orig_ce)
 		if (new_ce) {
 			return new_ce;
 		}
-		ce = zend_shared_memdup_put(ce, sizeof(zend_class_entry));
+
+		zend_class_reference *class_ref = zend_shared_memdup_put(
+				ZEND_CE_TO_REF(ce), sizeof(zend_class_entry_storage));
+		ce = (zend_class_entry*)((char*)class_ref + ZEND_CLASS_ENTRY_HEADER_SIZE);
+		zend_shared_alloc_register_xlat_entry(orig_ce, ce);
+		class_ref->ce = ce;
+		zend_accel_store_interned_string(class_ref->key);
+
 		if (EXPECTED(!ZCG(current_persistent_script)->corrupted)) {
 			ce->ce_flags |= ZEND_ACC_IMMUTABLE;
 			if ((ce->ce_flags & ZEND_ACC_LINKED)
@@ -867,6 +925,7 @@ zend_class_entry *zend_persist_class_entry(zend_class_entry *orig_ce)
 		} else {
 			ce->ce_flags |= ZEND_ACC_FILE_CACHED;
 		}
+
 		ce->inheritance_cache = NULL;
 
 		if (!(ce->ce_flags & ZEND_ACC_CACHED)) {
@@ -879,7 +938,7 @@ zend_class_entry *zend_persist_class_entry(zend_class_entry *orig_ce)
 				zend_accel_get_class_name_map_ptr(ce->name);
 			}
 			if (ce->parent_name && !(ce->ce_flags & ZEND_ACC_LINKED)) {
-				zend_accel_store_interned_string(ce->parent_name);
+				zend_accel_store_pnr(ce->parent_name);
 			}
 		}
 
@@ -904,7 +963,7 @@ zend_class_entry *zend_persist_class_entry(zend_class_entry *orig_ce)
 
 			/* Persist only static properties in this class.
 			 * Static properties from parent classes will be handled in class_copy_ctor */
-			i = (ce->parent && (ce->ce_flags & ZEND_ACC_LINKED)) ? ce->parent->default_static_members_count : 0;
+			i = (ce->num_parents && (ce->ce_flags & ZEND_ACC_LINKED)) ? ce->parents[0]->ce->default_static_members_count : 0;
 			for (; i < ce->default_static_members_count; i++) {
 				zend_persist_zval(&ce->default_static_members_table[i]);
 			}
@@ -1066,24 +1125,36 @@ zend_class_entry *zend_persist_class_entry(zend_class_entry *orig_ce)
 void zend_update_parent_ce(zend_class_entry *ce)
 {
 	if (ce->ce_flags & ZEND_ACC_LINKED) {
-		if (ce->parent) {
-			int i, end;
-			zend_class_entry *parent = ce->parent;
-
-			if (parent->type == ZEND_USER_CLASS) {
-				zend_class_entry *p = zend_shared_alloc_get_xlat_entry(parent);
-
+		if (ce->num_parents) {
+			ce->parents = zend_shared_memdup_free(ce->parents,
+					sizeof(zend_class_reference *) * ce->num_parents);
+			for (uint32_t i = 0; i < ce->num_parents; i++) {
+				zend_class_reference *parent_ref = ce->parents[i];
+				zend_class_reference *p = zend_shared_alloc_get_xlat_entry(parent_ref);
 				if (p) {
-					ce->parent = parent = p;
+					ce->parents[i] = parent_ref = p;
+				} else {
+					ZEND_ASSERT(!ZEND_REF_IS_TRIVIAL(parent_ref));
+					ce->parents[i] = parent_ref = zend_shared_memdup_free(
+							parent_ref,
+							ZEND_CLASS_REF_SIZE(parent_ref->args.num_types));
+					zend_accel_store_interned_string(parent_ref->key);
+					zend_persist_type_list(&parent_ref->args);
+					zend_class_entry *ce = zend_shared_alloc_get_xlat_entry(parent_ref->ce);
+					if (ce) {
+						parent_ref->ce = ce;
+					}
 				}
 			}
 
 			/* Create indirections to static properties from parent classes */
-			i = parent->default_static_members_count - 1;
-			while (parent && parent->default_static_members_table) {
-				end = parent->parent ? parent->parent->default_static_members_count : 0;
-				for (; i >= end; i--) {
-					zval *p = &ce->default_static_members_table[i];
+			zend_class_entry *parent = ce->parents[0]->ce;
+			int j = parent->default_static_members_count - 1;
+			int end;
+			while (parent->default_static_members_table) {
+				end = parent->num_parents ? parent->parents[0]->ce->default_static_members_count : 0;
+				for (; j >= end; j--) {
+					zval *p = &ce->default_static_members_table[j];
 					/* The static property may have been overridden by a trait
 					 * during inheritance. In that case, the property default
 					 * value is replaced by zend_declare_typed_property() at the
@@ -1091,11 +1162,14 @@ void zend_update_parent_ce(zend_class_entry *ce)
 					 * point to the parent property value if the child value was
 					 * already indirect. */
 					if (Z_TYPE_P(p) == IS_INDIRECT) {
-						ZVAL_INDIRECT(p, &parent->default_static_members_table[i]);
+						ZVAL_INDIRECT(p, &parent->default_static_members_table[j]);
 					}
 				}
 
-				parent = parent->parent;
+				if (!parent->num_parents) {
+					break;
+				}
+				parent = parent->parents[0]->ce;
 			}
 		}
 

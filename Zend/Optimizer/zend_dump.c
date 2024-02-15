@@ -23,7 +23,9 @@
 #include "zend_func_info.h"
 #include "zend_call_graph.h"
 #include "zend_dump.h"
+#include "zend_smart_str.h"
 #include "ext/standard/php_string.h"
+#include "zend_types.h"
 
 void zend_dump_ht(HashTable *ht)
 {
@@ -76,6 +78,39 @@ void zend_dump_const(const zval *zv)
 		case IS_ARRAY:
 			fprintf(stderr, " array(...)");
 			break;
+		case IS_PNR: {
+			zend_packed_name_reference pnr = Z_PNR_P(zv);
+			zend_string *name;
+			const zend_type_list *type_args;
+			ZEND_PNR_UNPACK(pnr, name, type_args);
+
+			smart_str str = {0};
+			smart_str_append(&str, name);
+
+			if (type_args != &zend_empty_type_list) {
+				smart_str_appendc(&str, '<');
+				zend_type *single_type;
+				ZEND_TYPE_LIST_FOREACH((zend_type_list*)type_args, single_type) {
+					if (single_type != type_args->types) {
+						smart_str_appendc(&str, ',');
+					}
+					zend_string *type_str = zend_type_to_string(*single_type, NULL);
+					smart_str_append(&str, type_str);
+					zend_string_release(type_str);
+				} ZEND_TYPE_LIST_FOREACH_END();
+				smart_str_appendc(&str, '>');
+			}
+
+			name = smart_str_extract(&str);
+			zend_string *escaped_string = php_addcslashes(name, "\0..\37\"\\\177..\377", 2);
+			zend_string_release(name);
+
+			fprintf(stderr, " pnr(\"%s\")", ZSTR_VAL(escaped_string));
+
+			zend_string_release(escaped_string);
+
+			break;
+		}
 		default:
 			fprintf(stderr, " zval(type=%d)", Z_TYPE_P(zv));
 			break;
@@ -373,7 +408,11 @@ ZEND_API void zend_dump_ssa_var(const zend_op_array *op_array, const zend_ssa *s
 	} else {
 		fprintf(stderr, "#?.");
 	}
-	zend_dump_var(op_array, (var_num < op_array->last_var ? IS_CV : var_type), var_num);
+	if (var_num >= 0) {
+		zend_dump_var(op_array, (var_num < op_array->last_var ? IS_CV : var_type), var_num);
+	} else {
+		fprintf(stderr, "?");
+	}
 
 	if (ssa_var_num >= 0 && ssa->vars) {
 		if (ssa->vars[ssa_var_num].no_val) {
@@ -446,13 +485,14 @@ ZEND_API void zend_dump_op(const zend_op_array *op_array, const zend_basic_block
 	uint32_t n = 0;
 
 	if (!ssa_op || ssa_op->result_use < 0) {
-		if (opline->result_type & (IS_CV|IS_VAR|IS_TMP_VAR)) {
-			if (ssa_op && ssa_op->result_def >= 0) {
-				int ssa_var_num = ssa_op->result_def;
-				zend_dump_ssa_var(op_array, ssa, ssa_var_num, opline->result_type, EX_VAR_TO_NUM(opline->result.var), dump_flags);
-			} else {
-				zend_dump_var(op_array, opline->result_type, EX_VAR_TO_NUM(opline->result.var));
-			}
+		if (ssa_op && ssa_op->result_def >= 0) {
+			int ssa_var_num = ssa_op->result_def;
+			zend_dump_ssa_var(op_array, ssa, ssa_var_num, opline->result_type,
+					(opline->result_type & (IS_CV|IS_VAR|IS_TMP_VAR)) ? EX_VAR_TO_NUM(opline->result.var) : -1,
+					dump_flags);
+			fprintf(stderr, " = ");
+		} else if (opline->result_type & (IS_CV|IS_VAR|IS_TMP_VAR)) {
+			zend_dump_var(op_array, opline->result_type, EX_VAR_TO_NUM(opline->result.var));
 			fprintf(stderr, " = ");
 		}
 	}

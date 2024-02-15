@@ -100,7 +100,7 @@ PHP_METHOD(PhpToken, tokenize)
 		Z_PARAM_LONG(flags)
 	ZEND_PARSE_PARAMETERS_END();
 
-	token_class = zend_get_called_scope(execute_data);
+	token_class = zend_get_called_scope(execute_data)->ce;
 
 	/* Check construction preconditions in advance, so these are not repeated for each token. */
 	if (token_class->ce_flags & ZEND_ACC_EXPLICIT_ABSTRACT_CLASS) {

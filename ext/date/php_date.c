@@ -314,10 +314,7 @@ static void date_throw_uninitialized_error(zend_class_entry *ce)
 	if (ce->type == ZEND_INTERNAL_CLASS) {
 		zend_throw_error(date_ce_date_object_error, "Object of type %s has not been correctly initialized by calling parent::__construct() in its constructor", ZSTR_VAL(ce->name));
 	} else {
-		zend_class_entry *ce_ptr = ce;
-		while (ce_ptr && ce_ptr->parent && ce_ptr->type == ZEND_USER_CLASS) {
-			ce_ptr = ce_ptr->parent;
-		}
+		zend_class_entry *ce_ptr = zend_class_entry_get_root(ce);
 		if (ce_ptr->type != ZEND_INTERNAL_CLASS) {
 			zend_throw_error(date_ce_date_object_error, "Object of type %s not been correctly initialized by calling parent::__construct() in its constructor", ZSTR_VAL(ce->name));
 		}
@@ -603,14 +600,14 @@ static void update_property(zend_object *object, zend_string *key, zval *prop_va
 
 				zend_string_release_ex(cname, 0);
 			} else { // protected
-				zend_update_property(object->ce, object, prop_name, prop_name_len, prop_val);
+				zend_update_property(OBJ_CE(object), object, prop_name, prop_name_len, prop_val);
 			}
 		}
 		return;
 	}
 
 	// public
-	zend_update_property(object->ce, object, ZSTR_VAL(key), ZSTR_LEN(key), prop_val);
+	zend_update_property(OBJ_CE(object), object, ZSTR_VAL(key), ZSTR_LEN(key), prop_val);
 }
 /* }}} */
 
@@ -1596,8 +1593,8 @@ static zend_class_entry *get_base_date_class(zend_class_entry *start_ce)
 {
 	zend_class_entry *tmp = start_ce;
 
-	while (tmp != date_ce_date && tmp != date_ce_immutable && tmp->parent) {
-		tmp = tmp->parent;
+	while (tmp != date_ce_date && tmp != date_ce_immutable && tmp->num_parents) {
+		tmp = tmp->parents[0]->ce;
 	}
 
 	return tmp;
@@ -1861,7 +1858,7 @@ static zend_object *date_object_new_date(zend_class_entry *class_type) /* {{{ */
 static zend_object *date_object_clone_date(zend_object *this_ptr) /* {{{ */
 {
 	php_date_obj *old_obj = php_date_obj_from_obj(this_ptr);
-	php_date_obj *new_obj = php_date_obj_from_obj(date_object_new_date(old_obj->std.ce));
+	php_date_obj *new_obj = php_date_obj_from_obj(date_object_new_date(OBJ_CE(&old_obj->std)));
 
 	zend_objects_clone_members(&new_obj->std, &old_obj->std);
 	if (!old_obj->time) {
@@ -2001,7 +1998,7 @@ static zend_object *date_object_new_timezone(zend_class_entry *class_type) /* {{
 static zend_object *date_object_clone_timezone(zend_object *this_ptr) /* {{{ */
 {
 	php_timezone_obj *old_obj = php_timezone_obj_from_obj(this_ptr);
-	php_timezone_obj *new_obj = php_timezone_obj_from_obj(date_object_new_timezone(old_obj->std.ce));
+	php_timezone_obj *new_obj = php_timezone_obj_from_obj(date_object_new_timezone(OBJ_CE(&old_obj->std)));
 
 	zend_objects_clone_members(&new_obj->std, &old_obj->std);
 	if (!old_obj->initialized) {
@@ -2165,7 +2162,7 @@ static zend_object *date_object_new_interval(zend_class_entry *class_type) /* {{
 static zend_object *date_object_clone_interval(zend_object *this_ptr) /* {{{ */
 {
 	php_interval_obj *old_obj = php_interval_obj_from_obj(this_ptr);
-	php_interval_obj *new_obj = php_interval_obj_from_obj(date_object_new_interval(old_obj->std.ce));
+	php_interval_obj *new_obj = php_interval_obj_from_obj(date_object_new_interval(OBJ_CE(&old_obj->std)));
 
 	zend_objects_clone_members(&new_obj->std, &old_obj->std);
 	new_obj->civil_or_wall = old_obj->civil_or_wall;
@@ -2256,7 +2253,7 @@ static zend_object *date_object_new_period(zend_class_entry *class_type) /* {{{ 
 static zend_object *date_object_clone_period(zend_object *this_ptr) /* {{{ */
 {
 	php_period_obj *old_obj = php_period_obj_from_obj(this_ptr);
-	php_period_obj *new_obj = php_period_obj_from_obj(date_object_new_period(old_obj->std.ce));
+	php_period_obj *new_obj = php_period_obj_from_obj(date_object_new_period(OBJ_CE(&old_obj->std)));
 
 	zend_objects_clone_members(&new_obj->std, &old_obj->std);
 	new_obj->initialized = old_obj->initialized;

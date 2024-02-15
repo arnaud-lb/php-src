@@ -24,6 +24,9 @@
 #include "zend_builtin_functions.h"
 #include "zend_interfaces.h"
 #include "zend_exceptions.h"
+#include "zend_operators.h"
+#include "zend_string.h"
+#include "zend_types.h"
 #include "zend_vm.h"
 #include "zend_dtrace.h"
 #include "zend_smart_str.h"
@@ -44,10 +47,12 @@ ZEND_API zend_class_entry *zend_ce_division_by_zero_error;
 ZEND_API zend_class_entry *zend_ce_unhandled_match_error;
 
 /* Internal pseudo-exception that is not exposed to userland. Throwing this exception *does not* execute finally blocks. */
-static zend_class_entry zend_ce_unwind_exit;
+static zend_class_entry_storage zend_ces_unwind_exit;
+#define zend_ce_unwind_exit ZEND_CES_TO_CE(zend_ces_unwind_exit)
 
 /* Internal pseudo-exception that is not exposed to userland. Throwing this exception *does* execute finally blocks. */
-static zend_class_entry zend_ce_graceful_exit;
+static zend_class_entry_storage zend_ces_graceful_exit;
+#define zend_ce_graceful_exit ZEND_CES_TO_CE(zend_ces_graceful_exit)
 
 ZEND_API void (*zend_throw_exception_hook)(zend_object *ex);
 
@@ -59,8 +64,8 @@ static int zend_implement_throwable(zend_class_entry *interface, zend_class_entr
 	/* zend_ce_exception and zend_ce_error may not be initialized yet when this is called (e.g when
 	 * implementing Throwable for Exception itself). Perform a manual inheritance check. */
 	zend_class_entry *root = class_type;
-	while (root->parent) {
-		root = root->parent;
+	if (root->num_parents) {
+		root = root->parents[root->num_parents-1]->ce;
 	}
 	if (zend_string_equals_literal(root->name, "Exception")
 			|| zend_string_equals_literal(root->name, "Error")) {
@@ -82,7 +87,7 @@ static int zend_implement_throwable(zend_class_entry *interface, zend_class_entr
 
 static inline zend_class_entry *i_get_exception_base(zend_object *object) /* {{{ */
 {
-	return instanceof_function(object->ce, zend_ce_exception) ? zend_ce_exception : zend_ce_error;
+	return instanceof_function(OBJ_CE(object), zend_ce_exception) ? zend_ce_exception : zend_ce_error;
 }
 /* }}} */
 
@@ -107,7 +112,7 @@ void zend_exception_set_previous(zend_object *exception, zend_object *add_previo
 		return;
 	}
 
-	ZEND_ASSERT(instanceof_function(add_previous->ce, zend_ce_throwable)
+	ZEND_ASSERT(instanceof_function(OBJ_CE(add_previous), zend_ce_throwable)
 		&& "Previous exception must implement Throwable");
 
 	ZVAL_OBJ(&pv, add_previous);
@@ -172,7 +177,7 @@ ZEND_API ZEND_COLD void zend_throw_exception_internal(zend_object *exception) /*
 #ifdef HAVE_DTRACE
 	if (DTRACE_EXCEPTION_THROWN_ENABLED()) {
 		if (exception != NULL) {
-			DTRACE_EXCEPTION_THROWN(ZSTR_VAL(exception->ce->name));
+			DTRACE_EXCEPTION_THROWN(ZSTR_VAL(OBJ_NAME(exception)));
 		} else {
 			DTRACE_EXCEPTION_THROWN(NULL);
 		}
@@ -195,7 +200,7 @@ ZEND_API ZEND_COLD void zend_throw_exception_internal(zend_object *exception) /*
 		}
 	}
 	if (!EG(current_execute_data)) {
-		if (exception && (exception->ce == zend_ce_parse_error || exception->ce == zend_ce_compile_error)) {
+		if (exception && (OBJ_CE(exception) == zend_ce_parse_error || OBJ_CE(exception) == zend_ce_compile_error)) {
 			return;
 		}
 		if (EG(exception)) {
@@ -794,9 +799,13 @@ void zend_register_default_exception(void) /* {{{ */
 	zend_ce_unhandled_match_error = register_class_UnhandledMatchError(zend_ce_error);
 	zend_init_exception_class_entry(zend_ce_unhandled_match_error);
 
-	INIT_CLASS_ENTRY(zend_ce_unwind_exit, "UnwindExit", NULL);
+	INIT_CLASS_ENTRY((*zend_ce_unwind_exit), "UnwindExit", NULL);
+	zend_init_class_entry_header(&zend_ces_unwind_exit,
+			zend_new_interned_string(zend_string_tolower_ex(zend_ce_unwind_exit->name, true)));
 
-	INIT_CLASS_ENTRY(zend_ce_graceful_exit, "GracefulExit", NULL);
+	INIT_CLASS_ENTRY((*zend_ce_graceful_exit), "GracefulExit", NULL);
+	zend_init_class_entry_header(&zend_ces_graceful_exit,
+			zend_new_interned_string(zend_string_tolower_ex(zend_ce_graceful_exit->name, true)));
 }
 /* }}} */
 
@@ -900,7 +909,7 @@ ZEND_API ZEND_COLD zend_result zend_exception_error(zend_object *ex, int severit
 	zend_result result = FAILURE;
 
 	ZVAL_OBJ(&exception, ex);
-	ce_exception = ex->ce;
+	ce_exception = OBJ_CE(ex);
 	EG(exception) = NULL;
 	if (ce_exception == zend_ce_parse_error || ce_exception == zend_ce_compile_error) {
 		zend_string *message = zval_get_string(GET_PROPERTY(&exception, ZEND_STR_MESSAGE));
@@ -918,7 +927,7 @@ ZEND_API ZEND_COLD zend_result zend_exception_error(zend_object *ex, int severit
 		zend_string *str, *file = NULL;
 		zend_long line = 0;
 
-		zend_call_known_instance_method_with_0_params(ex->ce->__tostring, ex, &tmp);
+		zend_call_known_instance_method_with_0_params(OBJ_CE(ex)->__tostring, ex, &tmp);
 		if (!EG(exception)) {
 			if (Z_TYPE(tmp) != IS_STRING) {
 				zend_error(E_WARNING, "%s::__toString() must return a string", ZSTR_VAL(ce_exception->name));
@@ -957,7 +966,7 @@ ZEND_API ZEND_COLD zend_result zend_exception_error(zend_object *ex, int severit
 
 		zend_string_release_ex(str, 0);
 		zend_string_release_ex(file, 0);
-	} else if (ce_exception == &zend_ce_unwind_exit || ce_exception == &zend_ce_graceful_exit) {
+	} else if (ce_exception == zend_ce_unwind_exit || ce_exception == zend_ce_graceful_exit) {
 		/* We successfully unwound, nothing more to do.
 		 * We still return FAILURE in this case, as further execution should still be aborted. */
 	} else {
@@ -1005,12 +1014,12 @@ ZEND_API ZEND_COLD void zend_throw_exception_object(zval *exception) /* {{{ */
 
 ZEND_API ZEND_COLD zend_object *zend_create_unwind_exit(void)
 {
-	return zend_objects_new(&zend_ce_unwind_exit);
+	return zend_objects_new(zend_ce_unwind_exit);
 }
 
 ZEND_API ZEND_COLD zend_object *zend_create_graceful_exit(void)
 {
-	return zend_objects_new(&zend_ce_graceful_exit);
+	return zend_objects_new(zend_ce_graceful_exit);
 }
 
 ZEND_API ZEND_COLD void zend_throw_unwind_exit(void)
@@ -1031,10 +1040,10 @@ ZEND_API ZEND_COLD void zend_throw_graceful_exit(void)
 
 ZEND_API bool zend_is_unwind_exit(const zend_object *ex)
 {
-	return ex->ce == &zend_ce_unwind_exit;
+	return ex->cr == (zend_class_reference*) &zend_ces_unwind_exit;
 }
 
 ZEND_API bool zend_is_graceful_exit(const zend_object *ex)
 {
-	return ex->ce == &zend_ce_graceful_exit;
+	return ex->cr == (zend_class_reference*) &zend_ces_graceful_exit;
 }

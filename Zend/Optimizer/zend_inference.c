@@ -60,40 +60,6 @@
 #define LOG_NEG_RANGE(...)
 #endif
 
-/* Pop elements in unspecified order from worklist until it is empty */
-#define WHILE_WORKLIST(worklist, len, i) do { \
-	bool _done = 0; \
-	while (!_done) { \
-		_done = 1; \
-		ZEND_BITSET_FOREACH(worklist, len, i) { \
-			zend_bitset_excl(worklist, i); \
-			_done = 0;
-
-#define WHILE_WORKLIST_END() \
-		} ZEND_BITSET_FOREACH_END(); \
-	} \
-} while (0)
-
-#define CHECK_SCC_VAR(var2) \
-	do { \
-		if (!ssa->vars[var2].no_val) { \
-			if (ssa->vars[var2].scc < 0) { \
-				zend_ssa_check_scc_var(op_array, ssa, var2, index, stack); \
-			} \
-			if (ssa->vars[var2].scc < ssa->vars[var].scc) { \
-				ssa->vars[var].scc = ssa->vars[var2].scc; \
-				is_root = 0; \
-			} \
-		} \
-	} while (0)
-
-#define CHECK_SCC_ENTRY(var2) \
-	do { \
-		if (ssa->vars[var2].scc != ssa->vars[var].scc) { \
-			ssa->vars[var2].scc_entry = 1; \
-		} \
-	} while (0)
-
 #define ADD_SCC_VAR(_var) \
 	do { \
 		if (ssa->vars[_var].scc == scc && \
@@ -111,56 +77,19 @@
 		} \
 	} while (0)
 
-#define FOR_EACH_DEFINED_VAR(line, MACRO) \
-	do { \
-		if (ssa->ops[line].op1_def >= 0) { \
-			MACRO(ssa->ops[line].op1_def); \
-		} \
-		if (ssa->ops[line].op2_def >= 0) { \
-			MACRO(ssa->ops[line].op2_def); \
-		} \
-		if (ssa->ops[line].result_def >= 0) { \
-			MACRO(ssa->ops[line].result_def); \
-		} \
-		if (op_array->opcodes[line].opcode == ZEND_OP_DATA) { \
-			if (ssa->ops[line-1].op1_def >= 0) { \
-				MACRO(ssa->ops[line-1].op1_def); \
-			} \
-			if (ssa->ops[line-1].op2_def >= 0) { \
-				MACRO(ssa->ops[line-1].op2_def); \
-			} \
-			if (ssa->ops[line-1].result_def >= 0) { \
-				MACRO(ssa->ops[line-1].result_def); \
-			} \
-		} else if ((uint32_t)line+1 < op_array->last && \
-		           op_array->opcodes[line+1].opcode == ZEND_OP_DATA) { \
-			if (ssa->ops[line+1].op1_def >= 0) { \
-				MACRO(ssa->ops[line+1].op1_def); \
-			} \
-			if (ssa->ops[line+1].op2_def >= 0) { \
-				MACRO(ssa->ops[line+1].op2_def); \
-			} \
-			if (ssa->ops[line+1].result_def >= 0) { \
-				MACRO(ssa->ops[line+1].result_def); \
-			} \
-		} \
-	} while (0)
+/* Pop elements in unspecified order from worklist until it is empty */
+#define WHILE_WORKLIST(worklist, len, i) do { \
+	bool _done = 0; \
+	while (!_done) { \
+		_done = 1; \
+		ZEND_BITSET_FOREACH(worklist, len, i) { \
+			zend_bitset_excl(worklist, i); \
+			_done = 0;
 
-
-#define FOR_EACH_VAR_USAGE(_var, MACRO) \
-	do { \
-		zend_ssa_phi *p = ssa->vars[_var].phi_use_chain; \
-		int use = ssa->vars[_var].use_chain; \
-		while (use >= 0) { \
-			FOR_EACH_DEFINED_VAR(use, MACRO); \
-			use = zend_ssa_next_use(ssa->ops, _var, use); \
-		} \
-		p = ssa->vars[_var].phi_use_chain; \
-		while (p) { \
-			MACRO(p->ssa_var); \
-			p = zend_ssa_next_use_phi(ssa, _var, p); \
-		} \
-	} while (0)
+#define WHILE_WORKLIST_END() \
+		} ZEND_BITSET_FOREACH_END(); \
+	} \
+} while (0)
 
 static inline bool add_will_overflow(zend_long a, zend_long b) {
 	return (b > 0 && a > ZEND_LONG_MAX - b)
@@ -171,320 +100,6 @@ static inline bool sub_will_overflow(zend_long a, zend_long b) {
 	return (b > 0 && a < ZEND_LONG_MIN + b)
 		|| (b < 0 && a > ZEND_LONG_MAX + b);
 }
-#endif
-
-#if 0
-/* Recursive Pearce's SCC algorithm implementation */
-static void zend_ssa_check_scc_var(const zend_op_array *op_array, zend_ssa *ssa, int var, int *index, zend_worklist_stack *stack) /* {{{ */
-{
-	int is_root = 1;
-#ifdef SYM_RANGE
-	zend_ssa_phi *p;
-#endif
-
-	ssa->vars[var].scc = *index;
-	(*index)++;
-
-	FOR_EACH_VAR_USAGE(var, CHECK_SCC_VAR);
-
-#ifdef SYM_RANGE
-	/* Process symbolic control-flow constraints */
-	p = ssa->vars[var].sym_use_chain;
-	while (p) {
-		CHECK_SCC_VAR(p->ssa_var);
-		p = p->sym_use_chain;
-	}
-#endif
-
-	if (is_root) {
-		ssa->sccs--;
-		while (stack->len > 0) {
-			int var2 = zend_worklist_stack_peek(stack);
-			if (ssa->vars[var2].scc < ssa->vars[var].scc) {
-				break;
-			}
-			zend_worklist_stack_pop(stack);
-			ssa->vars[var2].scc = ssa->sccs;
-			(*index)--;
-		}
-		ssa->vars[var].scc = ssa->sccs;
-		ssa->vars[var].scc_entry = 1;
-		(*index)--;
-	} else {
-		zend_worklist_stack_push(stack, var);
-	}
-}
-/* }}} */
-
-ZEND_API void zend_ssa_find_sccs(const zend_op_array *op_array, zend_ssa *ssa) /* {{{ */
-{
-	int index = 0;
-	zend_worklist_stack stack;
-	int j;
-	ALLOCA_FLAG(stack_use_heap)
-
-	ZEND_WORKLIST_STACK_ALLOCA(&stack, ssa->vars_count, stack_use_heap);
-
-	/* Find SCCs using Pearce's algorithm. */
-	ssa->sccs = ssa->vars_count;
-	for (j = 0; j < ssa->vars_count; j++) {
-		if (!ssa->vars[j].no_val && ssa->vars[j].scc < 0) {
-			zend_ssa_check_scc_var(op_array, ssa, j, &index, &stack);
-		}
-	}
-
-	if (ssa->sccs) {
-		/* Shift SCC indexes. */
-		for (j = 0; j < ssa->vars_count; j++) {
-			if (ssa->vars[j].scc >= 0) {
-				ssa->vars[j].scc -= ssa->sccs;
-			}
-		}
-	}
-	ssa->sccs = ssa->vars_count - ssa->sccs;
-
-	for (j = 0; j < ssa->vars_count; j++) {
-		if (ssa->vars[j].scc >= 0) {
-			int var = j;
-			FOR_EACH_VAR_USAGE(var, CHECK_SCC_ENTRY);
-		}
-	}
-
-	ZEND_WORKLIST_STACK_FREE_ALLOCA(&stack, stack_use_heap);
-}
-/* }}} */
-
-#else
-/* Iterative Pearce's SCC algorithm implementation */
-
-typedef struct _zend_scc_iterator {
-	int               state;
-	int               last;
-	union {
-		int           use;
-		zend_ssa_phi *phi;
-	};
-} zend_scc_iterator;
-
-static int zend_scc_next(const zend_op_array *op_array, zend_ssa *ssa, int var, zend_scc_iterator *iterator) /* {{{ */
-{
-	zend_ssa_phi *phi;
-	int use, var2;
-
-	switch (iterator->state) {
-		case 0:                       goto state_0;
-		case 1:  use = iterator->use; goto state_1;
-		case 2:  use = iterator->use; goto state_2;
-		case 3:  use = iterator->use; goto state_3;
-		case 4:  use = iterator->use; goto state_4;
-		case 5:  use = iterator->use; goto state_5;
-		case 6:  use = iterator->use; goto state_6;
-		case 7:  use = iterator->use; goto state_7;
-		case 8:  use = iterator->use; goto state_8;
-		case 9:  phi = iterator->phi; goto state_9;
-#ifdef SYM_RANGE
-		case 10: phi = iterator->phi; goto state_10;
-#endif
-		case 11:                      goto state_11;
-	}
-
-state_0:
-	use = ssa->vars[var].use_chain;
-	while (use >= 0) {
-		iterator->use = use;
-		var2 = ssa->ops[use].op1_def;
-		if (var2 >= 0 && !ssa->vars[var2].no_val) {
-			iterator->state = 1;
-			return var2;
-		}
-state_1:
-		var2 = ssa->ops[use].op2_def;
-		if (var2 >= 0 && !ssa->vars[var2].no_val) {
-			iterator->state = 2;
-			return var2;
-		}
-state_2:
-		var2 = ssa->ops[use].result_def;
-		if (var2 >= 0 && !ssa->vars[var2].no_val) {
-			iterator->state = 3;
-			return var2;
-		}
-state_3:
-		if (op_array->opcodes[use].opcode == ZEND_OP_DATA) {
-			var2 = ssa->ops[use-1].op1_def;
-			if (var2 >= 0 && !ssa->vars[var2].no_val) {
-				iterator->state = 4;
-				return var2;
-			}
-state_4:
-			var2 = ssa->ops[use-1].op2_def;
-			if (var2 >= 0 && !ssa->vars[var2].no_val) {
-				iterator->state = 5;
-				return var2;
-			}
-state_5:
-			var2 = ssa->ops[use-1].result_def;
-			if (var2 >= 0 && !ssa->vars[var2].no_val) {
-				iterator->state = 8;
-				return var2;
-			}
-		} else if ((uint32_t)use+1 < op_array->last &&
-		           op_array->opcodes[use+1].opcode == ZEND_OP_DATA) {
-			var2 = ssa->ops[use+1].op1_def;
-			if (var2 >= 0 && !ssa->vars[var2].no_val) {
-				iterator->state = 6;
-				return var2;
-			}
-state_6:
-			var2 = ssa->ops[use+1].op2_def;
-			if (var2 >= 0 && !ssa->vars[var2].no_val) {
-				iterator->state = 7;
-				return var2;
-			}
-state_7:
-			var2 = ssa->ops[use+1].result_def;
-			if (var2 >= 0 && !ssa->vars[var2].no_val) {
-				iterator->state = 8;
-				return var2;
-			}
-		}
-state_8:
-		use = zend_ssa_next_use(ssa->ops, var, use);
-	}
-
-	phi = ssa->vars[var].phi_use_chain;
-	while (phi) {
-		var2 = phi->ssa_var;
-		if (!ssa->vars[var2].no_val) {
-			iterator->state = 9;
-			iterator->phi = phi;
-			return var2;
-		}
-state_9:
-		phi = zend_ssa_next_use_phi(ssa, var, phi);
-	}
-
-#ifdef SYM_RANGE
-	/* Process symbolic control-flow constraints */
-	phi = ssa->vars[var].sym_use_chain;
-	while (phi) {
-		var2 = phi->ssa_var;
-		if (!ssa->vars[var2].no_val) {
-			iterator->state = 10;
-			iterator->phi = phi;
-			return var2;
-		}
-state_10:
-		phi = phi->sym_use_chain;
-	}
-#endif
-
-	iterator->state = 11;
-state_11:
-	return -1;
-}
-/* }}} */
-
-static void zend_ssa_check_scc_var(const zend_op_array *op_array, zend_ssa *ssa, int var, int *index, zend_worklist_stack *stack, zend_worklist_stack *vstack, zend_scc_iterator *iterators) /* {{{ */
-{
-restart:
-	zend_worklist_stack_push(vstack, var);
-	iterators[var].state = 0;
-	iterators[var].last = -1;
-	ssa->vars[var].scc_entry = 1;
-	ssa->vars[var].scc = *index;
-	(*index)++;
-
-	while (vstack->len > 0) {
-		var = zend_worklist_stack_peek(vstack);
-		while (1) {
-			int var2;
-
-			if (iterators[var].last >= 0) {
-				/* finish edge */
-				var2 = iterators[var].last;
-				if (ssa->vars[var2].scc < ssa->vars[var].scc) {
-					ssa->vars[var].scc = ssa->vars[var2].scc;
-					ssa->vars[var].scc_entry = 0;
-				}
-			}
-			var2 = zend_scc_next(op_array, ssa, var, iterators + var);
-			iterators[var].last = var2;
-			if (var2 < 0) break;
-			/* begin edge */
-			if (ssa->vars[var2].scc < 0) {
-				var = var2;
-				goto restart;
-			}
-		}
-
-		/* finish visiting */
-		zend_worklist_stack_pop(vstack);
-		if (ssa->vars[var].scc_entry) {
-			ssa->sccs--;
-			while (stack->len > 0) {
-				int var2 = zend_worklist_stack_peek(stack);
-				if (ssa->vars[var2].scc < ssa->vars[var].scc) {
-					break;
-				}
-				zend_worklist_stack_pop(stack);
-				ssa->vars[var2].scc = ssa->sccs;
-				(*index)--;
-			}
-			ssa->vars[var].scc = ssa->sccs;
-			(*index)--;
-		} else {
-			zend_worklist_stack_push(stack, var);
-		}
-	}
-}
-/* }}} */
-
-ZEND_API void zend_ssa_find_sccs(const zend_op_array *op_array, zend_ssa *ssa) /* {{{ */
-{
-	int index = 0;
-	zend_worklist_stack stack, vstack;
-	zend_scc_iterator *iterators;
-	int j;
-	ALLOCA_FLAG(stack_use_heap)
-	ALLOCA_FLAG(vstack_use_heap)
-	ALLOCA_FLAG(iterators_use_heap)
-
-	iterators = do_alloca(sizeof(zend_scc_iterator) * ssa->vars_count, iterators_use_heap);
-	ZEND_WORKLIST_STACK_ALLOCA(&vstack, ssa->vars_count, vstack_use_heap);
-	ZEND_WORKLIST_STACK_ALLOCA(&stack, ssa->vars_count, stack_use_heap);
-
-	/* Find SCCs using Pearce's algorithm. */
-	ssa->sccs = ssa->vars_count;
-	for (j = 0; j < ssa->vars_count; j++) {
-		if (!ssa->vars[j].no_val && ssa->vars[j].scc < 0) {
-			zend_ssa_check_scc_var(op_array, ssa, j, &index, &stack, &vstack, iterators);
-		}
-	}
-
-	if (ssa->sccs) {
-		/* Shift SCC indexes. */
-		for (j = 0; j < ssa->vars_count; j++) {
-			if (ssa->vars[j].scc >= 0) {
-				ssa->vars[j].scc -= ssa->sccs;
-			}
-		}
-	}
-	ssa->sccs = ssa->vars_count - ssa->sccs;
-
-	for (j = 0; j < ssa->vars_count; j++) {
-		if (ssa->vars[j].scc >= 0) {
-			int var = j;
-			FOR_EACH_VAR_USAGE(var, CHECK_SCC_ENTRY);
-		}
-	}
-
-	ZEND_WORKLIST_STACK_FREE_ALLOCA(&stack, stack_use_heap);
-	ZEND_WORKLIST_STACK_FREE_ALLOCA(&vstack, vstack_use_heap);
-	free_alloca(iterators, iterators_use_heap);
-}
-/* }}} */
-
 #endif
 
 ZEND_API void zend_ssa_find_false_dependencies(const zend_op_array *op_array, zend_ssa *ssa) /* {{{ */
@@ -2385,8 +2000,8 @@ static uint32_t zend_convert_type(const zend_script *script, zend_type type, zen
 		if (pce) {
 			/* As we only have space to store one CE,
 			 * we use a plain object type for class unions. */
-			if (ZEND_TYPE_HAS_NAME(type)) {
-				zend_string *lcname = zend_string_tolower(ZEND_TYPE_NAME(type));
+			if (ZEND_TYPE_HAS_PNR(type)) {
+				zend_string *lcname = zend_string_tolower(ZEND_TYPE_PNR_NAME(type));
 				// TODO: Pass through op_array.
 				*pce = zend_optimizer_get_class_entry(script, NULL, lcname);
 				zend_string_release_ex(lcname, 0);
@@ -2470,7 +2085,7 @@ static const zend_property_info *zend_fetch_static_prop_info(const zend_script *
 					break;
 				case ZEND_FETCH_CLASS_PARENT:
 					if (op_array->scope && (op_array->scope->ce_flags & ZEND_ACC_LINKED)) {
-						ce = op_array->scope->parent;
+						ce = op_array->scope->parents[0]->ce;
 					}
 					break;
 			}
@@ -3341,8 +2956,8 @@ static zend_always_inline zend_result _zend_update_type_info(
 						}
 						break;
 					case ZEND_FETCH_CLASS_PARENT:
-						if (op_array->scope && op_array->scope->parent && (op_array->scope->ce_flags & ZEND_ACC_LINKED)) {
-							UPDATE_SSA_OBJ_TYPE(op_array->scope->parent, 0, ssa_op->result_def);
+						if (op_array->scope && op_array->scope->parents[0]->ce && (op_array->scope->ce_flags & ZEND_ACC_LINKED)) {
+							UPDATE_SSA_OBJ_TYPE(op_array->scope->parents[0]->ce, 0, ssa_op->result_def);
 						} else {
 							UPDATE_SSA_OBJ_TYPE(NULL, 0, ssa_op->result_def);
 						}
@@ -3992,17 +3607,6 @@ ZEND_API zend_result zend_update_type_info(
 	return _zend_update_type_info(op_array, ssa, script, NULL, opline, ssa_op, ssa_opcodes, optimization_level, 0);
 }
 
-static uint32_t get_class_entry_rank(zend_class_entry *ce) {
-	uint32_t rank = 0;
-	if (ce->ce_flags & ZEND_ACC_LINKED) {
-		while (ce->parent) {
-			rank++;
-			ce = ce->parent;
-		}
-	}
-	return rank;
-}
-
 /* Compute least common ancestor on class inheritance tree only */
 static zend_class_entry *join_class_entries(
 		zend_class_entry *ce1, zend_class_entry *ce2, int *is_instanceof) {
@@ -4014,22 +3618,20 @@ static zend_class_entry *join_class_entries(
 		return NULL;
 	}
 
-	rank1 = get_class_entry_rank(ce1);
-	rank2 = get_class_entry_rank(ce2);
-
-	while (rank1 != rank2) {
-		if (rank1 > rank2) {
-			ce1 = !(ce1->ce_flags & ZEND_ACC_LINKED) ? NULL : ce1->parent;
-			rank1--;
-		} else {
-			ce2 = !(ce2->ce_flags & ZEND_ACC_LINKED) ? NULL : ce2->parent;
-			rank2--;
-		}
+	if (ce1->num_parents > ce2->num_parents) {
+		rank1 = ce1->num_parents - ce2->num_parents;
+		rank2 = 0;
+	} else {
+		rank1 = 0;
+		rank2 = ce2->num_parents - ce1->num_parents;
 	}
 
+	ce1 = rank1 > 0 ? ce1->parents[rank1-1]->ce : ce1;
+	ce2 = rank2 > 0 ? ce2->parents[rank2-1]->ce : ce2;
+
 	while (ce1 != ce2) {
-		ce1 = !(ce1->ce_flags & ZEND_ACC_LINKED) ? NULL : ce1->parent;
-		ce2 = !(ce2->ce_flags & ZEND_ACC_LINKED) ? NULL : ce2->parent;
+		ce1 = !(ce1->ce_flags & ZEND_ACC_LINKED) || !ce1->num_parents ? NULL : ce1->parents[0]->ce;
+		ce2 = !(ce2->ce_flags & ZEND_ACC_LINKED) || !ce2->num_parents ? NULL : ce2->parents[0]->ce;
 	}
 
 	if (ce1) {
@@ -5070,7 +4672,7 @@ ZEND_API bool zend_may_throw_ex(const zend_op *opline, const zend_ssa_op *ssa_op
 				const zend_class_entry *ce = var_info->ce;
 
 				if (var_info->is_instanceof ||
-				    !ce || ce->create_object || ce->__get || ce->__set || ce->parent) {
+				    !ce || ce->create_object || ce->__get || ce->__set || ce->num_parents) {
 					return 1;
 				}
 

@@ -678,8 +678,8 @@ PHP_FUNCTION(count)
 				}
 			}
 			/* if not and the object implements Countable we call its count() method */
-			if (instanceof_function(zobj->ce, zend_ce_countable)) {
-				zend_function *count_fn = zend_hash_find_ptr(&zobj->ce->function_table, ZSTR_KNOWN(ZEND_STR_COUNT));
+			if (instanceof_function(OBJ_CE(zobj), zend_ce_countable)) {
+				zend_function *count_fn = zend_hash_find_ptr(&OBJ_CE(zobj)->function_table, ZSTR_KNOWN(ZEND_STR_COUNT));
 				zend_call_known_instance_method_with_0_params(count_fn, zobj, &retval);
 				if (Z_TYPE(retval) != IS_UNDEF) {
 					RETVAL_LONG(zval_get_long(&retval));

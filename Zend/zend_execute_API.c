@@ -25,12 +25,14 @@
 #include "zend_compile.h"
 #include "zend_execute.h"
 #include "zend_API.h"
+#include "zend_hash.h"
 #include "zend_stack.h"
 #include "zend_constants.h"
 #include "zend_extensions.h"
 #include "zend_exceptions.h"
 #include "zend_closures.h"
 #include "zend_generators.h"
+#include "zend_types.h"
 #include "zend_vm.h"
 #include "zend_float.h"
 #include "zend_fibers.h"
@@ -145,6 +147,7 @@ void init_executor(void) /* {{{ */
 
 	EG(function_table) = CG(function_table);
 	EG(class_table) = CG(class_table);
+	zend_hash_init(&EG(generic_class_table), 8, NULL, ZEND_GENERIC_CLASS_DTOR, 0);
 
 	EG(in_autoload) = NULL;
 	EG(error_handling) = EH_NORMAL;
@@ -317,6 +320,7 @@ ZEND_API void zend_shutdown_executor_values(bool fast_shutdown)
 				}
 			}
 		} ZEND_HASH_FOREACH_END();
+		zend_hash_clean(&EG(generic_class_table));
 		ZEND_HASH_MAP_REVERSE_FOREACH_VAL(EG(class_table), zv) {
 			zend_class_entry *ce = Z_PTR_P(zv);
 
@@ -431,6 +435,7 @@ void shutdown_executor(void) /* {{{ */
 		 * each allocated block separately.
 		 */
 		zend_hash_discard(EG(function_table), EG(persistent_functions_count));
+		zend_hash_discard(&EG(generic_class_table), 0);
 		zend_hash_discard(EG(class_table), EG(persistent_classes_count));
 	} else {
 		zend_vm_stack_destroy();
@@ -456,6 +461,9 @@ void shutdown_executor(void) /* {{{ */
 				zend_string_release_ex(key, 0);
 			} ZEND_HASH_MAP_FOREACH_END_DEL();
 		}
+
+		// TODO: reverse_clean
+		zend_hash_graceful_reverse_destroy(&EG(generic_class_table));
 
 		while (EG(symtable_cache_ptr) > EG(symtable_cache)) {
 			EG(symtable_cache_ptr)--;
@@ -1115,6 +1123,50 @@ ZEND_API bool zend_is_valid_class_name(zend_string *name) {
 	return 1;
 }
 
+ZEND_API zend_class_reference *zend_lookup_generic_class(zend_name_reference *name_ref, zend_string *base_key, uint32_t flags) /* {{{ */
+{
+	zend_class_entry *ce = NULL;
+	zval *zv;
+	zend_string *name = name_ref->name;
+	zend_string *key = name_ref->key;
+	uint32_t ce_cache = 0;
+
+	if (ZSTR_HAS_CE_CACHE(key) && ZSTR_VALID_CE_CACHE(key)) {
+		ce_cache = GC_REFCOUNT(key);
+		zend_class_reference *class_ref = GET_CE_CACHE(ce_cache);
+		if (EXPECTED(class_ref)) {
+			return class_ref;
+		}
+	}
+
+	zv = zend_hash_find(&EG(generic_class_table), key);
+	if (zv) {
+		zend_class_reference *class_ref = Z_CR_P(zv);
+		/* Don't populate CE_CACHE for mutable classes during compilation.
+		 * The class may be freed while persisting. */
+		if (ce_cache &&
+				(!CG(in_compilation) || (ce->ce_flags & ZEND_ACC_IMMUTABLE))) {
+			SET_CE_CACHE(ce_cache, class_ref);
+		}
+		return class_ref;
+	}
+
+	ce = zend_lookup_class_ex(name, base_key, flags);
+	if (!ce) {
+		return NULL;
+	}
+
+	zend_class_reference *class_ref = zend_build_class_reference(name_ref, ce);
+	if (!UNEXPECTED(class_ref)) {
+		return NULL;
+	}
+
+	void *ptr = zend_hash_add_ptr(&EG(generic_class_table), name_ref->key, class_ref);
+	ZEND_ASSERT(ptr);
+
+	return class_ref;
+}
+
 ZEND_API zend_class_entry *zend_lookup_class_ex(zend_string *name, zend_string *key, uint32_t flags) /* {{{ */
 {
 	zend_class_entry *ce = NULL;
@@ -1125,9 +1177,9 @@ ZEND_API zend_class_entry *zend_lookup_class_ex(zend_string *name, zend_string *
 
 	if (ZSTR_HAS_CE_CACHE(name) && ZSTR_VALID_CE_CACHE(name)) {
 		ce_cache = GC_REFCOUNT(name);
-		ce = GET_CE_CACHE(ce_cache);
-		if (EXPECTED(ce)) {
-			return ce;
+		zend_class_reference *class_ref = GET_CE_CACHE(ce_cache);
+		if (EXPECTED(class_ref)) {
+			return class_ref->ce;
 		}
 	}
 
@@ -1169,7 +1221,7 @@ ZEND_API zend_class_entry *zend_lookup_class_ex(zend_string *name, zend_string *
 		 * The class may be freed while persisting. */
 		if (ce_cache &&
 				(!CG(in_compilation) || (ce->ce_flags & ZEND_ACC_IMMUTABLE))) {
-			SET_CE_CACHE(ce_cache, ce);
+			SET_CE_CACHE(ce_cache, ZEND_CE_TO_REF(ce));
 		}
 		return ce;
 	}
@@ -1226,7 +1278,7 @@ ZEND_API zend_class_entry *zend_lookup_class_ex(zend_string *name, zend_string *
 	if (ce) {
 		ZEND_ASSERT(!CG(in_compilation));
 		if (ce_cache) {
-			SET_CE_CACHE(ce_cache, ce);
+			SET_CE_CACHE(ce_cache, ZEND_CE_TO_REF(ce));
 		}
 	}
 	return ce;
@@ -1239,13 +1291,28 @@ ZEND_API zend_class_entry *zend_lookup_class(zend_string *name) /* {{{ */
 }
 /* }}} */
 
-ZEND_API zend_class_entry *zend_get_called_scope(zend_execute_data *ex) /* {{{ */
+ZEND_API zend_class_reference *zend_lookup_class_by_pnr(zend_packed_name_reference pnr, zend_string *base_key, uint32_t flags) /* {{{ */
+{
+	if (ZEND_PNR_IS_SIMPLE(pnr)) {
+		zend_class_entry *ce = zend_lookup_class_ex(
+				ZEND_PNR_SIMPLE_GET_NAME(pnr), base_key, flags);
+		if (!ce) {
+			return NULL;
+		}
+		return ZEND_CE_TO_REF(ce);
+	}
+
+	return zend_lookup_generic_class(ZEND_PNR_COMPLEX_GET_REF(pnr), base_key, flags);
+}
+/* }}} */
+
+ZEND_API zend_class_reference *zend_get_called_scope(zend_execute_data *ex) /* {{{ */
 {
 	while (ex) {
 		if (Z_TYPE(ex->This) == IS_OBJECT) {
-			return Z_OBJCE(ex->This);
+			return Z_OBJCR(ex->This);
 		} else if (Z_CE(ex->This)) {
-			return Z_CE(ex->This);
+			return ZEND_CE_TO_REF(Z_CE(ex->This));
 		} else if (ex->func) {
 			if (ex->func->type != ZEND_INTERNAL_FUNCTION || ex->func->common.scope) {
 				return NULL;
@@ -1660,17 +1727,19 @@ check_fetch_type:
 				zend_throw_or_error(fetch_type, NULL, "Cannot access \"parent\" when no class scope is active");
 				return NULL;
 			}
-			if (UNEXPECTED(!scope->parent)) {
+			if (UNEXPECTED(!scope->num_parents)) {
 				zend_throw_or_error(fetch_type, NULL, "Cannot access \"parent\" when current class scope has no parent");
-			}
-			return scope->parent;
-		case ZEND_FETCH_CLASS_STATIC:
-			ce = zend_get_called_scope(EG(current_execute_data));
-			if (UNEXPECTED(!ce)) {
-				zend_throw_or_error(fetch_type, NULL, "Cannot access \"static\" when no class scope is active");
 				return NULL;
 			}
-			return ce;
+			return scope->parents[0]->ce;
+		case ZEND_FETCH_CLASS_STATIC: {
+				zend_class_reference *class_ref = zend_get_called_scope(EG(current_execute_data));
+				if (UNEXPECTED(!class_ref)) {
+					zend_throw_or_error(fetch_type, NULL, "Cannot access \"static\" when no class scope is active");
+					return NULL;
+				}
+				return class_ref->ce;
+			}
 		case ZEND_FETCH_CLASS_AUTO: {
 				fetch_sub_type = zend_get_class_fetch_type(class_name);
 				if (UNEXPECTED(fetch_sub_type != ZEND_FETCH_CLASS_DEFAULT)) {
@@ -1704,10 +1773,11 @@ zend_class_entry *zend_fetch_class_with_scope(
 				zend_throw_or_error(fetch_type, NULL, "Cannot access \"parent\" when no class scope is active");
 				return NULL;
 			}
-			if (UNEXPECTED(!scope->parent)) {
+			if (UNEXPECTED(!scope->num_parents)) {
 				zend_throw_or_error(fetch_type, NULL, "Cannot access \"parent\" when current class scope has no parent");
+				return NULL;
 			}
-			return scope->parent;
+			return scope->parents[0]->ce;
 		case 0:
 			break;
 		/* Other fetch types are not supported by this function. */
@@ -1730,6 +1800,17 @@ zend_class_entry *zend_fetch_class_by_name(zend_string *class_name, zend_string 
 		return NULL;
 	}
 	return ce;
+}
+/* }}} */
+
+zend_class_reference *zend_fetch_generic_class_by_ref(zend_name_reference *name_ref, zend_string *base_key, uint32_t fetch_type) /* {{{ */
+{
+	zend_class_reference *class_ref = zend_lookup_generic_class(name_ref, base_key, fetch_type);
+	if (!class_ref) {
+		report_class_fetch_error(name_ref->name, fetch_type);
+		return NULL;
+	}
+	return class_ref;
 }
 /* }}} */
 

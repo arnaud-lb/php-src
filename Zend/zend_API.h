@@ -25,6 +25,7 @@
 #include "zend_modules.h"
 #include "zend_list.h"
 #include "zend_operators.h"
+#include "zend_types.h"
 #include "zend_variables.h"
 #include "zend_execute.h"
 #include "zend_type_info.h"
@@ -303,7 +304,7 @@ typedef struct _zend_fcall_info_cache {
 		class_container.__debugInfo = NULL;						\
 		class_container.__serialize = NULL;						\
 		class_container.__unserialize = NULL;					\
-		class_container.parent = NULL;							\
+		class_container.num_parents = 0;						\
 		class_container.num_interfaces = 0;						\
 		class_container.trait_names = NULL;						\
 		class_container.num_traits = 0;							\
@@ -531,11 +532,13 @@ ZEND_API const char *zend_get_type_by_const(int type);
 #define array_init(arg)				ZVAL_ARR((arg), zend_new_array(0))
 #define array_init_size(arg, size)	ZVAL_ARR((arg), zend_new_array(size))
 ZEND_API void object_init(zval *arg);
-ZEND_API zend_result object_init_ex(zval *arg, zend_class_entry *ce);
-ZEND_API zend_result object_and_properties_init(zval *arg, zend_class_entry *ce, HashTable *properties);
+ZEND_API zend_result object_init_ref(zval *arg, zend_class_reference *class_ref);
+ZEND_API zend_result object_init_ex(zval *arg, zend_class_entry *class_type);
+ZEND_API zend_result object_and_properties_init(zval *arg, zend_class_reference *class_ref, HashTable *properties);
 ZEND_API void object_properties_init(zend_object *object, zend_class_entry *class_type);
 ZEND_API void object_properties_init_ex(zend_object *object, HashTable *properties);
 ZEND_API void object_properties_load(zend_object *object, HashTable *properties);
+ZEND_API zend_class_reference *zend_build_class_reference(zend_name_reference *name_ref, zend_class_entry *ce);
 
 ZEND_API void zend_merge_properties(zval *obj, HashTable *properties);
 
@@ -850,7 +853,7 @@ static zend_always_inline void zend_call_known_instance_method(
 		zend_function *fn, zend_object *object, zval *retval_ptr,
 		uint32_t param_count, zval *params)
 {
-	zend_call_known_function(fn, object, object->ce, retval_ptr, param_count, params, NULL);
+	zend_call_known_function(fn, object, OBJ_CE(object), retval_ptr, param_count, params, NULL);
 }
 
 static zend_always_inline void zend_call_known_instance_method_with_0_params(
@@ -2514,7 +2517,7 @@ static zend_always_inline bool zend_parse_arg_obj_or_class_name(
 
 		return *destination != NULL;
 	} else if (EXPECTED(Z_TYPE_P(arg) == IS_OBJECT)) {
-		*destination = Z_OBJ_P(arg)->ce;
+		*destination = Z_OBJCE_P(arg);
 	} else if (allow_null && EXPECTED(Z_TYPE_P(arg) == IS_NULL)) {
 		*destination = NULL;
 	} else {
@@ -2537,6 +2540,11 @@ static zend_always_inline bool zend_parse_arg_obj_or_str(
 
 	*destination_object = NULL;
 	return zend_parse_arg_str(arg, destination_string, allow_null, arg_num);
+}
+
+/* Get root class at start of "extends" chain. */
+static zend_always_inline zend_class_entry *zend_class_entry_get_root(zend_class_entry *ce) {
+	return ce->num_parents ? ce->parents[ce->num_parents - 1]->ce : ce;
 }
 
 END_EXTERN_C()

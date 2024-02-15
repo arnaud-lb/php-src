@@ -148,6 +148,8 @@ END_EXTERN_C()
 static zend_always_inline uint32_t _const_op_type(const zval *zv) {
 	if (Z_TYPE_P(zv) == IS_CONSTANT_AST) {
 		return MAY_BE_RC1 | MAY_BE_RCN | MAY_BE_ANY | MAY_BE_ARRAY_KEY_ANY | MAY_BE_ARRAY_OF_ANY;
+	} else if (Z_TYPE_P(zv) == IS_PNR) {
+		return MAY_BE_STRING;
 	} else if (Z_TYPE_P(zv) == IS_ARRAY) {
 		return zend_array_type_info(zv);
 	} else {
@@ -218,7 +220,6 @@ static zend_always_inline bool zend_sub_will_overflow(zend_long a, zend_long b) 
 BEGIN_EXTERN_C()
 
 ZEND_API void zend_ssa_find_false_dependencies(const zend_op_array *op_array, zend_ssa *ssa);
-ZEND_API void zend_ssa_find_sccs(const zend_op_array *op_array, zend_ssa *ssa);
 ZEND_API zend_result zend_ssa_inference(zend_arena **raena, const zend_op_array *op_array, const zend_script *script, zend_ssa *ssa, zend_long optimization_level);
 
 ZEND_API uint32_t zend_array_element_type(uint32_t t1, uint8_t op_type, int write, int insert);

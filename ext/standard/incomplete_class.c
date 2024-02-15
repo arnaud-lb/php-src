@@ -100,7 +100,7 @@ static zend_object *php_create_incomplete_object(zend_class_entry *class_type)
 {
 	zend_object *object;
 
-	object = zend_objects_new( class_type);
+	object = zend_objects_new(class_type);
 	object->handlers = &php_incomplete_object_handlers;
 
 	object_properties_init(object, class_type);

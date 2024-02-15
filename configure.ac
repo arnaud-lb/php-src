@@ -1746,6 +1746,8 @@ PHP_ADD_SOURCES(Zend, \
     zend_observer.c zend_system_id.c zend_enum.c zend_fibers.c zend_atomic.c \
     zend_max_execution_timer.c \
     zend_hrtime.c \
+	zend_type_tools.c \
+	zend_symbolic_inference.c \
 	Optimizer/zend_optimizer.c \
 	Optimizer/pass1.c \
 	Optimizer/pass3.c \
@@ -1767,6 +1769,8 @@ PHP_ADD_SOURCES(Zend, \
 	Optimizer/escape_analysis.c \
 	Optimizer/compact_vars.c \
 	Optimizer/zend_dump.c \
+	Optimizer/zend_symbolic_inference.c \
+	Optimizer/zend_scc.c \
     , -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1)
 
 PHP_ADD_BUILD_DIR(main main/streams)

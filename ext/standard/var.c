@@ -23,11 +23,14 @@
 #include "php.h"
 #include "php_string.h"
 #include "php_var.h"
+#include "zend_compile.h"
 #include "zend_smart_str.h"
 #include "basic_functions.h"
 #include "php_incomplete_class.h"
 #include "zend_enum.h"
 #include "zend_exceptions.h"
+#include "zend_string.h"
+#include "zend_types.h"
 /* }}} */
 
 struct php_serialize_data {
@@ -76,7 +79,7 @@ static void php_object_property_dump(zend_property_info *prop_info, zval *zv, ze
 
 	if (Z_TYPE_P(zv) == IS_UNDEF) {
 		ZEND_ASSERT(ZEND_TYPE_IS_SET(prop_info->type));
-		zend_string *type_str = zend_type_to_string(prop_info->type);
+		zend_string *type_str = zend_type_to_string(prop_info->type, prop_info->ce);
 		php_printf("%*cuninitialized(%s)\n",
 			level + 1, ' ', ZSTR_VAL(type_str));
 		zend_string_release(type_str);
@@ -163,8 +166,27 @@ again:
 
 			myht = zend_get_properties_for(struc, ZEND_PROP_PURPOSE_DEBUG);
 			class_name = Z_OBJ_HANDLER_P(struc, get_class_name)(Z_OBJ_P(struc));
-			php_printf("%sobject(%s)#%d (%d) {\n", COMMON, ZSTR_VAL(class_name), Z_OBJ_HANDLE_P(struc), myht ? zend_array_count(myht) : 0);
+
+			zend_string *types = zend_empty_string;
+			if (Z_OBJ_P(struc)->cr->args.num_types) {
+				zend_type_list *args = &Z_OBJ_P(struc)->cr->args;
+				smart_str str = {0};
+				smart_str_appendc(&str, '<');
+				for (uint32_t i = 0; i < args->num_types; i++) {
+					if (i > 0) {
+						smart_str_appendc(&str, ',');
+					}
+					zend_string *t = zend_type_to_string(args->types[i], NULL);
+					smart_str_append(&str, t);
+					zend_string_release(t);
+				}
+				smart_str_appendc(&str, '>');
+				types = smart_str_extract(&str);
+			}
+
+			php_printf("%sobject(%s%s)#%d (%d) {\n", COMMON, ZSTR_VAL(class_name), ZSTR_VAL(types), Z_OBJ_HANDLE_P(struc), myht ? zend_array_count(myht) : 0);
 			zend_string_release_ex(class_name, 0);
+			zend_string_release(types);
 
 			if (myht) {
 				zend_ulong num;
@@ -266,7 +288,7 @@ static void zval_object_property_dump(zend_property_info *prop_info, zval *zv, z
 		ZEND_PUTS("]=>\n");
 	}
 	if (prop_info && Z_TYPE_P(zv) == IS_UNDEF) {
-		zend_string *type_str = zend_type_to_string(prop_info->type);
+		zend_string *type_str = zend_type_to_string(prop_info->type, prop_info->ce);
 		php_printf("%*cuninitialized(%s)\n",
 			level + 1, ' ', ZSTR_VAL(type_str));
 		zend_string_release(type_str);
@@ -780,7 +802,7 @@ static HashTable* php_var_serialize_call_sleep(zend_object *obj, zend_function *
 
 	if (Z_TYPE(retval) != IS_ARRAY) {
 		zval_ptr_dtor(&retval);
-		php_error_docref(NULL, E_WARNING, "%s::__sleep() should return an array only containing the names of instance-variables to serialize", ZSTR_VAL(obj->ce->name));
+		php_error_docref(NULL, E_WARNING, "%s::__sleep() should return an array only containing the names of instance-variables to serialize", ZSTR_VAL(OBJ_NAME(obj)));
 		return NULL;
 	}
 
@@ -1171,7 +1193,7 @@ again:
 				 && Z_OBJ_HT_P(struc)->get_properties == zend_std_get_properties) {
 					/* Optimized version without rebulding properties HashTable */
 					zend_object *obj = Z_OBJ_P(struc);
-					zend_class_entry *ce = obj->ce;
+					zend_class_entry *ce = OBJ_CE(obj);
 					zend_property_info *prop_info;
 					zval *prop;
 					int i;

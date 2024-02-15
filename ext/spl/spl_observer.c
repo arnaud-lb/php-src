@@ -88,7 +88,7 @@ static zend_result spl_object_storage_get_hash(zend_hash_key *key, spl_SplObject
 		zval rv;
 		ZVAL_OBJ(&param, obj);
 		zend_call_method_with_1_params(
-			&intern->std, intern->std.ce, &intern->fptr_get_hash, "getHash", &rv, &param);
+			&intern->std, OBJ_CE(&intern->std), &intern->fptr_get_hash, "getHash", &rv, &param);
 		if (!Z_ISUNDEF(rv)) {
 			if (Z_TYPE(rv) == IS_STRING) {
 				key->key = Z_STR(rv);
@@ -254,9 +254,8 @@ static void spl_object_storage_addall(spl_SplObjectStorage *intern, spl_SplObjec
 static zend_object *spl_object_storage_new_ex(zend_class_entry *class_type, zend_object *orig) /* {{{ */
 {
 	spl_SplObjectStorage *intern;
-	zend_class_entry *parent = class_type;
 
-	intern = emalloc(sizeof(spl_SplObjectStorage) + zend_object_properties_size(parent));
+	intern = emalloc(sizeof(spl_SplObjectStorage) + zend_object_properties_size(class_type));
 	memset(intern, 0, sizeof(spl_SplObjectStorage) - sizeof(zval));
 	intern->pos = 0;
 
@@ -265,35 +264,29 @@ static zend_object *spl_object_storage_new_ex(zend_class_entry *class_type, zend
 
 	zend_hash_init(&intern->storage, 0, NULL, spl_object_storage_dtor, 0);
 
-	while (parent) {
-		if (parent == spl_ce_SplObjectStorage) {
-			/* Possible optimization: Cache these results with a map from class entry to IS_NULL/IS_PTR.
-			 * Or maybe just a single item with the result for the most recently loaded subclass. */
-			if (class_type != spl_ce_SplObjectStorage) {
-				zend_function *get_hash = zend_hash_str_find_ptr(&class_type->function_table, "gethash", sizeof("gethash") - 1);
-				if (get_hash->common.scope != spl_ce_SplObjectStorage) {
-					intern->fptr_get_hash = get_hash;
-				}
-				if (intern->fptr_get_hash != NULL ||
-					SPL_OBJECT_STORAGE_CLASS_HAS_OVERRIDE(class_type, zf_offsetget) ||
-					SPL_OBJECT_STORAGE_CLASS_HAS_OVERRIDE(class_type, zf_offsetexists)) {
-					intern->flags |= SOS_OVERRIDDEN_READ_DIMENSION;
-				}
-
-				if (intern->fptr_get_hash != NULL ||
-					SPL_OBJECT_STORAGE_CLASS_HAS_OVERRIDE(class_type, zf_offsetset)) {
-					intern->flags |= SOS_OVERRIDDEN_WRITE_DIMENSION;
-				}
-
-				if (intern->fptr_get_hash != NULL ||
-					SPL_OBJECT_STORAGE_CLASS_HAS_OVERRIDE(class_type, zf_offsetunset)) {
-					intern->flags |= SOS_OVERRIDDEN_UNSET_DIMENSION;
-				}
-			}
-			break;
+	if (class_type != spl_ce_SplObjectStorage
+			&& zend_class_entry_get_root(class_type) == spl_ce_SplObjectStorage) {
+		/* Possible optimization: Cache these results with a map from class entry to IS_NULL/IS_PTR.
+		 * Or maybe just a single item with the result for the most recently loaded subclass. */
+		zend_function *get_hash = zend_hash_str_find_ptr(&class_type->function_table, "gethash", sizeof("gethash") - 1);
+		if (get_hash->common.scope != spl_ce_SplObjectStorage) {
+			intern->fptr_get_hash = get_hash;
+		}
+		if (intern->fptr_get_hash != NULL ||
+			SPL_OBJECT_STORAGE_CLASS_HAS_OVERRIDE(class_type, zf_offsetget) ||
+			SPL_OBJECT_STORAGE_CLASS_HAS_OVERRIDE(class_type, zf_offsetexists)) {
+			intern->flags |= SOS_OVERRIDDEN_READ_DIMENSION;
 		}
 
-		parent = parent->parent;
+		if (intern->fptr_get_hash != NULL ||
+			SPL_OBJECT_STORAGE_CLASS_HAS_OVERRIDE(class_type, zf_offsetset)) {
+			intern->flags |= SOS_OVERRIDDEN_WRITE_DIMENSION;
+		}
+
+		if (intern->fptr_get_hash != NULL ||
+			SPL_OBJECT_STORAGE_CLASS_HAS_OVERRIDE(class_type, zf_offsetunset)) {
+			intern->flags |= SOS_OVERRIDDEN_UNSET_DIMENSION;
+		}
 	}
 
 	if (orig) {
@@ -310,7 +303,7 @@ static zend_object *spl_object_storage_clone(zend_object *old_object)
 {
 	zend_object *new_object;
 
-	new_object = spl_object_storage_new_ex(old_object->ce, old_object);
+	new_object = spl_object_storage_new_ex(OBJ_CE(old_object), old_object);
 
 	zend_objects_clone_members(new_object, old_object);
 
@@ -382,15 +375,9 @@ static int spl_object_storage_compare_info(zval *e1, zval *e2) /* {{{ */
 
 static int spl_object_storage_compare_objects(zval *o1, zval *o2) /* {{{ */
 {
-	zend_object *zo1;
-	zend_object *zo2;
-
 	ZEND_COMPARE_OBJECTS_FALLBACK(o1, o2);
 
-	zo1 = (zend_object *)Z_OBJ_P(o1);
-	zo2 = (zend_object *)Z_OBJ_P(o2);
-
-	if (zo1->ce != spl_ce_SplObjectStorage || zo2->ce != spl_ce_SplObjectStorage) {
+	if (Z_OBJCE_P(o1) != spl_ce_SplObjectStorage || Z_OBJCE_P(o2) != spl_ce_SplObjectStorage) {
 		return ZEND_UNCOMPARABLE;
 	}
 
@@ -1151,7 +1138,7 @@ PHP_METHOD(MultipleIterator, rewind)
 	zend_hash_internal_pointer_reset_ex(&intern->storage, &intern->pos);
 	while ((element = zend_hash_get_current_data_ptr_ex(&intern->storage, &intern->pos)) != NULL && !EG(exception)) {
 		zend_object *it = element->obj;
-		zend_call_known_instance_method_with_0_params(it->ce->iterator_funcs_ptr->zf_rewind, it, NULL);
+		zend_call_known_instance_method_with_0_params(OBJ_CE(it)->iterator_funcs_ptr->zf_rewind, it, NULL);
 		zend_hash_move_forward_ex(&intern->storage, &intern->pos);
 	}
 }
@@ -1172,7 +1159,7 @@ PHP_METHOD(MultipleIterator, next)
 	zend_hash_internal_pointer_reset_ex(&intern->storage, &intern->pos);
 	while ((element = zend_hash_get_current_data_ptr_ex(&intern->storage, &intern->pos)) != NULL && !EG(exception)) {
 		zend_object *it = element->obj;
-		zend_call_known_instance_method_with_0_params(it->ce->iterator_funcs_ptr->zf_next, it, NULL);
+		zend_call_known_instance_method_with_0_params(OBJ_CE(it)->iterator_funcs_ptr->zf_next, it, NULL);
 		zend_hash_move_forward_ex(&intern->storage, &intern->pos);
 	}
 }
@@ -1201,7 +1188,7 @@ PHP_METHOD(MultipleIterator, valid)
 	zend_hash_internal_pointer_reset_ex(&intern->storage, &intern->pos);
 	while ((element = zend_hash_get_current_data_ptr_ex(&intern->storage, &intern->pos)) != NULL && !EG(exception)) {
 		zend_object *it = element->obj;
-		zend_call_known_instance_method_with_0_params(it->ce->iterator_funcs_ptr->zf_valid, it, &retval);
+		zend_call_known_instance_method_with_0_params(OBJ_CE(it)->iterator_funcs_ptr->zf_valid, it, &retval);
 
 		if (!Z_ISUNDEF(retval)) {
 			valid = (Z_TYPE(retval) == IS_TRUE);
@@ -1239,7 +1226,7 @@ static void spl_multiple_iterator_get_all(spl_SplObjectStorage *intern, int get_
 	zend_hash_internal_pointer_reset_ex(&intern->storage, &intern->pos);
 	while ((element = zend_hash_get_current_data_ptr_ex(&intern->storage, &intern->pos)) != NULL && !EG(exception)) {
 		zend_object *it = element->obj;
-		zend_call_known_instance_method_with_0_params(it->ce->iterator_funcs_ptr->zf_valid, it, &retval);
+		zend_call_known_instance_method_with_0_params(OBJ_CE(it)->iterator_funcs_ptr->zf_valid, it, &retval);
 
 		if (!Z_ISUNDEF(retval)) {
 			valid = Z_TYPE(retval) == IS_TRUE;
@@ -1250,9 +1237,9 @@ static void spl_multiple_iterator_get_all(spl_SplObjectStorage *intern, int get_
 
 		if (valid) {
 			if (SPL_MULTIPLE_ITERATOR_GET_ALL_CURRENT == get_type) {
-				zend_call_known_instance_method_with_0_params(it->ce->iterator_funcs_ptr->zf_current, it, &retval);
+				zend_call_known_instance_method_with_0_params(OBJ_CE(it)->iterator_funcs_ptr->zf_current, it, &retval);
 			} else {
-				zend_call_known_instance_method_with_0_params(it->ce->iterator_funcs_ptr->zf_key, it, &retval);
+				zend_call_known_instance_method_with_0_params(OBJ_CE(it)->iterator_funcs_ptr->zf_key, it, &retval);
 			}
 			if (Z_ISUNDEF(retval)) {
 				zend_throw_exception(spl_ce_RuntimeException, "Failed to call sub iterator method", 0);

@@ -796,7 +796,7 @@ PHP_FUNCTION(get_browser)
 	if (return_array) {
 		RETVAL_ARR(agent_ht);
 	} else {
-		object_and_properties_init(return_value, zend_standard_class_def, agent_ht);
+		object_and_properties_init(return_value, ZEND_CE_TO_REF(zend_standard_class_def), agent_ht);
 	}
 
 	HashTable *target_ht = return_array ? Z_ARRVAL_P(return_value) : Z_OBJPROP_P(return_value);

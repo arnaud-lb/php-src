@@ -868,7 +868,11 @@ ZEND_API void zend_cleanup_mutable_class_data(zend_class_entry *ce);
 ZEND_API void zend_cleanup_internal_class_data(zend_class_entry *ce);
 ZEND_API void zend_type_release(zend_type type, bool persistent);
 ZEND_API zend_string *zend_create_member_string(zend_string *class_name, zend_string *member_name);
+ZEND_API void zend_pnr_destroy(zend_packed_name_reference pnr);
 
+void zend_compile_name_reference_key(zend_name_reference *ref, zend_string *lcname);
+void zend_name_reference_release(zend_name_reference *name_ref, bool uses_arena, bool persistent);
+void zend_packed_name_reference_release(zend_packed_name_reference ref, bool persistent);
 
 ZEND_API ZEND_COLD void zend_user_exception_handler(void);
 
@@ -884,6 +888,7 @@ void zend_free_internal_arg_info(zend_internal_function *function);
 ZEND_API void destroy_zend_function(zend_function *function);
 ZEND_API void zend_function_dtor(zval *zv);
 ZEND_API void destroy_zend_class(zval *zv);
+ZEND_API void destroy_zend_class_reference(zval *zv);
 void zend_class_add_ref(zval *zv);
 
 ZEND_API zend_string *zend_mangle_property_name(const char *src1, size_t src1_length, const char *src2, size_t src2_length, bool internal);
@@ -899,6 +904,7 @@ static zend_always_inline const char *zend_get_unmangled_property_name(const zen
 
 #define ZEND_FUNCTION_DTOR zend_function_dtor
 #define ZEND_CLASS_DTOR destroy_zend_class
+#define ZEND_GENERIC_CLASS_DTOR destroy_zend_class_reference
 
 typedef bool (*zend_needs_live_range_cb)(zend_op_array *op_array, zend_op *opline);
 ZEND_API void zend_recalc_live_ranges(
@@ -908,6 +914,7 @@ ZEND_API void pass_two(zend_op_array *op_array);
 ZEND_API bool zend_is_compiling(void);
 ZEND_API char *zend_make_compiled_string_description(const char *name);
 ZEND_API void zend_initialize_class_data(zend_class_entry *ce, bool nullify_handlers);
+zend_class_entry *zend_init_class_entry_header(zend_class_entry_storage *ptr, zend_string *key);
 uint32_t zend_get_class_fetch_type(const zend_string *name);
 ZEND_API uint8_t zend_get_call_op(const zend_op *init_op, zend_function *fbc);
 ZEND_API bool zend_is_smart_branch(const zend_op *opline);
@@ -931,8 +938,8 @@ int ZEND_FASTCALL zendlex(zend_parser_stack_elem *elem);
 
 void zend_assert_valid_class_name(const zend_string *const_name);
 
-zend_string *zend_type_to_string_resolved(zend_type type, zend_class_entry *scope);
-ZEND_API zend_string *zend_type_to_string(zend_type type);
+ZEND_API zend_string *zend_type_to_string(zend_type type, const zend_class_entry *scope);
+zend_string *zend_type_to_string_resolved(zend_type type, const zend_class_entry *scope);
 
 /* BEGIN: OPCODES */
 

@@ -277,7 +277,7 @@ PHPAPI void php_random_engine_common_free_object(zend_object *object)
 PHPAPI zend_object *php_random_engine_common_clone_object(zend_object *object)
 {
 	php_random_engine *old_engine = php_random_engine_from_obj(object);
-	php_random_engine *new_engine = php_random_engine_from_obj(old_engine->std.ce->create_object(old_engine->std.ce));
+	php_random_engine *new_engine = php_random_engine_from_obj(OBJ_CE(&old_engine->std)->create_object(OBJ_CE(&old_engine->std)));
 
 	new_engine->algo = old_engine->algo;
 	if (old_engine->status) {

@@ -99,6 +99,11 @@ typedef struct _zend_cfg {
 #define ZEND_CFG_RECV_ENTRY            (1<<24)
 #define ZEND_CALL_TREE                 (1<<23)
 #define ZEND_SSA_USE_CV_RESULTS        (1<<22)
+/* Chain function call opcodes by adding fake defs and uses. E.g. in a sequence
+ * INIT_FCALL->SEND->SEND->DO_FCALL, each element defines an SSA var that is
+ * used by the next one. This can be used to ensure that a worklist algorithm
+ * would visit DO_FCALL if any of the previous op codes were visited. */
+#define ZEND_SSA_CALL_CHAINS           (1<<21)
 
 #define CRT_CONSTANT_EX(op_array, opline, node) \
 	(((op_array)->fn_flags & ZEND_ACC_DONE_PASS_TWO) ? \

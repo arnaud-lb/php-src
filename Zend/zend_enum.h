@@ -48,14 +48,14 @@ ZEND_API zend_result zend_enum_get_case_by_value(zend_object **result, zend_clas
 
 static zend_always_inline zval *zend_enum_fetch_case_name(zend_object *zobj)
 {
-	ZEND_ASSERT(zobj->ce->ce_flags & ZEND_ACC_ENUM);
+	ZEND_ASSERT(OBJ_CE(zobj)->ce_flags & ZEND_ACC_ENUM);
 	return OBJ_PROP_NUM(zobj, 0);
 }
 
 static zend_always_inline zval *zend_enum_fetch_case_value(zend_object *zobj)
 {
-	ZEND_ASSERT(zobj->ce->ce_flags & ZEND_ACC_ENUM);
-	ZEND_ASSERT(zobj->ce->enum_backing_type != IS_UNDEF);
+	ZEND_ASSERT(OBJ_CE(zobj)->ce_flags & ZEND_ACC_ENUM);
+	ZEND_ASSERT(OBJ_CE(zobj)->enum_backing_type != IS_UNDEF);
 	return OBJ_PROP_NUM(zobj, 1);
 }
 

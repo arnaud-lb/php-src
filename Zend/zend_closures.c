@@ -22,11 +22,13 @@
 #include "zend_API.h"
 #include "zend_closures.h"
 #include "zend_exceptions.h"
+#include "zend_execute.h"
 #include "zend_interfaces.h"
 #include "zend_objects.h"
 #include "zend_objects_API.h"
 #include "zend_globals.h"
 #include "zend_closures_arginfo.h"
+#include "zend_types.h"
 
 typedef struct _zend_closure {
 	zend_object       std;
@@ -140,7 +142,7 @@ ZEND_METHOD(Closure, call)
 	closure = (zend_closure *) Z_OBJ_P(ZEND_THIS);
 
 	newobj = Z_OBJ_P(newthis);
-	newclass = newobj->ce;
+	newclass = OBJ_CE(newobj);
 
 	if (!zend_valid_closure_binding(closure, newthis, newclass)) {
 		return;
@@ -224,7 +226,7 @@ static void do_closure_bind(zval *return_value, zval *zclosure, zval *newthis, z
 	zend_closure *closure = (zend_closure *) Z_OBJ_P(zclosure);
 
 	if (scope_obj) {
-		ce = scope_obj->ce;
+		ce = OBJ_CE(scope_obj);
 	} else if (scope_str) {
 		if (zend_string_equals(scope_str, ZSTR_KNOWN(ZEND_STR_STATIC))) {
 			ce = closure->func.common.scope;
@@ -318,7 +320,8 @@ static ZEND_NAMED_FUNCTION(zend_closure_call_magic) /* {{{ */ {
 	}
 
 	fcc.object = fci.object = Z_OBJ_P(ZEND_THIS);
-	fcc.called_scope = zend_get_called_scope(EG(current_execute_data));
+	zend_class_reference *class_ref = zend_get_called_scope(EG(current_execute_data));
+	fcc.called_scope = class_ref ? class_ref->ce : NULL;
 
 	zend_call_function(&fci, &fcc);
 
@@ -339,7 +342,7 @@ static zend_result zend_create_closure_from_callable(zval *return_value, zval *c
 	mptr = fcc.function_handler;
 	if (mptr->common.fn_flags & ZEND_ACC_CALL_VIA_TRAMPOLINE) {
 		/* For Closure::fromCallable([$closure, "__invoke"]) return $closure. */
-		if (fcc.object && fcc.object->ce == zend_ce_closure
+		if (fcc.object && OBJ_CE(fcc.object) == zend_ce_closure
 				&& zend_string_equals(mptr->common.function_name, ZSTR_KNOWN(ZEND_STR_MAGIC_INVOKE))) {
 			RETVAL_OBJ_COPY(fcc.object);
 			zend_free_trampoline(mptr);
@@ -793,7 +796,7 @@ static void zend_create_closure_ex(zval *res, zend_function *func, zend_class_en
 		if (UNEXPECTED(closure->func.internal_function.handler == zend_closure_internal_handler)) {
 			/* avoid infinity recursion, by taking handler from nested closure */
 			zend_closure *nested = (zend_closure*)((char*)func - XtOffsetOf(zend_closure, func));
-			ZEND_ASSERT(nested->std.ce == zend_ce_closure);
+			ZEND_ASSERT(OBJ_CE(&nested->std) == zend_ce_closure);
 			closure->orig_internal_handler = nested->orig_internal_handler;
 		} else {
 			closure->orig_internal_handler = closure->func.internal_function.handler;
