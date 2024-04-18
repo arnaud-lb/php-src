@@ -198,6 +198,9 @@
 #define ULong uint32_t
 #endif
 
+#define STRTOD_PRECOMPUTE_P5S
+
+#ifdef STRTOD_MALLOC_CACHE
 #undef Bigint
 #undef freelist
 #undef p5s
@@ -205,8 +208,11 @@
 
 #define Bigint      _zend_strtod_bigint
 #define freelist    (EG(strtod_state).freelist)
+#ifndef STRTOD_PRECOMPUTE_P5S
 #define p5s         (EG(strtod_state).p5s)
+#endif
 #define dtoa_result (EG(strtod_state).result)
+#endif /* STRTOD_MALLOC_CACHE */
 
 #ifdef DEBUG
 static void Bug(const char *message) {
@@ -536,16 +542,23 @@ BCinfo { int dp0, dp1, dplen, dsign, e0, inexact, nd, nd0, rounding, scale, uflc
 
 #define Kmax ZEND_STRTOD_K_MAX
 
- struct
-Bigint {
+struct Bigint {
+#ifdef STRTOD_MALLOC_CACHE
 	struct Bigint *next;
+#endif
 	int k, maxwds, sign, wds;
 	ULong x[1];
-	};
+};
 
- typedef struct Bigint Bigint;
+struct StaticBigint {
+	int k, maxwds, sign, wds;
+	ULong x[19];
+};
 
-#ifndef Bigint
+typedef struct Bigint Bigint;
+typedef struct StaticBigint StaticBigint;
+
+#if !defined(freelist) && defined(STRTOD_MALLOC_CACHE)
  static Bigint *freelist[Kmax+1];
 #endif
 
@@ -576,6 +589,14 @@ Balloc
 {
 	int x;
 	Bigint *rv;
+#ifndef STRTOD_MALLOC_CACHE
+	x = 1 << k;
+	rv = emalloc(sizeof(Bigint) + (x-1)*sizeof(ULong));
+	rv->k = k;
+	rv->maxwds = x;
+	rv->sign = 0;
+	rv->wds = 0;
+#else /* !STRTOD_MALLOC_CACHE */
 #ifndef Omit_Private_Memory
 	unsigned int len;
 #endif
@@ -612,6 +633,7 @@ Balloc
 		}
 	FREE_DTOA_LOCK(0);
 	rv->sign = rv->wds = 0;
+#endif /* !STRTOD_MALLOC_CACHE */
 	return rv;
 	}
 
@@ -623,6 +645,9 @@ Bfree
 	(Bigint *v)
 #endif
 {
+#ifndef STRTOD_MALLOC_CACHE
+	efree(v);
+#else /* !STRTOD_MALLOC_CACHE */
 	if (v) {
 		if (v->k > Kmax)
 			FREE((void*)v);
@@ -633,6 +658,7 @@ Bfree
 			FREE_DTOA_LOCK(0);
 			}
 		}
+#endif /* !STRTOD_MALLOC_CACHE */
 	}
 
 #define Bcopy(x,y) memcpy((char *)&x->sign, (char *)&y->sign, \
@@ -941,9 +967,51 @@ mult
 	return c;
 	}
 
-#ifndef p5s
+#if !defined(p5s) && !defined(STRTOD_PRECOMPUTE_P5S)
  static Bigint *p5s;
 #endif
+
+#ifdef STRTOD_PRECOMPUTE_P5S
+/* p5s[0]=5^4, p5s[n]=p5s[n-1]^2 */
+static const StaticBigint p5s[7] = {
+    {
+	     .k = 1, .maxwds = 1, .sign = 0, .wds = 1,
+	     .x = {0x00000271},
+    },
+    {
+	     .k = 1, .maxwds = 1, .sign = 0, .wds = 1,
+	     .x = {0x0005f5e1},
+    },
+    {
+	     .k = 1, .maxwds = 2, .sign = 0, .wds = 2,
+	     .x = {0x86f26fc1, 0x00000023},
+    },
+    {
+	     .k = 2, .maxwds = 3, .sign = 0, .wds = 3,
+	     .x = {0x85acef81, 0x2d6d415b, 0x000004ee},
+    },
+    {
+	     .k = 3, .maxwds = 5, .sign = 0, .wds = 5,
+	     .x = {0xbf6a1f01, 0x6e38ed64, 0xdaa797ed, 0xe93ff9f4, 0x00184f03},
+    },
+    {
+	     .k = 4, .maxwds = 10, .sign = 0, .wds = 10,
+	     .x = {
+			0x2e953e01, 0x03df9909, 0x0f1538fd, 0x2374e42f, 0xd3cff5ec,
+			0xc404dc08, 0xbccdb0da, 0xa6337f19, 0xe91f2603, 0x0000024e
+		 },
+    },
+    {
+	     .k = 5, .maxwds = 19, .sign = 0, .wds = 19,
+	     .x = {
+			 0x982e7c01, 0xbed3875b, 0xd8d99f72, 0x12152f87, 0x6bde50c6,
+			 0xcf4a6e70, 0xd595d80f, 0x26b2716e, 0xadc666b0, 0x1d153624,
+			 0x3c42d35a, 0x63ff540e, 0xcc5573c0, 0x65f9ef17, 0x55bc28f2,
+			 0x80dcc7f7, 0xf46eeddc, 0x5fdcefce, 0x000553f7,
+		 },
+    },
+};
+#endif /* STRTOD_PRECOMPUTE_P5S */
 
  static Bigint *
 pow5mult
@@ -953,7 +1021,14 @@ pow5mult
 	(Bigint *b, int k)
 #endif
 {
-	Bigint *b1, *p5, *p51;
+	ZEND_ASSERT(k >= DBL_MIN_10_EXP || k <= DBL_MAX_10_EXP);
+
+#ifdef STRTOD_PRECOMPUTE_P5S
+	const StaticBigint *p5;
+#else
+	Bigint *p5, *p51;
+#endif
+	Bigint *b1;
 	int i;
 	static const int p05[3] = { 5, 25, 125 };
 
@@ -962,6 +1037,22 @@ pow5mult
 
 	if (!(k >>= 2))
 		return b;
+
+#ifdef STRTOD_PRECOMPUTE_P5S
+	ZEND_ASSERT(k < (1<<(sizeof(p5s)/sizeof(*p5s)+1)));
+	p5 = p5s;
+	for(;;) {
+		if (k & 1) {
+			b1 = mult(b, (Bigint*)p5);
+			Bfree(b);
+			b = b1;
+		}
+		if (!(k >>= 1)) {
+			break;
+		}
+		p5++;
+	}
+#else /* !STRTOD_PRECOMPUTE_P5S */
 	if (!(p5 = p5s)) {
 		/* first time */
 #ifdef MULTIPLE_THREADS
@@ -999,6 +1090,7 @@ pow5mult
 			}
 		p5 = p51;
 		}
+#endif /* !STRTOD_PRECOMPUTE_P5S */
 	return b;
 	}
 
@@ -3598,7 +3690,7 @@ zend_strtod
 	return sign ? -dval(&rv) : dval(&rv);
 	}
 
-#if !defined(MULTIPLE_THREADS) && !defined(dtoa_result)
+#if !defined(MULTIPLE_THREADS) && !defined(dtoa_result) && defined(STRTOD_MALLOC_CACHE)
  ZEND_TLS char *dtoa_result;
 #endif
 
@@ -3619,7 +3711,7 @@ rv_alloc(int i)
 	r = (int*)Balloc(k);
 	*r = k;
 	return
-#ifndef MULTIPLE_THREADS
+#if !defined(MULTIPLE_THREADS) && defined(STRTOD_MALLOC_CACHE)
 	dtoa_result =
 #endif
 		(char *)(r+1);
@@ -3657,7 +3749,7 @@ zend_freedtoa(char *s)
 	Bigint *b = (Bigint *)((int *)s - 1);
 	b->maxwds = 1 << (b->k = *(int*)b);
 	Bfree(b);
-#ifndef MULTIPLE_THREADS
+#if !defined(MULTIPLE_THREADS) && defined(STRTOD_MALLOC_CACHE)
 	if (s == dtoa_result)
 		dtoa_result = 0;
 #endif
@@ -3767,7 +3859,7 @@ ZEND_API char *zend_dtoa(double dd, int mode, int ndigits, int *decpt, bool *sig
 #endif /*}}*/
 #endif /*}*/
 
-#ifndef MULTIPLE_THREADS
+#if !defined(MULTIPLE_THREADS) && defined(STRTOD_MALLOC_CACHE)
 	if (dtoa_result) {
 		zend_freedtoa(dtoa_result);
 		dtoa_result = 0;
@@ -4604,6 +4696,7 @@ ZEND_API char *zend_gcvt(double value, int ndigit, char dec_point, char exponent
 
 static void destroy_freelist(void)
 {
+#ifdef STRTOD_MALLOC_CACHE
 	int i;
 	Bigint *tmp;
 
@@ -4617,10 +4710,12 @@ static void destroy_freelist(void)
 		freelist[i] = NULL;
 	}
 	FREE_DTOA_LOCK(0)
+#endif
 }
 
 static void free_p5s(void)
 {
+#ifndef STRTOD_PRECOMPUTE_P5S
 	Bigint **listp, *tmp;
 
 	ACQUIRE_DTOA_LOCK(1)
@@ -4631,4 +4726,5 @@ static void free_p5s(void)
 	}
 	p5s = NULL;
 	FREE_DTOA_LOCK(1)
+#endif
 }

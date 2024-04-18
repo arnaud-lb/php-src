@@ -305,7 +305,9 @@ struct _zend_executor_globals {
 	struct sigaction oldact;
 #endif
 
+#ifdef STRTOD_MALLOC_CACHE
 	zend_strtod_state strtod_state;
+#endif
 
 	void *reserved[ZEND_MAX_RESERVED_RESOURCES];
 };
