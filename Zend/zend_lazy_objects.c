@@ -375,7 +375,7 @@ ZEND_API zend_object *zend_lazy_object_init_with(zend_object *obj, zend_fcall_in
 		for (int i = 0; i < obj->ce->default_properties_count; i++) {
 			zval *p = &properties_table_snapshot[i];
 			/* Use zval_ptr_dtor directly here (not zend_object_dtor_property),
-			 * as the reference type_source will have already been deleted in
+			 * as any reference type_source will have already been deleted in
 			 * case the prop is not bound to this value anymore. */
 			i_zval_ptr_dtor(p);
 		}
