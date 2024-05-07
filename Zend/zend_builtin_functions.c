@@ -770,9 +770,7 @@ ZEND_FUNCTION(get_object_vars)
 
 	zval obj_zv;
 	ZVAL_OBJ(&obj_zv, zobj);
-	ZEND_LAZY_OBJECT_RAW(zobj) {
-		properties = zend_get_properties_for(&obj_zv, ZEND_PROP_PURPOSE_GET_OBJECT_VARS);
-	} ZEND_LAZY_OBJECT_RAW_END();
+	properties = zend_get_properties_for(&obj_zv, ZEND_PROP_PURPOSE_GET_OBJECT_VARS);
 
 	if (properties == NULL) {
 		RETURN_EMPTY_ARRAY();

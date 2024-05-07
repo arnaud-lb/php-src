@@ -2456,7 +2456,6 @@ ZEND_API HashTable *zend_std_get_properties_for(zend_object *obj, zend_prop_purp
 			}
 			ZEND_FALLTHROUGH;
 		case ZEND_PROP_PURPOSE_JSON:
-		case ZEND_PROP_PURPOSE_GET_OBJECT_VARS:
 		case ZEND_PROP_PURPOSE_VAR_EXPORT:
 			if (obj->ce->num_hooked_props) {
 				return zend_hooked_object_build_properties(obj);
@@ -2467,6 +2466,18 @@ ZEND_API HashTable *zend_std_get_properties_for(zend_object *obj, zend_prop_purp
 			if (ht) {
 				GC_TRY_ADDREF(ht);
 			}
+			return ht;
+		case ZEND_PROP_PURPOSE_GET_OBJECT_VARS:
+			ZEND_LAZY_OBJECT_RAW(obj) {
+				if (obj->ce->num_hooked_props) {
+					ht = zend_hooked_object_build_properties(obj);
+				} else {
+					ht = obj->handlers->get_properties(obj);
+					if (ht) {
+						GC_TRY_ADDREF(ht);
+					}
+				}
+			} ZEND_LAZY_OBJECT_RAW_END();
 			return ht;
 		case ZEND_PROP_PURPOSE_SERIALIZE: {
 			if (!zend_object_is_lazy(obj)) {
