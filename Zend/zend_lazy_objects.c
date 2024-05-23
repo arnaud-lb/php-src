@@ -174,6 +174,13 @@ ZEND_API zend_result zend_object_make_lazy(zend_object *obj, zend_fcall_info_cac
 	zend_object_dtor_dynamic_properties(obj);
 	obj->properties = NULL;
 
+	/* Objects become non-lazy if all properties are made non-lazy before
+	 * initialization is triggerd. If the object has no properties to begin
+	 * with, this happens immediately. */
+	if (!obj->ce->default_properties_count) {
+		return SUCCESS;
+	}
+
 	/* unset() declared properties */
 	for (int i = 0; i < obj->ce->default_properties_count; i++) {
 		zval *p = &obj->properties_table[i];
