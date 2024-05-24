@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: bd4f9ce534ad20e9a2c0a9c42d9e31670fe4df9e */
+ * Stub hash: 2b50537e264c87056c2f0c34232c0775bdaad637 */
 
 ZEND_BEGIN_ARG_WITH_TENTATIVE_RETURN_TYPE_INFO_EX(arginfo_class_Reflection_getModifierNames, 0, 1, IS_ARRAY, 0)
 	ZEND_ARG_TYPE_INFO(0, modifiers, IS_LONG, 0)
@@ -355,6 +355,8 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_ReflectionLazyObject_setPr
 	ZEND_ARG_TYPE_INFO(0, value, IS_MIXED, 0)
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, class, IS_STRING, 1, "null")
 ZEND_END_ARG_INFO()
+
+#define arginfo_class_ReflectionLazyObject_setRawProperty arginfo_class_ReflectionLazyObject_setProperty
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_ReflectionLazyObject_skipProperty, 0, 1, IS_VOID, 0)
 	ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
@@ -810,6 +812,7 @@ ZEND_METHOD(ReflectionLazyObject, fromInstance);
 ZEND_METHOD(ReflectionLazyObject, isInitialized);
 ZEND_METHOD(ReflectionLazyObject, initialize);
 ZEND_METHOD(ReflectionLazyObject, setProperty);
+ZEND_METHOD(ReflectionLazyObject, setRawProperty);
 ZEND_METHOD(ReflectionLazyObject, skipProperty);
 ZEND_METHOD(ReflectionLazyObject, __construct);
 ZEND_METHOD(ReflectionProperty, __construct);
@@ -1105,6 +1108,7 @@ static const zend_function_entry class_ReflectionLazyObject_methods[] = {
 	ZEND_ME(ReflectionLazyObject, isInitialized, arginfo_class_ReflectionLazyObject_isInitialized, ZEND_ACC_PUBLIC)
 	ZEND_ME(ReflectionLazyObject, initialize, arginfo_class_ReflectionLazyObject_initialize, ZEND_ACC_PUBLIC)
 	ZEND_ME(ReflectionLazyObject, setProperty, arginfo_class_ReflectionLazyObject_setProperty, ZEND_ACC_PUBLIC)
+	ZEND_ME(ReflectionLazyObject, setRawProperty, arginfo_class_ReflectionLazyObject_setRawProperty, ZEND_ACC_PUBLIC)
 	ZEND_ME(ReflectionLazyObject, skipProperty, arginfo_class_ReflectionLazyObject_skipProperty, ZEND_ACC_PUBLIC)
 	ZEND_ME(ReflectionLazyObject, __construct, arginfo_class_ReflectionLazyObject___construct, ZEND_ACC_PRIVATE)
 	ZEND_FE_END
