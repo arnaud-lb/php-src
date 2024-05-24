@@ -5,6 +5,7 @@ Lazy objects: clone preserves initialized properties
 
 class C {
     public $a = 1;
+    public $b;
 
     public function __construct() {
     }

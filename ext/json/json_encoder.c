@@ -29,6 +29,7 @@
 #include <zend_exceptions.h>
 #include "zend_enum.h"
 #include "zend_property_hooks.h"
+#include "zend_lazy_objects.h"
 
 static const char digits[] = "0123456789abcdef";
 
@@ -129,7 +130,7 @@ static zend_result php_json_encode_array(smart_str *buf, zval *val, int options,
 		/* Optimized version without rebuilding properties HashTable */
 		zend_object *obj = Z_OBJ_P(val);
 
-		if (zend_object_is_lazy(Z_OBJ_P(val))) {
+		if (zend_lazy_object_must_init(Z_OBJ_P(val))) {
 			obj = zend_lazy_object_init(Z_OBJ_P(val));
 			if (!obj) {
 				return FAILURE;

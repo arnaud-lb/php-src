@@ -11,6 +11,7 @@ class Canary {
 
 #[\AllowDynamicProperties]
 class C {
+    public $b;
     public function __construct() {
         $this->a = new Canary();
     }
@@ -49,7 +50,9 @@ object(C)#%d (0) {
 string(11) "initializer"
 object(Canary)#%d (0) {
 }
-object(C)#%d (1) {
+object(C)#%d (2) {
+  ["b"]=>
+  NULL
   ["a"]=>
   object(Canary)#%d (0) {
   }
@@ -66,7 +69,9 @@ object(Canary)#%d (0) {
 }
 object(C)#%d (1) {
   ["instance"]=>
-  object(C)#%d (1) {
+  object(C)#%d (2) {
+    ["b"]=>
+    NULL
     ["a"]=>
     object(Canary)#%d (0) {
     }

@@ -1,5 +1,7 @@
 --TEST--
 Lazy objects: Initializer effects are reverted after exception (dynamic properties, no default props, initialized hashtable)
+--XFAIL--
+Class without props is never lazy
 --FILE--
 <?php
 

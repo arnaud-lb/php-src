@@ -853,9 +853,9 @@ ZEND_FUNCTION(get_mangled_object_vars)
 		Z_PARAM_OBJ(obj)
 	ZEND_PARSE_PARAMETERS_END();
 
-	ZEND_LAZY_OBJECT_RAW(obj) {
+	ZEND_LAZY_OBJECT_PASSTHRU(obj) {
 		properties = obj->handlers->get_properties(obj);
-	} ZEND_LAZY_OBJECT_RAW_END();
+	} ZEND_LAZY_OBJECT_PASSTHRU_END();
 
 	if (!properties) {
 		ZVAL_EMPTY_ARRAY(return_value);

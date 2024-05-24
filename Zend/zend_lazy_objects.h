@@ -41,19 +41,18 @@
 
 /* Temporarily allow raw access to the lazy object without triggering
  * initialization */
-#define ZEND_LAZY_OBJECT_RAW(zobj)                                          \
+#define ZEND_LAZY_OBJECT_PASSTHRU(zobj)                                     \
 	do {                                                                    \
 		zend_object *_zobj = (zobj);                                        \
-		uint32_t _is_lazy = OBJ_EXTRA_FLAGS(_zobj) & IS_OBJ_LAZY;           \
-		OBJ_EXTRA_FLAGS(zobj) &= ~IS_OBJ_LAZY;                              \
+		zend_lazy_object_passthru_begin(_zobj);                             \
 		do
 
-#define ZEND_LAZY_OBJECT_RAW_END()                                          \
+#define ZEND_LAZY_OBJECT_PASSTHRU_END()                                     \
 		while (0);                                                          \
-		OBJ_EXTRA_FLAGS(_zobj) |= _is_lazy;                                 \
+		zend_lazy_object_passthru_end(_zobj);                               \
 	} while (0)
 
-typedef uint32_t zend_lazy_object_flags_t;
+typedef uint8_t zend_lazy_object_flags_t;
 
 typedef struct _zend_lazy_objects_store {
 	/* object handle -> *zend_lazy_object_info */
@@ -61,6 +60,24 @@ typedef struct _zend_lazy_objects_store {
 } zend_lazy_objects_store;
 
 typedef struct _zend_fcall_info_cache zend_fcall_info_cache;
+
+ZEND_API zend_result zend_object_make_lazy(zend_object *obj, zend_fcall_info_cache *initializer, zend_lazy_object_flags_t flags);
+ZEND_API zend_object *zend_lazy_object_init(zend_object *obj);
+ZEND_API zend_object *zend_lazy_object_init_with(zend_object *obj, zend_fcall_info_cache *custom_initializer);
+
+void zend_lazy_objects_init(zend_lazy_objects_store *store);
+void zend_lazy_objects_destroy(zend_lazy_objects_store *store);
+zend_fcall_info_cache* zend_lazy_object_get_initializer(zend_object *obj);
+zend_object *zend_lazy_object_get_instance(zend_object *obj);
+zend_lazy_object_flags_t zend_lazy_object_get_flags(zend_object *obj);
+void zend_lazy_object_del_info(zend_object *obj);
+zend_object *zend_lazy_object_clone(zend_object *old_obj);
+HashTable *zend_lazy_object_debug_info(zend_object *object, int *is_temp);
+bool zend_lazy_object_decr_lazy_props(zend_object *obj);
+void zend_lazy_object_realize(zend_object *obj);
+void zend_lazy_object_passthru_begin(zend_object *obj);
+void zend_lazy_object_passthru_end(zend_object *obj);
+bool zend_lazy_object_passthru(zend_object *obj);
 
 static zend_always_inline bool zend_object_is_lazy(zend_object *obj)
 {
@@ -77,20 +94,21 @@ static zend_always_inline bool zend_lazy_object_initialized(zend_object *obj)
 	return !(OBJ_EXTRA_FLAGS(obj) & IS_OBJ_LAZY);
 }
 
-ZEND_API zend_result zend_object_make_lazy(zend_object *obj, zend_fcall_info_cache *initializer, zend_lazy_object_flags_t flags);
-ZEND_API zend_object *zend_lazy_object_init(zend_object *obj);
-ZEND_API zend_object *zend_lazy_object_init_with(zend_object *obj, zend_fcall_info_cache *custom_initializer);
+/* True if accessing a lazy prop on obj mandates a call to
+ * zend_lazy_object_init(),
+ * False if obj is not lazy or passthru is enabled */
+static zend_always_inline bool zend_lazy_object_must_init(zend_object *obj)
+{
+	if (EXPECTED(!zend_object_is_lazy(obj))) {
+		return false;
+	}
 
-void zend_lazy_objects_init(zend_lazy_objects_store *store);
-void zend_lazy_objects_destroy(zend_lazy_objects_store *store);
-zend_fcall_info_cache* zend_lazy_object_get_initializer(zend_object *obj);
-zend_object *zend_lazy_object_get_instance(zend_object *obj);
-zend_lazy_object_flags_t zend_lazy_object_get_flags(zend_object *obj);
-void zend_lazy_object_del_info(zend_object *obj);
-zend_object *zend_lazy_object_clone(zend_object *old_obj);
-HashTable *zend_lazy_object_debug_info(zend_object *object, int *is_temp);
-bool zend_lazy_object_decr_lazy_props(zend_object *obj);
-void zend_lazy_object_realize(zend_object *obj);
+	if (zend_object_is_virtual(obj) && zend_lazy_object_initialized(obj)) {
+		return true;
+	}
+
+	return !zend_lazy_object_passthru(obj);
+}
 
 static inline bool zend_lazy_object_initialize_on_serialize(zend_object *obj)
 {

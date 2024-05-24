@@ -20,6 +20,7 @@
 
 #include "zend_compile.h"
 #include "zend_lazy_objects.h"
+#include "zend_object_handlers.h"
 #include "zend_type_info.h"
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -5717,21 +5718,57 @@ ZEND_METHOD(ReflectionLazyObject, initialize)
 }
 /* }}} */
 
-#define SKIP_INITIALIZER(object, skipInitializer) do {					\
-	zend_object *_object = Z_OBJ_P(object);								\
-	bool _skipInitializer = (skipInitializer);							\
-	uint32_t _is_lazy = OBJ_EXTRA_FLAGS(_object) & (IS_OBJ_LAZY|IS_OBJ_VIRTUAL_LAZY);\
-	if (_skipInitializer) {												\
-		OBJ_EXTRA_FLAGS(_object) &= ~(IS_OBJ_LAZY|IS_OBJ_VIRTUAL_LAZY);	\
-	}
+static void reflection_lazy_object_set_property(reflection_object *intern,
+		zend_string *name, zval *value, zend_class_entry *class,
+		bool skip_hooks)
+{
+	zend_object *object = Z_OBJ(intern->obj);
+	zend_property_info *prop_info;
 
-#define END_SKIP_INITIALIZER()											\
-	if (_skipInitializer) {												\
-		OBJ_EXTRA_FLAGS(_object) |= _is_lazy;							\
-	}																	\
-} while (0)
+	ZEND_LAZY_OBJECT_PASSTHRU(object) {
+		uint32_t *guard;
+		uint32_t guard_backup;
+		zend_class_entry *scope = class ? class : Z_OBJCE(intern->obj);
+		zend_class_entry *old_scope = EG(fake_scope);
 
-/* {{{ Set property value withtout triggering initializer */
+		EG(fake_scope) = scope;
+
+		prop_info = zend_get_property_info(object->ce, name, 1);
+
+		if (prop_info && prop_info != ZEND_WRONG_PROPERTY_INFO) {
+			if (UNEXPECTED(prop_info->flags & ZEND_ACC_STATIC)) {
+				zend_throw_exception_ex(reflection_exception_ptr, 0,
+						"Can not use %s on static property %s::$%s",
+						skip_hooks ? "setRawProperty" : "setProperty",
+						ZSTR_VAL(scope->name), ZSTR_VAL(name));
+				goto fail;
+			}
+			if (UNEXPECTED(skip_hooks && (prop_info->flags & ZEND_ACC_VIRTUAL))) {
+				zend_throw_exception_ex(reflection_exception_ptr, 0,
+						"Can not use setRawProperty on virtual property %s::$%s",
+						ZSTR_VAL(scope->name), ZSTR_VAL(name));
+				goto fail;
+			}
+		}
+
+		if (skip_hooks) {
+			guard = zend_get_property_guard(Z_OBJ(intern->obj), name);
+			guard_backup = *guard;
+			*guard |= ZEND_GUARD_PROPERTY_HOOK;
+		}
+
+		object->handlers->write_property(object, name, value, NULL);
+
+		if (skip_hooks) {
+			*guard = guard_backup;
+		}
+
+fail:
+		EG(fake_scope) = old_scope;
+	} ZEND_LAZY_OBJECT_PASSTHRU_END();
+}
+
+/* {{{ Set property value withtout triggering initializer while getting through hooks if any */
 ZEND_METHOD(ReflectionLazyObject, setProperty)
 {
 	reflection_object *intern;
@@ -5748,35 +5785,30 @@ ZEND_METHOD(ReflectionLazyObject, setProperty)
 
 	GET_REFLECTION_OBJECT();
 
-	bool prop_was_lazy;
-	zend_object *object = Z_OBJ(intern->obj);
-	zval *prop_ptr;
+	reflection_lazy_object_set_property(intern, name, value, class,
+			/* skip_hooks */ false);
+}
+/* }}} */
 
-	SKIP_INITIALIZER(&intern->obj, true) {
+/* {{{ Set property value withtout triggering initializer while skipping hooks if any */
+ZEND_METHOD(ReflectionLazyObject, setRawProperty)
+{
+	reflection_object *intern;
+	zend_string *name;
+	zval *value;
+	zend_class_entry *class = NULL;
 
-		zend_class_entry *scope = class ? class : Z_OBJCE(intern->obj);
-		zend_class_entry *old_scope = EG(fake_scope);
+	ZEND_PARSE_PARAMETERS_START(2, 3)
+		Z_PARAM_STR(name)
+		Z_PARAM_ZVAL(value)
+		Z_PARAM_OPTIONAL
+		Z_PARAM_CLASS_OR_NULL(class)
+	ZEND_PARSE_PARAMETERS_END();
 
-		EG(fake_scope) = scope;
+	GET_REFLECTION_OBJECT();
 
-		zend_property_info *prop_info = zend_get_property_info(object->ce, name, 1);
-
-		prop_was_lazy = prop_info && prop_info != ZEND_WRONG_PROPERTY_INFO
-			&& !(prop_info->flags & ZEND_ACC_STATIC)
-			&& (Z_PROP_FLAG_P(OBJ_PROP(object, prop_info->offset)) & IS_PROP_LAZY);
-
-		prop_ptr = object->handlers->write_property(object, name, value, NULL);
-
-		EG(fake_scope) = old_scope;
-	} END_SKIP_INITIALIZER();
-
-	if (prop_was_lazy && !(Z_PROP_FLAG_P(prop_ptr) & IS_PROP_LAZY)
-			&& zend_object_is_lazy(object)
-			&& !zend_lazy_object_initialized(object)) {
-		if (zend_lazy_object_decr_lazy_props(object)) {
-			zend_lazy_object_realize(object);
-		}
-	}
+	reflection_lazy_object_set_property(intern, name, value, class,
+			/* skip_hooks */ true);
 }
 /* }}} */
 
@@ -5808,16 +5840,23 @@ ZEND_METHOD(ReflectionLazyObject, skipProperty)
 
 	EG(fake_scope) = old_scope;
 
-	if (!prop_info || prop_info == ZEND_WRONG_PROPERTY_INFO) {
+	if (UNEXPECTED(!prop_info || prop_info == ZEND_WRONG_PROPERTY_INFO)) {
 		zend_throw_exception_ex(reflection_exception_ptr, 0,
 				"Property %s::$%s does not exist",
 				ZSTR_VAL(scope->name), ZSTR_VAL(name));
 		RETURN_THROWS();
 	}
 
-	if (prop_info->flags & ZEND_ACC_STATIC) {
+	if (UNEXPECTED(prop_info->flags & ZEND_ACC_STATIC)) {
 		zend_throw_exception_ex(reflection_exception_ptr, 0,
 				"Can not initialize static property %s::$%s",
+				ZSTR_VAL(scope->name), ZSTR_VAL(name));
+		RETURN_THROWS();
+	}
+
+	if (UNEXPECTED(prop_info->flags & ZEND_ACC_VIRTUAL)) {
+		zend_throw_exception_ex(reflection_exception_ptr, 0,
+				"Can not initialize virtual property %s::$%s",
 				ZSTR_VAL(scope->name), ZSTR_VAL(name));
 		RETURN_THROWS();
 	}

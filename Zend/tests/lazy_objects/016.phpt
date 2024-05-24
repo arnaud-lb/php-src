@@ -4,6 +4,7 @@ Lazy objects: destructor of lazy objets is not called if not initialized
 <?php
 
 class C {
+    public $a;
     public function __destruct() {
         var_dump(__METHOD__);
     }

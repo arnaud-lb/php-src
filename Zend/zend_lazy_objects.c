@@ -51,6 +51,7 @@ typedef struct _zend_lazy_object_info {
 	} u;
 	zend_lazy_object_flags_t flags;
 	int lazy_properties_count;
+	int passthru; /* If non-zero, access to object must not trigger initialization */
 } zend_lazy_object_info;
 
 /* zend_hash dtor_func_t for zend_lazy_objects_store.infos */
@@ -148,9 +149,30 @@ bool zend_lazy_object_decr_lazy_props(zend_object *obj)
 	return info->lazy_properties_count == 0;
 }
 
+void zend_lazy_object_passthru_begin(zend_object *obj)
+{
+	if (zend_object_is_lazy(obj) && !zend_lazy_object_initialized(obj)) {
+		zend_lazy_object_get_info(obj)->passthru++;
+	}
+}
+
+void zend_lazy_object_passthru_end(zend_object *obj)
+{
+	if (zend_object_is_lazy(obj) && !zend_lazy_object_initialized(obj)) {
+		zend_lazy_object_get_info(obj)->passthru--;
+	}
+}
+
+bool zend_lazy_object_passthru(zend_object *obj)
+{
+	ZEND_ASSERT(zend_object_is_lazy(obj));
+	ZEND_ASSERT(!zend_lazy_object_initialized(obj));
+
+	return zend_lazy_object_get_info(obj)->passthru;
+}
+
 ZEND_API zend_result zend_object_make_lazy(zend_object *obj, zend_fcall_info_cache *initializer, zend_lazy_object_flags_t flags)
 {
-	// TODO: allow makeLazy() on a lazy object? Otherwise prevent it in Reflection
 	ZEND_ASSERT(!zend_object_is_lazy(obj));
 	ZEND_ASSERT(!(flags & ~ZEND_LAZY_OBJECT_USER_FLAGS));
 
@@ -201,6 +223,7 @@ ZEND_API zend_result zend_object_make_lazy(zend_object *obj, zend_fcall_info_cac
 	zend_fcc_dup(&info->u.initializer, initializer);
 	info->flags = flags;
 	info->lazy_properties_count = obj->ce->default_properties_count;
+	info->passthru = 0;
 	zend_lazy_object_set_info(obj, info);
 
 	return SUCCESS;

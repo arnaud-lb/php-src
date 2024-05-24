@@ -3,6 +3,7 @@ Lazy objects: ReflectionLazyObject::skipProperty() prevent properties from trigg
 --FILE--
 <?php
 
+#[\AllowDynamicProperties]
 class A {
     private $priv = 'priv A';
     private $privA = 'privA';
@@ -14,6 +15,16 @@ class A {
     public $noDefault;
     public string $noDefaultTyped;
     public $initialized;
+
+    public $hooked {
+        get { return $this->hooked; }
+        set ($value) { $this->hooked = strtoupper($value); }
+    }
+
+    public $virtual {
+        get { return 'virtual'; }
+        set ($value) { }
+    }
 }
 
 class B extends A {
@@ -23,71 +34,113 @@ class B extends A {
     private readonly string $readonly;
 }
 
+set_error_handler(function ($errno, $errstr) {
+    throw new Error($errstr);
+});
+
+function testProperty(object $obj, $propReflector) {
+
+    $getValue = function ($obj, $propReflector) {
+        $name = $propReflector->getName();
+        return $obj->$name;
+    };
+
+    printf("\n## %s", $propReflector);
+
+    printf("\nskipProperty():\n");
+    $clone = clone $obj;
+    $lazyReflector = ReflectionLazyObject::fromInstance($clone);
+    $skept = false;
+    try {
+        $lazyReflector->skipProperty($propReflector->getName());
+        $skept = true;
+    } catch (ReflectionException $e) {
+        printf("%s: %s\n", $e::class, $e->getMessage());
+    }
+    if ($lazyReflector->isInitialized()) {
+        printf("Object was unexpectedly initialized (1)\n");
+    }
+    if ($skept) {
+        try {
+            printf("getValue(): ");
+            var_dump($getValue($clone, $propReflector));
+        } catch (\Error $e) {
+            printf("%s: %s\n", $e::class, $e->getMessage());
+        }
+        if (!$propReflector->isStatic()) {
+            $propReflector->setValue($clone, '');
+        }
+        if ($lazyReflector->isInitialized()) {
+            printf("Object was unexpectedly initialized (1)\n");
+        }
+    }
+
+    printf("\nsetProperty():\n");
+    $clone = clone $obj;
+    $lazyReflector = ReflectionLazyObject::fromInstance($clone);
+    try {
+        $lazyReflector->setProperty($propReflector->getName(), 'value');
+    } catch (ReflectionException $e) {
+        printf("%s: %s\n", $e::class, $e->getMessage());
+    }
+    if ($lazyReflector->isInitialized()) {
+        printf("Object was unexpectedly initialized (1)\n");
+    }
+    try {
+        printf("getValue(): ");
+        var_dump($getValue($clone, $propReflector));
+    } catch (\Error $e) {
+        printf("%s: %s\n", $e::class, $e->getMessage());
+    }
+    if ($lazyReflector->isInitialized()) {
+        printf("Object was unexpectedly initialized (1)\n");
+    }
+
+    printf("\nsetRawProperty():\n");
+    $clone = clone $obj;
+    $lazyReflector = ReflectionLazyObject::fromInstance($clone);
+    try {
+        $lazyReflector->setRawProperty($propReflector->getName(), 'value');
+    } catch (ReflectionException $e) {
+        printf("%s: %s\n", $e::class, $e->getMessage());
+    }
+    if ($lazyReflector->isInitialized()) {
+        printf("Object was unexpectedly initialized (1)\n");
+    }
+    try {
+        printf("getValue(): ");
+        var_dump($getValue($clone, $propReflector));
+    } catch (\Error $e) {
+        printf("%s: %s\n", $e::class, $e->getMessage());
+    }
+    if ($lazyReflector->isInitialized()) {
+        printf("Object was unexpectedly initialized (1)\n");
+    }
+}
+
 function test(string $name, object $obj) {
     printf("# %s:\n", $name);
 
-    var_dump($obj);
+    $reflector = new ReflectionClass($obj::class);
 
-    $lazyObj = ReflectionLazyObject::fromInstance($obj);
-
-    printf("Init pubA\n");
-    $lazyObj->skipProperty('pubA');
-    var_dump($obj);
-
-    printf("Init pubB\n");
-    $lazyObj->skipProperty('pubB');
-    var_dump($obj);
-
-    printf("Init prot\n");
-    $lazyObj->skipProperty('prot');
-    var_dump($obj);
-
-    printf("Init priv\n");
-    $lazyObj->skipProperty('priv');
-    var_dump($obj);
-
-    printf("Init A::priv\n");
-    $lazyObj->skipProperty('priv', A::class);
-    var_dump($obj);
-
-    try {
-        printf("Init privA\n");
-        $lazyObj->skipProperty('privA');
-        var_dump($obj);
-    } catch (Exception $e) {
-        printf("%s\n", $e->getMessage());
+    foreach ($reflector->getProperties() as $propReflector) {
+        testProperty($obj, $propReflector);
     }
 
-    printf("Init A::privA\n");
-    $lazyObj->skipProperty('privA', A::class);
-    var_dump($obj);
-
-    printf("Init readonly\n");
-    $lazyObj->skipProperty('readonly');
-    var_dump($obj);
-
-    printf("Init noDefault\n");
-    $lazyObj->skipProperty('noDefault');
-    var_dump($obj);
-
-    printf("Init noDefaultTyped\n");
-    $lazyObj->skipProperty('noDefaultTyped');
-    var_dump($obj);
-
-    printf("Init initialized\n");
-    $lazyObj->setProperty('initialized', new stdClass);
-    $lazyObj->skipProperty('initialized');
-    var_dump($obj);
-
-    printf("Accessing properties should not trigger initializer after skipProperty\n");
-    var_dump($obj->initialized);
-    var_dump($obj->noDefault);
-    var_dump($obj->pubA);
-    try {
-        var_dump($obj->noDefaultTyped);
-    } catch (Error $e) {
-        printf("%s\n", $e->getMessage());
-    }
+    testProperty($obj, new class {
+        function getName() {
+            return 'dynamicProp';
+        }
+        function setValue($obj, $value) {
+            $obj->dynamicProp = $value;
+        }
+        function isStatic() {
+            return false;
+        }
+        function __toString() {
+            return "Property [ \$dynamicProp ]\n";
+        }
+    });
 }
 
 $obj = (new ReflectionClass(B::class))->newInstanceWithoutConstructor();
@@ -100,374 +153,282 @@ test('Ghost', $obj);
 $obj = (new ReflectionClass(B::class))->newInstanceWithoutConstructor();
 ReflectionLazyObject::makeLazy($obj, function ($obj) {
     var_dump("initializer");
-    return new C();
+    return new A();
 }, ReflectionLazyObject::STRATEGY_VIRTUAL);
 
 test('Virtual', $obj);
 
 ?>
---EXPECTF--
+--EXPECT--
 # Ghost:
-object(B)#%d (0) {
-  ["noDefaultTyped"]=>
-  uninitialized(string)
-  ["readonly":"B":private]=>
-  uninitialized(string)
-}
-Init pubA
-object(B)#%d (1) {
-  ["pubA"]=>
-  string(4) "pubA"
-  ["noDefaultTyped"]=>
-  uninitialized(string)
-  ["readonly":"B":private]=>
-  uninitialized(string)
-}
-Init pubB
-object(B)#%d (2) {
-  ["pubA"]=>
-  string(4) "pubA"
-  ["noDefaultTyped"]=>
-  uninitialized(string)
-  ["pubB"]=>
-  string(4) "pubB"
-  ["readonly":"B":private]=>
-  uninitialized(string)
-}
-Init prot
-object(B)#%d (3) {
-  ["prot":protected]=>
-  string(4) "prot"
-  ["pubA"]=>
-  string(4) "pubA"
-  ["noDefaultTyped"]=>
-  uninitialized(string)
-  ["pubB"]=>
-  string(4) "pubB"
-  ["readonly":"B":private]=>
-  uninitialized(string)
-}
-Init priv
-object(B)#%d (4) {
-  ["prot":protected]=>
-  string(4) "prot"
-  ["pubA"]=>
-  string(4) "pubA"
-  ["noDefaultTyped"]=>
-  uninitialized(string)
-  ["priv":"B":private]=>
-  string(5) "privB"
-  ["pubB"]=>
-  string(4) "pubB"
-  ["readonly":"B":private]=>
-  uninitialized(string)
-}
-Init A::priv
-object(B)#%d (5) {
-  ["priv":"A":private]=>
-  string(6) "priv A"
-  ["prot":protected]=>
-  string(4) "prot"
-  ["pubA"]=>
-  string(4) "pubA"
-  ["noDefaultTyped"]=>
-  uninitialized(string)
-  ["priv":"B":private]=>
-  string(5) "privB"
-  ["pubB"]=>
-  string(4) "pubB"
-  ["readonly":"B":private]=>
-  uninitialized(string)
-}
-Init privA
-Property B::$privA does not exist
-Init A::privA
-object(B)#%d (6) {
-  ["priv":"A":private]=>
-  string(6) "priv A"
-  ["privA":"A":private]=>
-  string(5) "privA"
-  ["prot":protected]=>
-  string(4) "prot"
-  ["pubA"]=>
-  string(4) "pubA"
-  ["noDefaultTyped"]=>
-  uninitialized(string)
-  ["priv":"B":private]=>
-  string(5) "privB"
-  ["pubB"]=>
-  string(4) "pubB"
-  ["readonly":"B":private]=>
-  uninitialized(string)
-}
-Init readonly
-object(B)#%d (6) {
-  ["priv":"A":private]=>
-  string(6) "priv A"
-  ["privA":"A":private]=>
-  string(5) "privA"
-  ["prot":protected]=>
-  string(4) "prot"
-  ["pubA"]=>
-  string(4) "pubA"
-  ["noDefaultTyped"]=>
-  uninitialized(string)
-  ["priv":"B":private]=>
-  string(5) "privB"
-  ["pubB"]=>
-  string(4) "pubB"
-  ["readonly":"B":private]=>
-  uninitialized(string)
-}
-Init noDefault
-object(B)#%d (7) {
-  ["priv":"A":private]=>
-  string(6) "priv A"
-  ["privA":"A":private]=>
-  string(5) "privA"
-  ["prot":protected]=>
-  string(4) "prot"
-  ["pubA"]=>
-  string(4) "pubA"
-  ["noDefault"]=>
-  NULL
-  ["noDefaultTyped"]=>
-  uninitialized(string)
-  ["priv":"B":private]=>
-  string(5) "privB"
-  ["pubB"]=>
-  string(4) "pubB"
-  ["readonly":"B":private]=>
-  uninitialized(string)
-}
-Init noDefaultTyped
-object(B)#%d (7) {
-  ["priv":"A":private]=>
-  string(6) "priv A"
-  ["privA":"A":private]=>
-  string(5) "privA"
-  ["prot":protected]=>
-  string(4) "prot"
-  ["pubA"]=>
-  string(4) "pubA"
-  ["noDefault"]=>
-  NULL
-  ["noDefaultTyped"]=>
-  uninitialized(string)
-  ["priv":"B":private]=>
-  string(5) "privB"
-  ["pubB"]=>
-  string(4) "pubB"
-  ["readonly":"B":private]=>
-  uninitialized(string)
-}
-Init initialized
-object(B)#%d (8) {
-  ["priv":"A":private]=>
-  string(6) "priv A"
-  ["privA":"A":private]=>
-  string(5) "privA"
-  ["prot":protected]=>
-  string(4) "prot"
-  ["pubA"]=>
-  string(4) "pubA"
-  ["noDefault"]=>
-  NULL
-  ["noDefaultTyped"]=>
-  uninitialized(string)
-  ["initialized"]=>
-  NULL
-  ["priv":"B":private]=>
-  string(5) "privB"
-  ["pubB"]=>
-  string(4) "pubB"
-  ["readonly":"B":private]=>
-  uninitialized(string)
-}
-Accessing properties should not trigger initializer after skipProperty
-NULL
-NULL
-string(4) "pubA"
-Typed property A::$noDefaultTyped must not be accessed before initialization
+
+## Property [ private $priv = 'privB' ]
+
+skipProperty():
+getValue(): Error: Cannot access private property B::$priv
+
+setProperty():
+getValue(): Error: Cannot access private property B::$priv
+
+setRawProperty():
+getValue(): Error: Cannot access private property B::$priv
+
+## Property [ public $pubB = 'pubB' ]
+
+skipProperty():
+getValue(): string(4) "pubB"
+
+setProperty():
+getValue(): string(5) "value"
+
+setRawProperty():
+getValue(): string(5) "value"
+
+## Property [ private readonly string $readonly ]
+
+skipProperty():
+getValue(): Error: Cannot access private property B::$readonly
+
+setProperty():
+getValue(): Error: Cannot access private property B::$readonly
+
+setRawProperty():
+getValue(): Error: Cannot access private property B::$readonly
+
+## Property [ protected $prot = 'prot' ]
+
+skipProperty():
+getValue(): Error: Cannot access protected property B::$prot
+
+setProperty():
+getValue(): Error: Cannot access protected property B::$prot
+
+setRawProperty():
+getValue(): Error: Cannot access protected property B::$prot
+
+## Property [ public $pubA = 'pubA' ]
+
+skipProperty():
+getValue(): string(4) "pubA"
+
+setProperty():
+getValue(): string(5) "value"
+
+setRawProperty():
+getValue(): string(5) "value"
+
+## Property [ public static $static = 'static' ]
+
+skipProperty():
+ReflectionException: Can not initialize static property B::$static
+
+setProperty():
+ReflectionException: Can not use setProperty on static property B::$static
+getValue(): Error: Accessing static property B::$static as non static
+
+setRawProperty():
+ReflectionException: Can not use setRawProperty on static property B::$static
+getValue(): Error: Accessing static property B::$static as non static
+
+## Property [ public $noDefault = NULL ]
+
+skipProperty():
+getValue(): NULL
+
+setProperty():
+getValue(): string(5) "value"
+
+setRawProperty():
+getValue(): string(5) "value"
+
+## Property [ public string $noDefaultTyped ]
+
+skipProperty():
+getValue(): Error: Typed property A::$noDefaultTyped must not be accessed before initialization
+
+setProperty():
+getValue(): string(5) "value"
+
+setRawProperty():
+getValue(): string(5) "value"
+
+## Property [ public $initialized = NULL ]
+
+skipProperty():
+getValue(): NULL
+
+setProperty():
+getValue(): string(5) "value"
+
+setRawProperty():
+getValue(): string(5) "value"
+
+## Property [ public $hooked = NULL ]
+
+skipProperty():
+getValue(): NULL
+
+setProperty():
+getValue(): string(5) "VALUE"
+
+setRawProperty():
+getValue(): string(5) "value"
+
+## Property [ public $virtual ]
+
+skipProperty():
+ReflectionException: Can not initialize virtual property B::$virtual
+
+setProperty():
+getValue(): string(7) "virtual"
+
+setRawProperty():
+ReflectionException: Can not use setRawProperty on virtual property B::$virtual
+getValue(): string(7) "virtual"
+
+## Property [ $dynamicProp ]
+
+skipProperty():
+ReflectionException: Property B::$dynamicProp does not exist
+
+setProperty():
+getValue(): string(5) "value"
+
+setRawProperty():
+getValue(): string(5) "value"
 # Virtual:
-object(B)#%d (0) {
-  ["noDefaultTyped"]=>
-  uninitialized(string)
-  ["readonly":"B":private]=>
-  uninitialized(string)
-}
-Init pubA
-object(B)#%d (1) {
-  ["pubA"]=>
-  string(4) "pubA"
-  ["noDefaultTyped"]=>
-  uninitialized(string)
-  ["readonly":"B":private]=>
-  uninitialized(string)
-}
-Init pubB
-object(B)#%d (2) {
-  ["pubA"]=>
-  string(4) "pubA"
-  ["noDefaultTyped"]=>
-  uninitialized(string)
-  ["pubB"]=>
-  string(4) "pubB"
-  ["readonly":"B":private]=>
-  uninitialized(string)
-}
-Init prot
-object(B)#%d (3) {
-  ["prot":protected]=>
-  string(4) "prot"
-  ["pubA"]=>
-  string(4) "pubA"
-  ["noDefaultTyped"]=>
-  uninitialized(string)
-  ["pubB"]=>
-  string(4) "pubB"
-  ["readonly":"B":private]=>
-  uninitialized(string)
-}
-Init priv
-object(B)#%d (4) {
-  ["prot":protected]=>
-  string(4) "prot"
-  ["pubA"]=>
-  string(4) "pubA"
-  ["noDefaultTyped"]=>
-  uninitialized(string)
-  ["priv":"B":private]=>
-  string(5) "privB"
-  ["pubB"]=>
-  string(4) "pubB"
-  ["readonly":"B":private]=>
-  uninitialized(string)
-}
-Init A::priv
-object(B)#%d (5) {
-  ["priv":"A":private]=>
-  string(6) "priv A"
-  ["prot":protected]=>
-  string(4) "prot"
-  ["pubA"]=>
-  string(4) "pubA"
-  ["noDefaultTyped"]=>
-  uninitialized(string)
-  ["priv":"B":private]=>
-  string(5) "privB"
-  ["pubB"]=>
-  string(4) "pubB"
-  ["readonly":"B":private]=>
-  uninitialized(string)
-}
-Init privA
-Property B::$privA does not exist
-Init A::privA
-object(B)#%d (6) {
-  ["priv":"A":private]=>
-  string(6) "priv A"
-  ["privA":"A":private]=>
-  string(5) "privA"
-  ["prot":protected]=>
-  string(4) "prot"
-  ["pubA"]=>
-  string(4) "pubA"
-  ["noDefaultTyped"]=>
-  uninitialized(string)
-  ["priv":"B":private]=>
-  string(5) "privB"
-  ["pubB"]=>
-  string(4) "pubB"
-  ["readonly":"B":private]=>
-  uninitialized(string)
-}
-Init readonly
-object(B)#%d (6) {
-  ["priv":"A":private]=>
-  string(6) "priv A"
-  ["privA":"A":private]=>
-  string(5) "privA"
-  ["prot":protected]=>
-  string(4) "prot"
-  ["pubA"]=>
-  string(4) "pubA"
-  ["noDefaultTyped"]=>
-  uninitialized(string)
-  ["priv":"B":private]=>
-  string(5) "privB"
-  ["pubB"]=>
-  string(4) "pubB"
-  ["readonly":"B":private]=>
-  uninitialized(string)
-}
-Init noDefault
-object(B)#%d (7) {
-  ["priv":"A":private]=>
-  string(6) "priv A"
-  ["privA":"A":private]=>
-  string(5) "privA"
-  ["prot":protected]=>
-  string(4) "prot"
-  ["pubA"]=>
-  string(4) "pubA"
-  ["noDefault"]=>
-  NULL
-  ["noDefaultTyped"]=>
-  uninitialized(string)
-  ["priv":"B":private]=>
-  string(5) "privB"
-  ["pubB"]=>
-  string(4) "pubB"
-  ["readonly":"B":private]=>
-  uninitialized(string)
-}
-Init noDefaultTyped
-object(B)#%d (7) {
-  ["priv":"A":private]=>
-  string(6) "priv A"
-  ["privA":"A":private]=>
-  string(5) "privA"
-  ["prot":protected]=>
-  string(4) "prot"
-  ["pubA"]=>
-  string(4) "pubA"
-  ["noDefault"]=>
-  NULL
-  ["noDefaultTyped"]=>
-  uninitialized(string)
-  ["priv":"B":private]=>
-  string(5) "privB"
-  ["pubB"]=>
-  string(4) "pubB"
-  ["readonly":"B":private]=>
-  uninitialized(string)
-}
-Init initialized
-object(B)#%d (8) {
-  ["priv":"A":private]=>
-  string(6) "priv A"
-  ["privA":"A":private]=>
-  string(5) "privA"
-  ["prot":protected]=>
-  string(4) "prot"
-  ["pubA"]=>
-  string(4) "pubA"
-  ["noDefault"]=>
-  NULL
-  ["noDefaultTyped"]=>
-  uninitialized(string)
-  ["initialized"]=>
-  NULL
-  ["priv":"B":private]=>
-  string(5) "privB"
-  ["pubB"]=>
-  string(4) "pubB"
-  ["readonly":"B":private]=>
-  uninitialized(string)
-}
-Accessing properties should not trigger initializer after skipProperty
-NULL
-NULL
-string(4) "pubA"
-Typed property A::$noDefaultTyped must not be accessed before initialization
+
+## Property [ private $priv = 'privB' ]
+
+skipProperty():
+getValue(): Error: Cannot access private property B::$priv
+
+setProperty():
+getValue(): Error: Cannot access private property B::$priv
+
+setRawProperty():
+getValue(): Error: Cannot access private property B::$priv
+
+## Property [ public $pubB = 'pubB' ]
+
+skipProperty():
+getValue(): string(4) "pubB"
+
+setProperty():
+getValue(): string(5) "value"
+
+setRawProperty():
+getValue(): string(5) "value"
+
+## Property [ private readonly string $readonly ]
+
+skipProperty():
+getValue(): Error: Cannot access private property B::$readonly
+
+setProperty():
+getValue(): Error: Cannot access private property B::$readonly
+
+setRawProperty():
+getValue(): Error: Cannot access private property B::$readonly
+
+## Property [ protected $prot = 'prot' ]
+
+skipProperty():
+getValue(): Error: Cannot access protected property B::$prot
+
+setProperty():
+getValue(): Error: Cannot access protected property B::$prot
+
+setRawProperty():
+getValue(): Error: Cannot access protected property B::$prot
+
+## Property [ public $pubA = 'pubA' ]
+
+skipProperty():
+getValue(): string(4) "pubA"
+
+setProperty():
+getValue(): string(5) "value"
+
+setRawProperty():
+getValue(): string(5) "value"
+
+## Property [ public static $static = 'static' ]
+
+skipProperty():
+ReflectionException: Can not initialize static property B::$static
+
+setProperty():
+ReflectionException: Can not use setProperty on static property B::$static
+getValue(): Error: Accessing static property B::$static as non static
+
+setRawProperty():
+ReflectionException: Can not use setRawProperty on static property B::$static
+getValue(): Error: Accessing static property B::$static as non static
+
+## Property [ public $noDefault = NULL ]
+
+skipProperty():
+getValue(): NULL
+
+setProperty():
+getValue(): string(5) "value"
+
+setRawProperty():
+getValue(): string(5) "value"
+
+## Property [ public string $noDefaultTyped ]
+
+skipProperty():
+getValue(): Error: Typed property A::$noDefaultTyped must not be accessed before initialization
+
+setProperty():
+getValue(): string(5) "value"
+
+setRawProperty():
+getValue(): string(5) "value"
+
+## Property [ public $initialized = NULL ]
+
+skipProperty():
+getValue(): NULL
+
+setProperty():
+getValue(): string(5) "value"
+
+setRawProperty():
+getValue(): string(5) "value"
+
+## Property [ public $hooked = NULL ]
+
+skipProperty():
+getValue(): NULL
+
+setProperty():
+getValue(): string(5) "VALUE"
+
+setRawProperty():
+getValue(): string(5) "value"
+
+## Property [ public $virtual ]
+
+skipProperty():
+ReflectionException: Can not initialize virtual property B::$virtual
+
+setProperty():
+getValue(): string(7) "virtual"
+
+setRawProperty():
+ReflectionException: Can not use setRawProperty on virtual property B::$virtual
+getValue(): string(7) "virtual"
+
+## Property [ $dynamicProp ]
+
+skipProperty():
+ReflectionException: Property B::$dynamicProp does not exist
+
+setProperty():
+getValue(): string(5) "value"
+
+setRawProperty():
+getValue(): string(5) "value"

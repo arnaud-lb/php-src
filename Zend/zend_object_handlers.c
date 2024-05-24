@@ -20,6 +20,7 @@
 
 #include "zend.h"
 #include "zend_globals.h"
+#include "zend_lazy_objects.h"
 #include "zend_variables.h"
 #include "zend_API.h"
 #include "zend_objects.h"
@@ -99,6 +100,8 @@ ZEND_API HashTable *zend_std_build_object_properties_array(zend_object *zobj) /*
 	int i;
 
 	if (zend_object_is_lazy(zobj) && zend_lazy_object_initialized(zobj)) {
+		/* Object is a virtual proxy, fetch inner instance */
+		ZEND_ASSERT(zend_object_is_virtual(zobj));
 		zobj = zend_lazy_object_get_instance(zobj);
 	}
 
@@ -134,7 +137,7 @@ ZEND_API HashTable *zend_std_build_object_properties_array(zend_object *zobj) /*
 
 ZEND_API HashTable **zend_std_get_properties_ptr(zend_object *zobj) /* {{{ */
 {
-	if (UNEXPECTED(zend_object_is_lazy(zobj))) {
+	if (UNEXPECTED(zend_lazy_object_must_init(zobj))) {
 		zend_object *instance = zend_lazy_object_init(zobj);
 		if (instance) {
 			zobj = instance;
@@ -734,6 +737,13 @@ static bool is_in_hook(const zend_property_info *prop_info)
 		return true;
 	}
 
+	/* Check if we're in ReflectionLazyObject::setRawProperty(). */
+	if (EX(func)
+	 && EX(func)->common.scope == reflection_lazy_object_ptr
+	 && (zend_string_equals_literal(EX(func)->common.function_name, "setRawProperty"))) {
+		return true;
+	}
+
 	return false;
 }
 
@@ -968,7 +978,7 @@ call_getter:
 	}
 
 uninit_error:
-	if (UNEXPECTED(zend_object_is_lazy(zobj))) {
+	if (UNEXPECTED(zend_lazy_object_must_init(zobj))) {
 		if (!prop_info || (Z_PROP_FLAG_P(retval) & IS_PROP_LAZY)) {
 			zobj = zend_lazy_object_init(zobj);
 			if (!zobj) {
@@ -1100,7 +1110,7 @@ found:;
 			goto exit;
 		}
 		if (Z_PROP_FLAG_P(variable_ptr) & IS_PROP_UNINIT) {
-			if (UNEXPECTED(zend_object_is_lazy(zobj))) {
+			if (UNEXPECTED(zend_lazy_object_must_init(zobj))) {
 				if (Z_PROP_FLAG_P(variable_ptr) & IS_PROP_LAZY) {
 					goto lazy_init;
 				}
@@ -1178,7 +1188,7 @@ found:;
 			OBJ_RELEASE(zobj);
 			variable_ptr = value;
 		} else if (EXPECTED(!IS_WRONG_PROPERTY_OFFSET(property_offset))) {
-			if (UNEXPECTED(zend_object_is_lazy(zobj))) {
+			if (UNEXPECTED(zend_lazy_object_must_init(zobj))) {
 				goto lazy_init;
 			}
 
@@ -1192,7 +1202,7 @@ found:;
 		}
 	} else {
 		ZEND_ASSERT(!IS_WRONG_PROPERTY_OFFSET(property_offset));
-		if (UNEXPECTED(zend_object_is_lazy(zobj))) {
+		if (UNEXPECTED(zend_lazy_object_must_init(zobj))) {
 			goto lazy_init;
 		}
 write_std_property:
@@ -1213,19 +1223,43 @@ write_std_property:
 				GC_ADDREF(zobj);
 				bool type_matched = zend_verify_property_type(prop_info, &tmp, property_uses_strict_types());
 				if (UNEXPECTED(GC_DELREF(zobj) == 0)) {
-					zend_object_released_while_assigning_to_property_error(prop_info);
-					zend_objects_store_del(zobj);
-					zval_ptr_dtor(&tmp);
-					variable_ptr = &EG(error_zval);
-					goto exit;
+					goto exit_del_object;
 				}
 				if (UNEXPECTED(!type_matched)) {
 					zval_ptr_dtor(value);
 					goto exit;
 				}
 				value = &tmp;
+
+				bool prop_was_lazy = Z_PROP_FLAG_P(variable_ptr) & IS_PROP_LAZY;
 				Z_PROP_FLAG_P(variable_ptr) = 0;
+
+				/* Lazy object is not lazy anymore if this was the last lazy prop */
+				if (UNEXPECTED(prop_was_lazy && zend_object_is_lazy(zobj) && !zend_lazy_object_initialized(zobj))) {
+					if (zend_lazy_object_decr_lazy_props(zobj)) {
+						GC_ADDREF(zobj);
+						zend_lazy_object_realize(zobj);
+						if (UNEXPECTED(GC_DELREF(zobj) == 0)) {
+							goto exit_del_object;
+						}
+					}
+				}
+
 				goto found; /* might have been updated via e.g. __toString() */
+			}
+
+			/* Lazy object is not lazy anymore if this was the last lazy prop */
+			bool prop_is_lazy = Z_PROP_FLAG_P(variable_ptr) & IS_PROP_LAZY;
+			if (UNEXPECTED(prop_is_lazy && zend_object_is_lazy(zobj) && !zend_lazy_object_initialized(zobj))) {
+				Z_PROP_FLAG_P(variable_ptr) &= ~IS_PROP_LAZY;
+				if (zend_lazy_object_decr_lazy_props(zobj)) {
+					GC_ADDREF(zobj);
+					zend_lazy_object_realize(zobj);
+					if (UNEXPECTED(GC_DELREF(zobj) == 0)) {
+						goto exit_del_object;
+					}
+					goto found; /* might have been updated */
+				}
 			}
 
 			ZVAL_COPY_VALUE(variable_ptr, value);
@@ -1257,6 +1291,14 @@ lazy_init:
 		goto exit;
 	}
 	return zend_std_write_property(zobj, name, value, cache_slot);
+
+exit_del_object:
+	zend_object_released_while_assigning_to_property_error(prop_info);
+	zend_objects_store_del(zobj);
+	zval_ptr_dtor(&tmp);
+	variable_ptr = &EG(error_zval);
+	goto exit;
+
 }
 /* }}} */
 
@@ -1385,7 +1427,7 @@ ZEND_API zval *zend_std_get_property_ptr_ptr(zend_object *zobj, zend_string *nam
 			if (EXPECTED(!zobj->ce->__get) ||
 			    UNEXPECTED((*zend_get_property_guard(zobj, name)) & IN_GET) ||
 			    UNEXPECTED(prop_info && (Z_PROP_FLAG_P(retval) & IS_PROP_UNINIT))) {
-				if (UNEXPECTED(zend_object_is_lazy(zobj) && (Z_PROP_FLAG_P(retval) & IS_PROP_LAZY))) {
+				if (UNEXPECTED(zend_lazy_object_must_init(zobj) && (Z_PROP_FLAG_P(retval) & IS_PROP_LAZY))) {
 					zobj = zend_lazy_object_init(zobj);
 					if (!zobj) {
 						return &EG(error_zval);
@@ -1441,7 +1483,7 @@ ZEND_API zval *zend_std_get_property_ptr_ptr(zend_object *zobj, zend_string *nam
 					return &EG(error_zval);
 				}
 			}
-			if (UNEXPECTED(zend_object_is_lazy(zobj))) {
+			if (UNEXPECTED(zend_lazy_object_must_init(zobj))) {
 				zobj = zend_lazy_object_init(zobj);
 				if (!zobj) {
 					return &EG(error_zval);
@@ -1500,7 +1542,7 @@ ZEND_API void zend_std_unset_property(zend_object *zobj, zend_string *name, void
 			return;
 		}
 		if (UNEXPECTED(Z_PROP_FLAG_P(slot) & IS_PROP_UNINIT)) {
-			if (UNEXPECTED(zend_object_is_lazy(zobj) && (Z_PROP_FLAG_P(slot) & IS_PROP_LAZY))) {
+			if (UNEXPECTED(zend_lazy_object_must_init(zobj) && (Z_PROP_FLAG_P(slot) & IS_PROP_LAZY))) {
 				zobj = zend_lazy_object_init(zobj);
 				if (!zobj) {
 					return;
@@ -1512,8 +1554,17 @@ ZEND_API void zend_std_unset_property(zend_object *zobj, zend_string *name, void
 				return;
 			}
 
-			/* Reset the IS_PROP_UNINIT flag, if it exists and bypass __unset(). */
+			bool was_prop_lazy = Z_PROP_FLAG_P(slot) & IS_PROP_LAZY;
+			/* Reset the IS_PROP_UNINIT|IS_PROP_LAZY flags, if they exist and bypass __unset(). */
 			Z_PROP_FLAG_P(slot) = 0;
+
+			/* Lazy object is not lazy anymore if this was the last lazy prop */
+			if (UNEXPECTED(zend_object_is_lazy(zobj) && !zend_lazy_object_initialized(zobj) && was_prop_lazy)) {
+				if (zend_lazy_object_decr_lazy_props(zobj)) {
+					zend_lazy_object_realize(zobj);
+				}
+			}
+
 			return;
 		}
 	} else if (EXPECTED(IS_DYNAMIC_PROPERTY_OFFSET(property_offset))
@@ -1554,7 +1605,7 @@ ZEND_API void zend_std_unset_property(zend_object *zobj, zend_string *name, void
 		}
 	}
 
-	if (UNEXPECTED(zend_object_is_lazy(zobj))) {
+	if (UNEXPECTED(zend_lazy_object_must_init(zobj))) {
 		zobj = zend_lazy_object_init(zobj);
 		if (!zobj) {
 			return;
@@ -2365,7 +2416,7 @@ exit:
 	return result;
 
 lazy_init:
-	if (UNEXPECTED(zend_object_is_lazy(zobj))) {
+	if (UNEXPECTED(zend_lazy_object_must_init(zobj))) {
 		if (!value || (Z_PROP_FLAG_P(value) & IS_PROP_LAZY)) {
 			zobj = zend_lazy_object_init(zobj);
 			if (!zobj) {
@@ -2468,7 +2519,7 @@ ZEND_API HashTable *zend_std_get_properties_for(zend_object *obj, zend_prop_purp
 			}
 			return ht;
 		case ZEND_PROP_PURPOSE_GET_OBJECT_VARS:
-			ZEND_LAZY_OBJECT_RAW(obj) {
+			ZEND_LAZY_OBJECT_PASSTHRU(obj) {
 				if (obj->ce->num_hooked_props) {
 					ht = zend_hooked_object_build_properties(obj);
 				} else {
@@ -2477,10 +2528,10 @@ ZEND_API HashTable *zend_std_get_properties_for(zend_object *obj, zend_prop_purp
 						GC_TRY_ADDREF(ht);
 					}
 				}
-			} ZEND_LAZY_OBJECT_RAW_END();
+			} ZEND_LAZY_OBJECT_PASSTHRU_END();
 			return ht;
 		case ZEND_PROP_PURPOSE_SERIALIZE: {
-			if (!zend_object_is_lazy(obj)) {
+			if (!zend_lazy_object_must_init(obj)) {
 				ht = obj->handlers->get_properties(obj);
 			} else if (zend_lazy_object_initialized(obj)) {
 				ZEND_ASSERT(zend_object_is_virtual(obj));

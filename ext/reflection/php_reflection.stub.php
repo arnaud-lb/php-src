@@ -453,6 +453,8 @@ class ReflectionLazyObject extends ReflectionObject
 
     public function setProperty(string $name, mixed $value, ?string $class = null): void {}
 
+    public function setRawProperty(string $name, mixed $value, ?string $class = null): void {}
+
     public function skipProperty(string $name, ?string $class = null): void {}
 
     private function __construct(object $object) {}

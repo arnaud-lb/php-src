@@ -83,6 +83,7 @@ ZEND_API void zend_object_std_dtor(zend_object *object)
 	}
 
 	if (UNEXPECTED(zend_object_is_lazy(object))) {
+		ZEND_ASSERT(zend_lazy_object_initialized(object) || !zend_lazy_object_passthru(object));
 		zend_lazy_object_del_info(object);
 	}
 

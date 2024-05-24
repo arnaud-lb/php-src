@@ -23,6 +23,7 @@
 #include "php.h"
 #include "php_string.h"
 #include "php_var.h"
+#include "zend_lazy_objects.h"
 #include "zend_smart_str.h"
 #include "basic_functions.h"
 #include "php_incomplete_class.h"
@@ -1208,7 +1209,7 @@ again:
 					/* Optimized version without rebulding properties HashTable */
 					zend_object *obj = Z_OBJ_P(struc);
 
-					if (zend_object_is_lazy(Z_OBJ_P(struc))
+					if (zend_lazy_object_must_init(Z_OBJ_P(struc))
 							&& zend_lazy_object_initialize_on_serialize(Z_OBJ_P(struc))) {
 						obj = zend_lazy_object_init(Z_OBJ_P(struc));
 						if (!obj) {
