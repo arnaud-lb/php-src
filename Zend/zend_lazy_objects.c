@@ -315,6 +315,13 @@ static zend_object *zend_lazy_object_init_virtual_with(zend_object *obj, zend_fc
 		return NULL;
 	}
 
+	if (Z_OBJ(retval) == obj || (zend_object_is_lazy(obj) && !zend_lazy_object_must_init(obj))) {
+		OBJ_EXTRA_FLAGS(obj) |= IS_OBJ_LAZY|IS_OBJ_VIRTUAL_LAZY;
+		zend_throw_error(NULL, "Virtual object intializer must return a non-lazy object");
+		zval_ptr_dtor(&retval);
+		return NULL;
+	}
+
 	zend_fcc_dtor(&info->u.initializer);
 	info->u.instance = Z_OBJ(retval);
 	info->flags |= IS_OBJ_VIRTUAL_LAZY|ZEND_LAZY_OBJECT_INITIALIZED;

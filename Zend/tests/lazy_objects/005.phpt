@@ -75,31 +75,44 @@ foreach ($tests as [$class, $instance]) {
         printf("%s: %s\n", $e::class, $e->getMessage());
     }
 }
---EXPECT--
+
+$obj = (new ReflectionClass($class))->newInstanceWithoutConstructor();
+ReflectionLazyObject::makeLazy($obj, function ($obj) {
+    var_dump("initializer");
+    return $obj;
+}, ReflectionLazyObject::STRATEGY_VIRTUAL);
+
+try {
+    var_dump($obj->a);
+} catch (\Error $e) {
+    printf("%s: %s\n", $e::class, $e->getMessage());
+}
+
+--EXPECTF--
 # Virtual initializer must return an instance of a compatible class:
 string(11) "initializer"
 int(1)
-object(C)#5 (1) {
+object(C)#%d (1) {
   ["instance"]=>
-  object(C)#1 (1) {
+  object(C)#%d (1) {
     ["a"]=>
     int(1)
   }
 }
 string(11) "initializer"
 int(1)
-object(C)#6 (1) {
+object(C)#%d (1) {
   ["instance"]=>
-  object(D)#2 (1) {
+  object(D)#%d (1) {
     ["a"]=>
     int(1)
   }
 }
 string(11) "initializer"
 int(1)
-object(D)#4 (1) {
+object(D)#%d (1) {
   ["instance"]=>
-  object(C)#3 (1) {
+  object(C)#%d (1) {
     ["a"]=>
     int(1)
   }
@@ -112,3 +125,5 @@ string(11) "initializer"
 Error: Virtual object intializer was expected to return an instance of C or a parent with the same properties, DateTime returned
 string(11) "initializer"
 Error: Virtual object intializer was expected to return an instance of C or a parent with the same properties, null returned
+string(11) "initializer"
+Error: Virtual object intializer must return a non-lazy object
