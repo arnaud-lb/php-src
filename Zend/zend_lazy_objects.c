@@ -342,21 +342,39 @@ static zend_object *zend_lazy_object_init_virtual_with(zend_object *obj, zend_fc
 	return Z_OBJ(retval);
 }
 
-/* Initialize a lazy object */
+/* Initialize a lazy object. Initializer may be NULL, in which case lazy
+ * properties are initialized to their default value and no initializer is
+ * called. */
 ZEND_API zend_object *zend_lazy_object_init_with(zend_object *obj, zend_fcall_info_cache *initializer)
 {
 	ZEND_ASSERT(zend_object_is_lazy(obj));
 	ZEND_ASSERT(!zend_lazy_object_initialized(obj));
 
-	// TODO: maybe split zend_lazy_object_init_with properly
+	zend_class_entry *ce = obj->ce;
+
+	if (!initializer) {
+		zval *default_properties_table = CE_DEFAULT_PROPERTIES_TABLE(ce);
+		zval *properties_table = obj->properties_table;
+
+		OBJ_EXTRA_FLAGS(obj) &= ~(IS_OBJ_LAZY|IS_OBJ_VIRTUAL_LAZY);
+
+		for (int i = 0; i < ce->default_properties_count; i++) {
+			if (Z_ISUNDEF(properties_table[i])) {
+				ZVAL_COPY_PROP(&properties_table[i], &default_properties_table[i]);
+			}
+		}
+
+		zend_lazy_object_del_info(obj);
+
+		return obj;
+	}
+
 	if (zend_object_is_virtual(obj)) {
 		return zend_lazy_object_init_virtual_with(obj, initializer);
 	}
 
 	/* Prevent reentrant initialization */
 	OBJ_EXTRA_FLAGS(obj) &= ~IS_OBJ_LAZY;
-
-	zend_class_entry *ce = obj->ce;
 
 	/* Snapshot dynamic properties */
 	HashTable *properties_snapshot = obj->properties;

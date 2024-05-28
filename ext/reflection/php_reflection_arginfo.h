@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 2b50537e264c87056c2f0c34232c0775bdaad637 */
+ * Stub hash: b4850617ae168d8a5003700a8ba817d942cd4157 */
 
 ZEND_BEGIN_ARG_WITH_TENTATIVE_RETURN_TYPE_INFO_EX(arginfo_class_Reflection_getModifierNames, 0, 1, IS_ARRAY, 0)
 	ZEND_ARG_TYPE_INFO(0, modifiers, IS_LONG, 0)
@@ -346,8 +346,8 @@ ZEND_END_ARG_INFO()
 
 #define arginfo_class_ReflectionLazyObject_isInitialized arginfo_class_ReflectionFunctionAbstract_hasTentativeReturnType
 
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_ReflectionLazyObject_initialize, 0, 0, IS_OBJECT, 1)
-	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, initializer, IS_CALLABLE, 1, "null")
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_ReflectionLazyObject_initialize, 0, 0, IS_OBJECT, 0)
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, skipInitializer, _IS_BOOL, 0, "false")
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_ReflectionLazyObject_setProperty, 0, 2, IS_VOID, 0)

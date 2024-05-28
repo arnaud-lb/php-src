@@ -449,7 +449,7 @@ class ReflectionLazyObject extends ReflectionObject
 
     public function isInitialized(): bool {}
 
-    public function initialize(?callable $initializer = null): ?object {}
+    public function initialize(bool $skipInitializer = false): object {}
 
     public function setProperty(string $name, mixed $value, ?string $class = null): void {}
 

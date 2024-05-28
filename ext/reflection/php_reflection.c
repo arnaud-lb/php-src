@@ -5695,20 +5695,19 @@ ZEND_METHOD(ReflectionLazyObject, isInitialized)
 ZEND_METHOD(ReflectionLazyObject, initialize)
 {
 	reflection_object *intern;
-	zend_fcall_info fci = {0};
-	zend_fcall_info_cache fcc;
+	bool skipInitializer = false;
 
 	ZEND_PARSE_PARAMETERS_START(0, 1)
 		Z_PARAM_OPTIONAL
-		Z_PARAM_FUNC_OR_NULL(fci, fcc)
+		Z_PARAM_BOOL(skipInitializer)
 	ZEND_PARSE_PARAMETERS_END();
 
 	GET_REFLECTION_OBJECT();
 
 	if (zend_object_is_lazy(Z_OBJ(intern->obj))
 			&& !zend_lazy_object_initialized(Z_OBJ(intern->obj))) {
-		if (ZEND_FCI_INITIALIZED(fci)) {
-			zend_lazy_object_init_with(Z_OBJ(intern->obj), &fcc);
+		if (skipInitializer) {
+			zend_lazy_object_init_with(Z_OBJ(intern->obj), NULL);
 		} else {
 			zend_lazy_object_init(Z_OBJ(intern->obj));
 		}

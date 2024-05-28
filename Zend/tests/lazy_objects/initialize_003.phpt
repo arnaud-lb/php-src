@@ -1,5 +1,7 @@
 --TEST--
 Lazy objects: ReflectionLazyObject::initialize with custom initializer
+--XFAIL--
+initialize() takes a boolean
 --FILE--
 <?php
 

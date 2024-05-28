@@ -1,10 +1,10 @@
 --TEST--
-Lazy objects: ReflectionLazyObject::initialize
+Lazy objects: ReflectionLazyObject::initialize(skipInitializer: true) initializes properties to their default value and skips initializer
 --FILE--
 <?php
 
 class C {
-    public int $a;
+    public int $a = 1;
 }
 
 function test(string $name, object $obj) {
@@ -15,10 +15,12 @@ function test(string $name, object $obj) {
     printf("Initialized:\n");
     var_dump($reflector?->isInitialized());
 
-    var_dump($reflector?->initialize());
+    printf("initialize(true) returns \$obj:\n");
+    var_dump($reflector?->initialize(true) === $obj);
 
     printf("Initialized:\n");
     var_dump($reflector?->isInitialized());
+    var_dump($obj);
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
@@ -43,20 +45,22 @@ test('Virtual', $obj);
 # Ghost:
 Initialized:
 bool(false)
-string(11) "initializer"
+initialize(true) returns $obj:
+bool(true)
+Initialized:
+bool(true)
 object(C)#%d (1) {
   ["a"]=>
   int(1)
 }
-Initialized:
-bool(true)
 # Virtual:
 Initialized:
 bool(false)
-string(11) "initializer"
+initialize(true) returns $obj:
+bool(true)
+Initialized:
+bool(true)
 object(C)#%d (1) {
   ["a"]=>
   int(1)
 }
-Initialized:
-bool(true)
