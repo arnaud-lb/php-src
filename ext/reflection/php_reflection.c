@@ -19,6 +19,7 @@
 */
 
 #include "zend_compile.h"
+#include "zend_execute.h"
 #include "zend_lazy_objects.h"
 #include "zend_object_handlers.h"
 #include "zend_type_info.h"
@@ -5574,30 +5575,44 @@ ZEND_METHOD(ReflectionLazyObject, __construct)
 }
 /* }}} */
 
-/* {{{ Makes an object lazy */
-PHP_METHOD(ReflectionLazyObject, makeLazy)
+void reflection_lazy_object_make_lazy(INTERNAL_FUNCTION_PARAMETERS, bool is_make_lazy)
 {
 	reflection_object *intern;
 	zend_object *obj;
+	zend_class_entry *ce = NULL;
 	zend_fcall_info fci;
 	zend_fcall_info_cache fcc;
 	zend_long flags = 0;
 
-	ZEND_PARSE_PARAMETERS_START(2, 3)
-		Z_PARAM_OBJ(obj)
-		Z_PARAM_FUNC(fci, fcc)
-		Z_PARAM_OPTIONAL
-		Z_PARAM_LONG(flags)
-	ZEND_PARSE_PARAMETERS_END();
+	if (is_make_lazy) {
+		ZEND_PARSE_PARAMETERS_START(2, 3)
+			Z_PARAM_OBJ(obj)
+			Z_PARAM_FUNC(fci, fcc)
+			Z_PARAM_OPTIONAL
+			Z_PARAM_LONG(flags)
+		ZEND_PARSE_PARAMETERS_END();
+	} else {
+		ZEND_PARSE_PARAMETERS_START(2, 3)
+			Z_PARAM_CLASS(ce)
+			Z_PARAM_FUNC(fci, fcc)
+			Z_PARAM_OPTIONAL
+			Z_PARAM_LONG(flags)
+		ZEND_PARSE_PARAMETERS_END();
+	}
 
 	if (flags & ~ZEND_LAZY_OBJECT_USER_FLAGS) {
 		zend_throw_exception_ex(reflection_exception_ptr, 0, "Invalid flags");
 		RETURN_THROWS();
 	}
 
-	if (zend_object_is_lazy(obj)) {
-		zend_throw_exception_ex(reflection_exception_ptr, 0, "Object is already lazy");
-		RETURN_THROWS();
+	if (is_make_lazy) {
+		if (zend_object_is_lazy(obj)) {
+			zend_throw_exception_ex(reflection_exception_ptr, 0, "Object is already lazy");
+			RETURN_THROWS();
+		}
+		ce = obj->ce;
+	} else {
+		obj = NULL;
 	}
 
 	switch (flags & (ZEND_LAZY_OBJECT_STRATEGY_GHOST|ZEND_LAZY_OBJECT_STRATEGY_VIRTUAL)) {
@@ -5619,21 +5634,41 @@ PHP_METHOD(ReflectionLazyObject, makeLazy)
 		zend_is_callable_ex(&fci.function_name, NULL, 0, NULL, &fcc, NULL);
 	}
 
-	if (zend_object_make_lazy(obj, &fcc, flags) != SUCCESS) {
+	obj = zend_object_make_lazy(obj, ce, &fcc, flags);
+	if (!obj) {
 		RETURN_THROWS();
 	}
 
-	if (SUCCESS != object_init_ex(return_value, reflection_lazy_object_ptr)) {
-		RETURN_THROWS();
+	if (is_make_lazy) {
+		if (SUCCESS != object_init_ex(return_value, reflection_lazy_object_ptr)) {
+			RETURN_THROWS();
+		}
+
+		intern = Z_REFLECTION_P(return_value);
+
+		ZVAL_STR_COPY(reflection_prop_name(return_value), obj->ce->name);
+		intern->ptr = obj->ce;
+		ZVAL_OBJ_COPY(&intern->obj, obj);
+
+		intern->ref_type = REF_TYPE_OTHER;
+	} else {
+		RETURN_OBJ(obj);
 	}
+}
 
-	intern = Z_REFLECTION_P(return_value);
+/* {{{ Makes an object lazy */
+PHP_METHOD(ReflectionLazyObject, makeLazy)
+{
+	reflection_lazy_object_make_lazy(INTERNAL_FUNCTION_PARAM_PASSTHRU,
+			/*is_make_lazy */ true);
+}
+/* }}} */
 
-	ZVAL_STR_COPY(reflection_prop_name(return_value), obj->ce->name);
-	intern->ptr = obj->ce;
-	ZVAL_OBJ_COPY(&intern->obj, obj);
-
-	intern->ref_type = REF_TYPE_OTHER;
+/* {{{ Instantiates a lazy instance */
+PHP_METHOD(ReflectionLazyObject, newInstanceLazy)
+{
+	reflection_lazy_object_make_lazy(INTERNAL_FUNCTION_PARAM_PASSTHRU,
+			/*is_make_lazy */ false);
 }
 /* }}} */
 

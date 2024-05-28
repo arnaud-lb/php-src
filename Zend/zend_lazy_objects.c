@@ -171,44 +171,67 @@ bool zend_lazy_object_passthru(zend_object *obj)
 	return zend_lazy_object_get_info(obj)->passthru;
 }
 
-ZEND_API zend_result zend_object_make_lazy(zend_object *obj, zend_fcall_info_cache *initializer, zend_lazy_object_flags_t flags)
+/* Make object 'obj' lazy. If 'obj' is NULL, create a lazy instance of
+ * class 'class_type' */
+ZEND_API zend_object *zend_object_make_lazy(zend_object *obj,
+		zend_class_entry *class_type, zend_fcall_info_cache *initializer,
+		zend_lazy_object_flags_t flags)
 {
-	ZEND_ASSERT(!zend_object_is_lazy(obj));
+	ZEND_ASSERT(!obj || !zend_object_is_lazy(obj));
 	ZEND_ASSERT(!(flags & ~ZEND_LAZY_OBJECT_USER_FLAGS));
-
-	zend_class_entry *class_type = obj->ce;
+	ZEND_ASSERT(!obj || obj->ce == class_type);
 
 	/* Internal classes are not supported */
 	if (UNEXPECTED(class_type->type == ZEND_INTERNAL_CLASS && class_type != zend_standard_class_def)) {
 		zend_throw_error(NULL, "Cannot make instance of internal class lazy: %s is internal", ZSTR_VAL(class_type->name));
-		return FAILURE;
+		return NULL;
 	}
 
 	for (zend_class_entry *parent = class_type->parent; parent; parent = parent->parent) {
 		if (UNEXPECTED(parent->type == ZEND_INTERNAL_CLASS && parent != zend_standard_class_def)) {
 			zend_throw_error(NULL, "Cannot make instance of internal class lazy: %s inherits internal class %s",
 				ZSTR_VAL(class_type->name), ZSTR_VAL(parent->name));
-			return FAILURE;
+			return NULL;
 		}
 	}
 
-	/* unset() dynamic properties */
-	zend_object_dtor_dynamic_properties(obj);
-	obj->properties = NULL;
+	if (!obj) {
+		zval zobj;
+		if (UNEXPECTED(class_type->ce_flags & (ZEND_ACC_INTERFACE|ZEND_ACC_TRAIT|ZEND_ACC_IMPLICIT_ABSTRACT_CLASS|ZEND_ACC_EXPLICIT_ABSTRACT_CLASS|ZEND_ACC_ENUM))) {
+			/* Slow path: use object_init_ex() */
+			if (object_init_ex(&zobj, class_type) == FAILURE) {
+				ZEND_ASSERT(EG(exception));
+				return NULL;
+			}
+			obj = Z_OBJ(zobj);
+		} else {
+			obj = zend_objects_new(class_type);
+		}
 
-	/* Objects become non-lazy if all properties are made non-lazy before
-	 * initialization is triggerd. If the object has no properties to begin
-	 * with, this happens immediately. */
-	if (!obj->ce->default_properties_count) {
-		return SUCCESS;
-	}
+		for (int i = 0; i < obj->ce->default_properties_count; i++) {
+			zval *p = &obj->properties_table[i];
+			ZVAL_UNDEF(p);
+			Z_PROP_FLAG_P(p) = IS_PROP_UNINIT | IS_PROP_LAZY;
+		}
+	} else {
+		/* unset() dynamic properties */
+		zend_object_dtor_dynamic_properties(obj);
+		obj->properties = NULL;
 
-	/* unset() declared properties */
-	for (int i = 0; i < obj->ce->default_properties_count; i++) {
-		zval *p = &obj->properties_table[i];
-		zend_object_dtor_property(obj, p);
-		ZVAL_UNDEF(p);
-		Z_PROP_FLAG_P(p) = IS_PROP_UNINIT | IS_PROP_LAZY;
+		/* Objects become non-lazy if all properties are made non-lazy before
+		 * initialization is triggerd. If the object has no properties to begin
+		 * with, this happens immediately. */
+		if (!obj->ce->default_properties_count) {
+			return obj;
+		}
+
+		/* unset() declared properties */
+		for (int i = 0; i < obj->ce->default_properties_count; i++) {
+			zval *p = &obj->properties_table[i];
+			zend_object_dtor_property(obj, p);
+			ZVAL_UNDEF(p);
+			Z_PROP_FLAG_P(p) = IS_PROP_UNINIT | IS_PROP_LAZY;
+		}
 	}
 
 	OBJ_EXTRA_FLAGS(obj) |= IS_OBJ_LAZY;
@@ -226,7 +249,7 @@ ZEND_API zend_result zend_object_make_lazy(zend_object *obj, zend_fcall_info_cac
 	info->passthru = 0;
 	zend_lazy_object_set_info(obj, info);
 
-	return SUCCESS;
+	return obj;
 }
 
 /* Revert initializer effects */
@@ -490,20 +513,9 @@ zend_object *zend_lazy_object_clone(zend_object *old_obj)
 		return zend_objects_clone_obj(info->u.instance);
 	}
 
-	zend_object *new_obj = zend_objects_new(old_obj->ce);
-
-	/* zend_object_make_lazy() expects the properties to be initialized. */
-	if (new_obj->ce->default_properties_count) {
-		zval *p = new_obj->properties_table;
-		zval *end = p + new_obj->ce->default_properties_count;
-		do {
-			ZVAL_UNDEF(p);
-			p++;
-		} while (p != end);
-	}
-
-	zend_result result = zend_object_make_lazy(new_obj, &info->u.initializer, info->flags);
-	ZEND_ASSERT(result == SUCCESS);
+	zend_object *new_obj = zend_object_make_lazy(NULL, old_obj->ce,
+			&info->u.initializer, info->flags);
+	ZEND_ASSERT(new_obj);
 
 	zend_objects_clone_members(new_obj, old_obj);
 

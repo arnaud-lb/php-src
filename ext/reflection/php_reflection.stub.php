@@ -443,6 +443,8 @@ class ReflectionLazyObject extends ReflectionObject
 
     public static function makeLazy(object $instance, callable $initializer, int $flags = 0): ReflectionLazyObject {}
 
+    public static function newInstanceLazy(string $className, callable $initializer, int $flags = 0): object {}
+
     public static function isLazyObject(object $instance): bool {}
 
     public static function fromInstance(object $instance): ?ReflectionLazyObject {}

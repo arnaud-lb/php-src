@@ -910,6 +910,8 @@ try_again:
 		goto exit;
 	}
 
+	retval = &EG(uninitialized_zval);
+
 	/* magic isset */
 	if ((type == BP_VAR_IS) && zobj->ce->__isset) {
 		zval tmp_result;
