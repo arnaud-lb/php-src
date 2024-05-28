@@ -1,0 +1,55 @@
+--TEST--
+Lazy objects: var_dump may not initialize object with __debugInfo() method
+--FILE--
+<?php
+
+class C {
+    public int $a;
+    public function __construct() {
+        var_dump(__METHOD__);
+        $this->a = 1;
+    }
+    public function __debugInfo() {
+        return ['hello'];
+    }
+}
+
+function test(string $name, object $obj) {
+    printf("# %s\n", $name);
+
+    var_dump($obj);
+    printf("Initialized:\n");
+    var_dump(!ReflectionLazyObject::fromInstance($obj));
+}
+
+$obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
+ReflectionLazyObject::makeLazy($obj, function ($obj) {
+    var_dump("initializer");
+    $obj->__construct();
+});
+
+test('Ghost', $obj);
+
+$obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
+ReflectionLazyObject::makeLazy($obj, function ($obj) {
+    var_dump("initializer");
+    return new C();
+}, ReflectionLazyObject::STRATEGY_VIRTUAL);
+
+test('Virtual', $obj);
+
+--EXPECTF--
+# Ghost
+object(C)#%d (1) {
+  [0]=>
+  string(5) "hello"
+}
+Initialized:
+bool(false)
+# Virtual
+object(C)#%d (1) {
+  [0]=>
+  string(5) "hello"
+}
+Initialized:
+bool(false)
