@@ -477,9 +477,13 @@ static void _class_string(smart_str *str, zend_class_entry *ce, zval *obj, char 
 	smart_str_append_printf(str, "%s  }\n", indent);
 
 	if (obj && Z_TYPE_P(obj) == IS_OBJECT) {
-		HashTable    *properties = Z_OBJ_HT_P(obj)->get_properties(Z_OBJ_P(obj));
+		HashTable    *properties;
 		zend_string  *prop_name;
 		smart_str prop_str = {0};
+
+		ZEND_LAZY_OBJECT_PASSTHRU(Z_OBJ_P(obj)) {
+			properties = Z_OBJ_HT_P(obj)->get_properties(Z_OBJ_P(obj));
+		} ZEND_LAZY_OBJECT_PASSTHRU_END();
 
 		count = 0;
 		if (properties && zend_hash_num_elements(properties)) {
