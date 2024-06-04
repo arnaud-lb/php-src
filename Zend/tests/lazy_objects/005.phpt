@@ -17,7 +17,6 @@ class C extends B {
 class D extends C {
 }
 
-/*
 print "# Ghost initializer must return NULL or no value:\n";
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
@@ -34,7 +33,6 @@ try {
     printf("%s: %s\n", $e::class, $e->getMessage());
 }
 var_dump($obj);
- */
 
 print "# Virtual initializer must return an instance of a compatible class:\n";
 
@@ -89,6 +87,17 @@ try {
 }
 
 --EXPECTF--
+# Ghost initializer must return NULL or no value:
+object(C)#%d (0) {
+  ["a"]=>
+  uninitialized(int)
+}
+string(11) "initializer"
+Error: Lazy object initializer must return NULL or no value
+object(C)#%d (0) {
+  ["a"]=>
+  uninitialized(int)
+}
 # Virtual initializer must return an instance of a compatible class:
 string(11) "initializer"
 int(1)
