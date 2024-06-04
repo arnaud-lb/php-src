@@ -19,17 +19,17 @@ function test(string $name, object $obj) {
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazy($obj, function ($obj) {
+ReflectionLazyObject::makeLazyGhost($obj, function ($obj) {
     var_dump("initializer");
 });
 
 test('Ghost', $obj);
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazy($obj, function ($obj) {
+ReflectionLazyObject::makeLazyVirtual($obj, function ($obj) {
     var_dump("initializer");
     return new C();
-}, ReflectionLazyObject::STRATEGY_VIRTUAL);
+});
 
 test('Virtual', $obj);
 

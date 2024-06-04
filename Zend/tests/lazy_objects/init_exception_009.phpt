@@ -30,7 +30,7 @@ function test(string $name, object $obj) {
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazy($obj, function ($obj) {
+ReflectionLazyObject::makeLazyGhost($obj, function ($obj) {
     global $table;
     var_dump("initializer");
     $obj->a = 3;
@@ -43,7 +43,7 @@ ReflectionLazyObject::makeLazy($obj, function ($obj) {
 test('Ghost', $obj);
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazy($obj, function ($obj) {
+ReflectionLazyObject::makeLazyVirtual($obj, function ($obj) {
     global $table;
     var_dump("initializer");
     $obj->a = 3;
@@ -51,7 +51,7 @@ ReflectionLazyObject::makeLazy($obj, function ($obj) {
     $obj->c = 5;
     $table = (array) $obj;
     throw new Exception('initializer exception');
-}, ReflectionLazyObject::STRATEGY_VIRTUAL);
+});
 
 // Initializer effects on the virtual proxy are not reverted
 test('Virtual', $obj);

@@ -20,16 +20,16 @@ function test(string $name, object $obj) {
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazy($obj, function ($obj) {
+ReflectionLazyObject::makeLazyGhost($obj, function ($obj) {
     throw new \Exception('init exception');
 });
 
 test('Ghost', $obj);
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazy($obj, function ($obj) {
+ReflectionLazyObject::makeLazyVirtual($obj, function ($obj) {
     throw new \Exception('init exception');
-}, ReflectionLazyObject::STRATEGY_VIRTUAL);
+});
 
 test('Ghost', $obj);
 

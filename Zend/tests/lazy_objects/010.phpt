@@ -14,7 +14,7 @@ class C {
 print "# Ghost:\n";
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazy($obj, function ($obj) {
+ReflectionLazyObject::makeLazyGhost($obj, function ($obj) {
     var_dump("initializer");
     $obj->__construct();
 });
@@ -24,10 +24,10 @@ var_dump(json_encode($obj));
 print "# Virtual:\n";
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazy($obj, function ($obj) {
+ReflectionLazyObject::makeLazyVirtual($obj, function ($obj) {
     var_dump("initializer");
     return new C();
-}, ReflectionLazyObject::STRATEGY_VIRTUAL);
+});
 
 var_dump(json_encode($obj));
 

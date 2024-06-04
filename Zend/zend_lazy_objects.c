@@ -177,8 +177,11 @@ ZEND_API zend_object *zend_object_make_lazy(zend_object *obj,
 		zend_class_entry *class_type, zend_fcall_info_cache *initializer,
 		zend_lazy_object_flags_t flags)
 {
+	ZEND_ASSERT(!(flags & ~(ZEND_LAZY_OBJECT_USER_FLAGS|ZEND_LAZY_OBJECT_STRATEGY_FLAGS)));
+	ZEND_ASSERT((flags & ZEND_LAZY_OBJECT_STRATEGY_FLAGS) == ZEND_LAZY_OBJECT_STRATEGY_GHOST
+			|| (flags & ZEND_LAZY_OBJECT_STRATEGY_FLAGS) == ZEND_LAZY_OBJECT_STRATEGY_VIRTUAL);
+
 	ZEND_ASSERT(!obj || !zend_object_is_lazy(obj));
-	ZEND_ASSERT(!(flags & ~ZEND_LAZY_OBJECT_USER_FLAGS));
 	ZEND_ASSERT(!obj || obj->ce == class_type);
 
 	/* Internal classes are not supported */

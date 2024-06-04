@@ -8,7 +8,7 @@ class C {
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazy($obj, function ($obj) {
+ReflectionLazyObject::makeLazyGhost($obj, function ($obj) {
     trigger_error('Fatal', E_USER_ERROR);
 });
 
