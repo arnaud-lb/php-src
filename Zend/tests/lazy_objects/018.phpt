@@ -37,7 +37,7 @@ ReflectionLazyObject::makeLazyGhost($obj, function () {
 test('Ghost', $obj);
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazyVirtual($obj, function () {
+ReflectionLazyObject::makeLazyProxy($obj, function () {
     var_dump("initializer");
     throw new \Exception('initializer exception');
 });

@@ -39,7 +39,7 @@ try {
 } catch (\Error $e) {
     printf("%s: %s\n", $e::class, $e->getMessage());
 }
-ReflectionLazyObject::makeLazyVirtual($obj, function ($obj) {
+ReflectionLazyObject::makeLazyProxy($obj, function ($obj) {
     var_dump("initializer");
     return new C();
 });

@@ -34,13 +34,13 @@ ReflectionLazyObject::makeLazyGhost($obj2, function ($obj2) {
 test('Ghost', $obj, $obj2);
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazyVirtual($obj, function ($obj) {
+ReflectionLazyObject::makeLazyProxy($obj, function ($obj) {
     var_dump("initializer");
 });
 
 $obj2 = new D();
 $obj2->dynamic = 'value';
-ReflectionLazyObject::makeLazyVirtual($obj2, function ($obj2) {
+ReflectionLazyObject::makeLazyProxy($obj2, function ($obj2) {
     var_dump("initializer");
 });
 

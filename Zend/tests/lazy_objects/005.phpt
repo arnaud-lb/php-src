@@ -46,7 +46,7 @@ $tests = [
 
 foreach ($tests as [$class, $instance]) {
     $obj = (new ReflectionClass($class))->newInstanceWithoutConstructor();
-    ReflectionLazyObject::makeLazyVirtual($obj, function ($obj) use ($instance) {
+    ReflectionLazyObject::makeLazyProxy($obj, function ($obj) use ($instance) {
         var_dump("initializer");
         return $instance;
     });
@@ -64,7 +64,7 @@ $tests = [
 
 foreach ($tests as [$class, $instance]) {
     $obj = (new ReflectionClass($class))->newInstanceWithoutConstructor();
-    ReflectionLazyObject::makeLazyVirtual($obj, function ($obj) use ($instance) {
+    ReflectionLazyObject::makeLazyProxy($obj, function ($obj) use ($instance) {
         var_dump("initializer");
         return $instance;
     });
@@ -77,7 +77,7 @@ foreach ($tests as [$class, $instance]) {
 }
 
 $obj = (new ReflectionClass($class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazyVirtual($obj, function ($obj) {
+ReflectionLazyObject::makeLazyProxy($obj, function ($obj) {
     var_dump("initializer");
     return $obj;
 });

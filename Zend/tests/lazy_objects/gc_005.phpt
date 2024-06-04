@@ -39,7 +39,7 @@ function virtual() {
     $canary = new Canary();
 
     $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-    $reflector = ReflectionLazyObject::makeLazyVirtual($obj, function () use ($canary) {
+    $reflector = ReflectionLazyObject::makeLazyProxy($obj, function () use ($canary) {
         return new C();
     });
 

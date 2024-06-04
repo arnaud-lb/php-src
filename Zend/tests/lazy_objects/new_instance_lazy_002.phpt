@@ -13,7 +13,7 @@ foreach ([ReflectionLazyObject::STRATEGY_GHOST, ReflectionLazyObject::STRATEGY_V
                 var_dump("initializer");
             });
         } else {
-            ReflectionLazyObject::makeLazyVirtual($obj, function ($obj) {
+            ReflectionLazyObject::makeLazyProxy($obj, function ($obj) {
                 var_dump("initializer");
             });
         }

@@ -24,7 +24,7 @@ var_dump($obj);
 print "# Virtual:\n";
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazyVirtual($obj, function ($obj) {
+ReflectionLazyObject::makeLazyProxy($obj, function ($obj) {
     var_dump("initializer");
     return new C();
 });

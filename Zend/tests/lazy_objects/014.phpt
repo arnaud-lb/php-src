@@ -19,7 +19,7 @@ print "# Virtual:\n";
 
 $obj = (new ReflectionClass(DateTime::class))->newInstanceWithoutConstructor();
 try {
-    ReflectionLazyObject::makeLazyVirtual($obj, function ($obj) {
+    ReflectionLazyObject::makeLazyProxy($obj, function ($obj) {
         var_dump("initializer");
         $obj->__construct();
     });

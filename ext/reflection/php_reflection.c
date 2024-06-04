@@ -5657,7 +5657,7 @@ PHP_METHOD(ReflectionLazyObject, makeLazyGhost)
 /* }}} */
 
 /* {{{ Makes an object lazy, using the virtual strategy */
-PHP_METHOD(ReflectionLazyObject, makeLazyVirtual)
+PHP_METHOD(ReflectionLazyObject, makeLazyProxy)
 {
 	reflection_lazy_object_make_lazy(INTERNAL_FUNCTION_PARAM_PASSTHRU,
 			ZEND_LAZY_OBJECT_STRATEGY_VIRTUAL, /*is_make_lazy */ true);
