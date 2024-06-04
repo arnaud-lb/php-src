@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: b180b38d237511b0b32c51eb13df310956f212d9 */
+ * Stub hash: bb36fae59a0ab6d29b3dfd82e3dd1c4e5df82313 */
 
 ZEND_BEGIN_ARG_WITH_TENTATIVE_RETURN_TYPE_INFO_EX(arginfo_class_Reflection_getModifierNames, 0, 1, IS_ARRAY, 0)
 	ZEND_ARG_TYPE_INFO(0, modifiers, IS_LONG, 0)
@@ -1523,20 +1523,8 @@ static zend_class_entry *register_class_ReflectionLazyObject(zend_class_entry *c
 	zval const_SKIP_INITIALIZATION_ON_SERIALIZE_value;
 	ZVAL_LONG(&const_SKIP_INITIALIZATION_ON_SERIALIZE_value, ZEND_LAZY_OBJECT_SKIP_INITIALIZATION_ON_SERIALIZE);
 	zend_string *const_SKIP_INITIALIZATION_ON_SERIALIZE_name = zend_string_init_interned("SKIP_INITIALIZATION_ON_SERIALIZE", sizeof("SKIP_INITIALIZATION_ON_SERIALIZE") - 1, 1);
-	zend_declare_class_constant_ex(class_entry, const_SKIP_INITIALIZATION_ON_SERIALIZE_name, &const_SKIP_INITIALIZATION_ON_SERIALIZE_value, ZEND_ACC_PUBLIC, NULL);
+	zend_declare_typed_class_constant(class_entry, const_SKIP_INITIALIZATION_ON_SERIALIZE_name, &const_SKIP_INITIALIZATION_ON_SERIALIZE_value, ZEND_ACC_PUBLIC, NULL, (zend_type) ZEND_TYPE_INIT_MASK(MAY_BE_LONG));
 	zend_string_release(const_SKIP_INITIALIZATION_ON_SERIALIZE_name);
-
-	zval const_STRATEGY_GHOST_value;
-	ZVAL_LONG(&const_STRATEGY_GHOST_value, ZEND_LAZY_OBJECT_STRATEGY_GHOST;);
-	zend_string *const_STRATEGY_GHOST_name = zend_string_init_interned("STRATEGY_GHOST", sizeof("STRATEGY_GHOST") - 1, 1);
-	zend_declare_class_constant_ex(class_entry, const_STRATEGY_GHOST_name, &const_STRATEGY_GHOST_value, ZEND_ACC_PUBLIC, NULL);
-	zend_string_release(const_STRATEGY_GHOST_name);
-
-	zval const_STRATEGY_VIRTUAL_value;
-	ZVAL_LONG(&const_STRATEGY_VIRTUAL_value, ZEND_LAZY_OBJECT_STRATEGY_VIRTUAL;);
-	zend_string *const_STRATEGY_VIRTUAL_name = zend_string_init_interned("STRATEGY_VIRTUAL", sizeof("STRATEGY_VIRTUAL") - 1, 1);
-	zend_declare_class_constant_ex(class_entry, const_STRATEGY_VIRTUAL_name, &const_STRATEGY_VIRTUAL_value, ZEND_ACC_PUBLIC, NULL);
-	zend_string_release(const_STRATEGY_VIRTUAL_name);
 
 	return class_entry;
 }

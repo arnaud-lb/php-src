@@ -423,23 +423,8 @@ class ReflectionObject extends ReflectionClass
 
 class ReflectionLazyObject extends ReflectionObject
 {
-    /**
-     * @var int
-     * @cvalue ZEND_LAZY_OBJECT_SKIP_INITIALIZATION_ON_SERIALIZE
-     */
-    public const SKIP_INITIALIZATION_ON_SERIALIZE = UNKNOWN;
-
-    /**
-     * @var int
-     * @cvalue ZEND_LAZY_OBJECT_STRATEGY_GHOST;
-     */
-    public const STRATEGY_GHOST = UNKNOWN;
-
-    /**
-     * @var int
-     * @cvalue ZEND_LAZY_OBJECT_STRATEGY_VIRTUAL;
-     */
-    public const STRATEGY_VIRTUAL = UNKNOWN;
+    /** @cvalue ZEND_LAZY_OBJECT_SKIP_INITIALIZATION_ON_SERIALIZE */
+    public const int SKIP_INITIALIZATION_ON_SERIALIZE = UNKNOWN;
 
     public static function makeLazyGhost(object $instance, callable $initializer, int $flags = 0): ReflectionLazyObject {}
 
