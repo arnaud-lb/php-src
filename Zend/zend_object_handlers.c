@@ -674,9 +674,10 @@ ZEND_API uint32_t *zend_get_recursion_guard(zend_object *zobj)
 /* Mask all guards on zobj with mask */
 void zend_mask_property_guards(zend_object *zobj, uint32_t mask)
 {
+	ZEND_ASSERT(zobj->ce->ce_flags & ZEND_ACC_USE_GUARDS);
+
 	zval *zv = zend_get_guard_value(zobj);
 
-	ZEND_ASSERT(zobj->ce->ce_flags & ZEND_ACC_USE_GUARDS);
 	if (EXPECTED(Z_TYPE_P(zv) == IS_STRING)) {
 		Z_GUARD_P(zv) &= mask;
 	} else if (EXPECTED(Z_TYPE_P(zv) == IS_ARRAY)) {

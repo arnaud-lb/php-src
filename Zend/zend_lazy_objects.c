@@ -44,6 +44,11 @@
 #include "zend_variables.h"
 #include "zend_lazy_objects.h"
 
+/**
+ * Information about each lazy object is stored outside of zend_objects, in
+ * EG(lazy_objects_store). This information is deleted when an object becomes
+ * non-lazy.
+ */
 typedef struct _zend_lazy_object_info {
 	union {
 		zend_fcall_info_cache initializer;
@@ -171,6 +176,10 @@ bool zend_lazy_object_passthru(zend_object *obj)
 	return zend_lazy_object_get_info(obj)->passthru;
 }
 
+/**
+ * Making objects lazy
+ */
+
 /* Make object 'obj' lazy. If 'obj' is NULL, create a lazy instance of
  * class 'class_type' */
 ZEND_API zend_object *zend_object_make_lazy(zend_object *obj,
@@ -254,6 +263,10 @@ ZEND_API zend_object *zend_object_make_lazy(zend_object *obj,
 
 	return obj;
 }
+
+/**
+ * Initialization of lazy objects
+ */
 
 /* Revert initializer effects */
 static void zend_lazy_object_revert_init(zend_object *obj, zval *properties_table_snapshot, HashTable *properties_snapshot)
@@ -350,11 +363,11 @@ static zend_object *zend_lazy_object_init_virtual_with(zend_object *obj, zend_fc
 
 	zend_fcc_dtor(&info->u.initializer);
 	info->u.instance = Z_OBJ(retval);
-	info->flags |= IS_OBJ_VIRTUAL_LAZY|ZEND_LAZY_OBJECT_INITIALIZED;
+	info->flags |= ZEND_LAZY_OBJECT_INITIALIZED;
 	OBJ_EXTRA_FLAGS(obj) |= IS_OBJ_VIRTUAL_LAZY;
 
-	/* unset() properties of the proxy. All accesses should be delegated to the
-	 * realized instance */
+	/* unset() properties of the proxy. This ensures that all accesses are be
+	 * delegated to the backing instance from now on. */
 	// TODO: test that props are undef after initialization
 	zend_object_dtor_dynamic_properties(obj);
 	obj->properties = NULL;
@@ -490,6 +503,7 @@ ZEND_API zend_object *zend_lazy_object_init(zend_object *obj)
 	return zend_lazy_object_init_with(obj, initializer);
 }
 
+/* Mark an object as non-lazy (after all properties were initialized) */
 void zend_lazy_object_realize(zend_object *obj)
 {
 	ZEND_ASSERT(zend_object_is_lazy(obj));
@@ -541,13 +555,12 @@ HashTable *zend_lazy_object_debug_info(zend_object *object, int *is_temp)
 		}
 	}
 
-	uint32_t is_lazy = OBJ_EXTRA_FLAGS(object) & (IS_OBJ_LAZY|IS_OBJ_VIRTUAL_LAZY);
-	OBJ_EXTRA_FLAGS(object) &= ~(IS_OBJ_LAZY|IS_OBJ_VIRTUAL_LAZY);
+	HashTable *properties;
+	ZEND_LAZY_OBJECT_PASSTHRU(object) {
+		properties = object->handlers->get_properties(object);
+	} ZEND_LAZY_OBJECT_PASSTHRU_END();
 
-	HashTable *properties = object->handlers->get_properties(object);
 	*is_temp = 0;
-
-	OBJ_EXTRA_FLAGS(object) |= is_lazy;
 
 	return properties;
 }
