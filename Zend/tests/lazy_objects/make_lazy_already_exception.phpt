@@ -10,11 +10,11 @@ class C extends stdClass {
 printf("# Ghost:\n");
 
 $obj = new C();
-ReflectionLazyObject::makeLazy($obj, function () {});
+ReflectionLazyObject::makeLazyGhost($obj, function () {});
 
 try {
-    $r = ReflectionLazyObject::makeLazy($obj, function ($obj) {
-    }, ReflectionLazyObject::STRATEGY_GHOST);
+    $r = ReflectionLazyObject::makeLazyGhost($obj, function ($obj) {
+    });
 } catch (\Exception $e) {
     printf("%s: %s\n", $e::class, $e->getMessage());
 }
@@ -22,23 +22,23 @@ try {
 printf("# Virtual:\n");
 
 $obj = new C();
-ReflectionLazyObject::makeLazy($obj, function () {});
+ReflectionLazyObject::makeLazyProxy($obj, function () {});
 
 try {
-    $r = ReflectionLazyObject::makeLazy($obj, function ($obj) {
-    }, ReflectionLazyObject::STRATEGY_VIRTUAL);
+    $r = ReflectionLazyObject::makeLazyProxy($obj, function ($obj) {
+    });
 } catch (\Exception $e) {
     printf("%s: %s\n", $e::class, $e->getMessage());
 }
 
 $obj = new C();
-ReflectionLazyObject::makeLazy($obj, function () {
+ReflectionLazyObject::makeLazyProxy($obj, function () {
     return new C();
-}, ReflectionLazyObject::STRATEGY_VIRTUAL)->initialize();
+})->initialize();
 
 try {
-    $r = ReflectionLazyObject::makeLazy($obj, function ($obj) {
-    }, ReflectionLazyObject::STRATEGY_VIRTUAL);
+    $r = ReflectionLazyObject::makeLazyProxy($obj, function ($obj) {
+    });
 } catch (\Exception $e) {
     printf("%s: %s\n", $e::class, $e->getMessage());
 }

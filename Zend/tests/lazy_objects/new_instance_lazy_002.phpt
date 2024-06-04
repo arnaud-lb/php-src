@@ -5,18 +5,12 @@ Lazy objects: newInstanceLazy can not instantiate sub-class of internal classes
 
 class C extends ReflectionClass {}
 
-foreach ([ReflectionLazyObject::STRATEGY_GHOST, ReflectionLazyObject::STRATEGY_VIRTUAL] as $strategy) {
+foreach (['makeLazyGhost', 'makeLazyProxy'] as $strategy) {
     $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
     try {
-        if ($strategy === ReflectionLazyObject::STRATEGY_GHOST) {
-            ReflectionLazyObject::makeLazyGhost($obj, function ($obj) {
-                var_dump("initializer");
-            });
-        } else {
-            ReflectionLazyObject::makeLazyProxy($obj, function ($obj) {
-                var_dump("initializer");
-            });
-        }
+        ReflectionLazyObject::$strategy($obj, function ($obj) {
+            var_dump("initializer");
+        });
     } catch (Error $e) {
         printf("%s: %s\n", $e::class, $e->getMessage());
     }
