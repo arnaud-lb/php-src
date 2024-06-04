@@ -21,28 +21,28 @@ function test(string $name, object $obj, object $obj2) {
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazy($obj, function ($obj) {
+ReflectionLazyObject::makeLazyGhost($obj, function ($obj) {
     var_dump("initializer");
 });
 
 $obj2 = new D();
 $obj2->dynamic = 'value';
-ReflectionLazyObject::makeLazy($obj2, function ($obj2) {
+ReflectionLazyObject::makeLazyGhost($obj2, function ($obj2) {
     var_dump("initializer");
 });
 
 test('Ghost', $obj, $obj2);
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazy($obj, function ($obj) {
+ReflectionLazyObject::makeLazyVirtual($obj, function ($obj) {
     var_dump("initializer");
-}, ReflectionLazyObject::STRATEGY_VIRTUAL);
+});
 
 $obj2 = new D();
 $obj2->dynamic = 'value';
-ReflectionLazyObject::makeLazy($obj2, function ($obj2) {
+ReflectionLazyObject::makeLazyVirtual($obj2, function ($obj2) {
     var_dump("initializer");
-}, ReflectionLazyObject::STRATEGY_VIRTUAL);
+});
 
 test('Virtual', $obj, $obj2);
 

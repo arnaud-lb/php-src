@@ -21,7 +21,7 @@ class D extends C {
 print "# Ghost initializer must return NULL or no value:\n";
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazy($obj, function ($obj) {
+ReflectionLazyObject::makeLazyGhost($obj, function ($obj) {
     var_dump("initializer");
     $obj->__construct();
     return new stdClass;
@@ -46,10 +46,10 @@ $tests = [
 
 foreach ($tests as [$class, $instance]) {
     $obj = (new ReflectionClass($class))->newInstanceWithoutConstructor();
-    ReflectionLazyObject::makeLazy($obj, function ($obj) use ($instance) {
+    ReflectionLazyObject::makeLazyVirtual($obj, function ($obj) use ($instance) {
         var_dump("initializer");
         return $instance;
-    }, ReflectionLazyObject::STRATEGY_VIRTUAL);
+    });
 
     var_dump($obj->a);
     var_dump($obj);
@@ -64,10 +64,10 @@ $tests = [
 
 foreach ($tests as [$class, $instance]) {
     $obj = (new ReflectionClass($class))->newInstanceWithoutConstructor();
-    ReflectionLazyObject::makeLazy($obj, function ($obj) use ($instance) {
+    ReflectionLazyObject::makeLazyVirtual($obj, function ($obj) use ($instance) {
         var_dump("initializer");
         return $instance;
-    }, ReflectionLazyObject::STRATEGY_VIRTUAL);
+    });
 
     try {
         var_dump($obj->a);
@@ -77,10 +77,10 @@ foreach ($tests as [$class, $instance]) {
 }
 
 $obj = (new ReflectionClass($class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazy($obj, function ($obj) {
+ReflectionLazyObject::makeLazyVirtual($obj, function ($obj) {
     var_dump("initializer");
     return $obj;
-}, ReflectionLazyObject::STRATEGY_VIRTUAL);
+});
 
 try {
     var_dump($obj->a);

@@ -13,16 +13,16 @@ class C {
 print "# Ghost:\n";
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazy($obj, function () {
+ReflectionLazyObject::makeLazyGhost($obj, function () {
     var_dump("initializer");
 });
 
 print "# Virtual:\n";
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazy($obj, function () {
+ReflectionLazyObject::makeLazyVirtual($obj, function () {
     var_dump("initializer");
-}, ReflectionLazyObject::STRATEGY_VIRTUAL);
+});
 
 --EXPECTF--
 # Ghost:

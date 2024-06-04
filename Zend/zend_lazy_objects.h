@@ -34,9 +34,12 @@
 #define ZEND_LAZY_OBJECT_INITIALIZED                        (1<<3)
 
 #define ZEND_LAZY_OBJECT_USER_FLAGS (                                       \
-	ZEND_LAZY_OBJECT_SKIP_INITIALIZATION_ON_SERIALIZE |                     \
-	ZEND_LAZY_OBJECT_STRATEGY_GHOST |                                       \
-	ZEND_LAZY_OBJECT_STRATEGY_VIRTUAL                                       \
+	ZEND_LAZY_OBJECT_SKIP_INITIALIZATION_ON_SERIALIZE                       \
+)
+
+#define ZEND_LAZY_OBJECT_STRATEGY_FLAGS (                                   \
+		ZEND_LAZY_OBJECT_STRATEGY_VIRTUAL |                                 \
+		ZEND_LAZY_OBJECT_STRATEGY_GHOST                                     \
 )
 
 /* Temporarily allow raw access to the lazy object without triggering

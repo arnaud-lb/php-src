@@ -20,7 +20,7 @@ function ghost() {
     $canary = new Canary();
 
     $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-    $reflector = ReflectionLazyObject::makeLazy($obj, function () use ($canary) {
+    $reflector = ReflectionLazyObject::makeLazyGhost($obj, function () use ($canary) {
     });
 
     $reflector->setProperty('value', $obj);
@@ -39,9 +39,9 @@ function virtual() {
     $canary = new Canary();
 
     $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-    $reflector = ReflectionLazyObject::makeLazy($obj, function () use ($canary) {
+    $reflector = ReflectionLazyObject::makeLazyVirtual($obj, function () use ($canary) {
         return new C();
-    }, ReflectionLazyObject::STRATEGY_VIRTUAL);
+    });
 
     $reflector->setProperty('value', $obj);
     $reflector = null;

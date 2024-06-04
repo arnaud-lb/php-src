@@ -23,7 +23,7 @@ function test(string $name, object $obj, callable $initializer) {
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazy($obj, function ($obj) {
+ReflectionLazyObject::makeLazyGhost($obj, function ($obj) {
     var_dump("initializer");
     $obj->a = 1;
 });
@@ -34,12 +34,12 @@ test('Ghost', $obj, function ($obj) {
 });
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazy($obj, function ($obj) {
+ReflectionLazyObject::makeLazyVirtual($obj, function ($obj) {
     var_dump("initializer");
     $c = new C();
     $c->a = 1;
     return $c;
-}, ReflectionLazyObject::STRATEGY_VIRTUAL);
+});
 
 test('Virtual', $obj, function ($obj) {
     var_dump("custom initializer");

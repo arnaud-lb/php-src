@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 8d67076be92dffbba859dea03527413a36c06e5d */
+ * Stub hash: b180b38d237511b0b32c51eb13df310956f212d9 */
 
 ZEND_BEGIN_ARG_WITH_TENTATIVE_RETURN_TYPE_INFO_EX(arginfo_class_Reflection_getModifierNames, 0, 1, IS_ARRAY, 0)
 	ZEND_ARG_TYPE_INFO(0, modifiers, IS_LONG, 0)
@@ -330,17 +330,21 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_class_ReflectionObject___construct, 0, 0, 1)
 	ZEND_ARG_TYPE_INFO(0, object, IS_OBJECT, 0)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_class_ReflectionLazyObject_makeLazy, 0, 2, ReflectionLazyObject, 0)
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_class_ReflectionLazyObject_makeLazyGhost, 0, 2, ReflectionLazyObject, 0)
 	ZEND_ARG_TYPE_INFO(0, instance, IS_OBJECT, 0)
 	ZEND_ARG_TYPE_INFO(0, initializer, IS_CALLABLE, 0)
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, flags, IS_LONG, 0, "0")
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_ReflectionLazyObject_newInstanceLazy, 0, 2, IS_OBJECT, 0)
+#define arginfo_class_ReflectionLazyObject_makeLazyVirtual arginfo_class_ReflectionLazyObject_makeLazyGhost
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_ReflectionLazyObject_newInstanceLazyGhost, 0, 2, IS_OBJECT, 0)
 	ZEND_ARG_TYPE_INFO(0, className, IS_STRING, 0)
 	ZEND_ARG_TYPE_INFO(0, initializer, IS_CALLABLE, 0)
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, flags, IS_LONG, 0, "0")
 ZEND_END_ARG_INFO()
+
+#define arginfo_class_ReflectionLazyObject_newInstanceLazyVirtual arginfo_class_ReflectionLazyObject_newInstanceLazyGhost
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_ReflectionLazyObject_isLazyObject, 0, 1, _IS_BOOL, 0)
 	ZEND_ARG_TYPE_INFO(0, instance, IS_OBJECT, 0)
@@ -812,8 +816,10 @@ ZEND_METHOD(ReflectionClass, getNamespaceName);
 ZEND_METHOD(ReflectionClass, getShortName);
 ZEND_METHOD(ReflectionClass, getAttributes);
 ZEND_METHOD(ReflectionObject, __construct);
-ZEND_METHOD(ReflectionLazyObject, makeLazy);
-ZEND_METHOD(ReflectionLazyObject, newInstanceLazy);
+ZEND_METHOD(ReflectionLazyObject, makeLazyGhost);
+ZEND_METHOD(ReflectionLazyObject, makeLazyVirtual);
+ZEND_METHOD(ReflectionLazyObject, newInstanceLazyGhost);
+ZEND_METHOD(ReflectionLazyObject, newInstanceLazyVirtual);
 ZEND_METHOD(ReflectionLazyObject, isLazyObject);
 ZEND_METHOD(ReflectionLazyObject, fromInstance);
 ZEND_METHOD(ReflectionLazyObject, isInitialized);
@@ -1109,8 +1115,10 @@ static const zend_function_entry class_ReflectionObject_methods[] = {
 };
 
 static const zend_function_entry class_ReflectionLazyObject_methods[] = {
-	ZEND_ME(ReflectionLazyObject, makeLazy, arginfo_class_ReflectionLazyObject_makeLazy, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
-	ZEND_ME(ReflectionLazyObject, newInstanceLazy, arginfo_class_ReflectionLazyObject_newInstanceLazy, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(ReflectionLazyObject, makeLazyGhost, arginfo_class_ReflectionLazyObject_makeLazyGhost, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(ReflectionLazyObject, makeLazyVirtual, arginfo_class_ReflectionLazyObject_makeLazyVirtual, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(ReflectionLazyObject, newInstanceLazyGhost, arginfo_class_ReflectionLazyObject_newInstanceLazyGhost, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(ReflectionLazyObject, newInstanceLazyVirtual, arginfo_class_ReflectionLazyObject_newInstanceLazyVirtual, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(ReflectionLazyObject, isLazyObject, arginfo_class_ReflectionLazyObject_isLazyObject, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(ReflectionLazyObject, fromInstance, arginfo_class_ReflectionLazyObject_fromInstance, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(ReflectionLazyObject, isInitialized, arginfo_class_ReflectionLazyObject_isInitialized, ZEND_ACC_PUBLIC)

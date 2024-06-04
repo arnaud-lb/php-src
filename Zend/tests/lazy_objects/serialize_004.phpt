@@ -23,16 +23,16 @@ function test(string $name, object $obj) {
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazy($obj, function ($obj) {
+ReflectionLazyObject::makeLazyGhost($obj, function ($obj) {
     var_dump("initializer");
 }, ReflectionLazyObject::SKIP_INITIALIZATION_ON_SERIALIZE);
 
 test('Ghost', $obj);
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazy($obj, function ($obj) {
+ReflectionLazyObject::makeLazyVirtual($obj, function ($obj) {
     var_dump("initializer");
-}, ReflectionLazyObject::STRATEGY_VIRTUAL | ReflectionLazyObject::SKIP_INITIALIZATION_ON_SERIALIZE);
+}, ReflectionLazyObject::SKIP_INITIALIZATION_ON_SERIALIZE);
 
 test('Virtual', $obj);
 

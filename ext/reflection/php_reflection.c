@@ -5575,7 +5575,8 @@ ZEND_METHOD(ReflectionLazyObject, __construct)
 }
 /* }}} */
 
-void reflection_lazy_object_make_lazy(INTERNAL_FUNCTION_PARAMETERS, bool is_make_lazy)
+void reflection_lazy_object_make_lazy(INTERNAL_FUNCTION_PARAMETERS,
+		int strategy, bool is_make_lazy)
 {
 	reflection_object *intern;
 	zend_object *obj;
@@ -5583,6 +5584,9 @@ void reflection_lazy_object_make_lazy(INTERNAL_FUNCTION_PARAMETERS, bool is_make
 	zend_fcall_info fci;
 	zend_fcall_info_cache fcc;
 	zend_long flags = 0;
+
+	ZEND_ASSERT(strategy == ZEND_LAZY_OBJECT_STRATEGY_GHOST
+			|| strategy == ZEND_LAZY_OBJECT_STRATEGY_VIRTUAL);
 
 	if (is_make_lazy) {
 		ZEND_PARSE_PARAMETERS_START(2, 3)
@@ -5615,18 +5619,6 @@ void reflection_lazy_object_make_lazy(INTERNAL_FUNCTION_PARAMETERS, bool is_make
 		obj = NULL;
 	}
 
-	switch (flags & (ZEND_LAZY_OBJECT_STRATEGY_GHOST|ZEND_LAZY_OBJECT_STRATEGY_VIRTUAL)) {
-		case ZEND_LAZY_OBJECT_STRATEGY_GHOST:
-		case ZEND_LAZY_OBJECT_STRATEGY_VIRTUAL:
-			break;
-		case 0:
-			flags |= ZEND_LAZY_OBJECT_STRATEGY_GHOST;
-			break;
-		default:
-			zend_throw_exception_ex(reflection_exception_ptr, 0, "Flags STRATEGY_GHOST and STRATEGY_VIRTUAL are mutually exclusive");
-			RETURN_THROWS();
-	}
-
 	if (!fcc.function_handler) {
 		/* Call trampoline has been cleared by zpp. Refetch it, because we want to deal
 		 * with it outselves. It is important that it is not refetched on every call,
@@ -5634,7 +5626,7 @@ void reflection_lazy_object_make_lazy(INTERNAL_FUNCTION_PARAMETERS, bool is_make
 		zend_is_callable_ex(&fci.function_name, NULL, 0, NULL, &fcc, NULL);
 	}
 
-	obj = zend_object_make_lazy(obj, ce, &fcc, flags);
+	obj = zend_object_make_lazy(obj, ce, &fcc, strategy | flags);
 	if (!obj) {
 		RETURN_THROWS();
 	}
@@ -5656,19 +5648,35 @@ void reflection_lazy_object_make_lazy(INTERNAL_FUNCTION_PARAMETERS, bool is_make
 	}
 }
 
-/* {{{ Makes an object lazy */
-PHP_METHOD(ReflectionLazyObject, makeLazy)
+/* {{{ Makes an object lazy, using the ghost strategy */
+PHP_METHOD(ReflectionLazyObject, makeLazyGhost)
 {
 	reflection_lazy_object_make_lazy(INTERNAL_FUNCTION_PARAM_PASSTHRU,
-			/*is_make_lazy */ true);
+			ZEND_LAZY_OBJECT_STRATEGY_GHOST, /*is_make_lazy */ true);
 }
 /* }}} */
 
-/* {{{ Instantiates a lazy instance */
-PHP_METHOD(ReflectionLazyObject, newInstanceLazy)
+/* {{{ Makes an object lazy, using the virtual strategy */
+PHP_METHOD(ReflectionLazyObject, makeLazyVirtual)
 {
 	reflection_lazy_object_make_lazy(INTERNAL_FUNCTION_PARAM_PASSTHRU,
-			/*is_make_lazy */ false);
+			ZEND_LAZY_OBJECT_STRATEGY_VIRTUAL, /*is_make_lazy */ true);
+}
+/* }}} */
+
+/* {{{ Instantiates a lazy instance, using the ghost strategy */
+PHP_METHOD(ReflectionLazyObject, newInstanceLazyGhost)
+{
+	reflection_lazy_object_make_lazy(INTERNAL_FUNCTION_PARAM_PASSTHRU,
+			ZEND_LAZY_OBJECT_STRATEGY_GHOST, /*is_make_lazy */ false);
+}
+/* }}} */
+
+/* {{{ Instantiates a lazy instance, using the virtual strategy */
+PHP_METHOD(ReflectionLazyObject, newInstanceLazyVirtual)
+{
+	reflection_lazy_object_make_lazy(INTERNAL_FUNCTION_PARAM_PASSTHRU,
+			ZEND_LAZY_OBJECT_STRATEGY_VIRTUAL, /*is_make_lazy */ false);
 }
 /* }}} */
 

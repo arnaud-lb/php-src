@@ -441,9 +441,13 @@ class ReflectionLazyObject extends ReflectionObject
      */
     public const STRATEGY_VIRTUAL = UNKNOWN;
 
-    public static function makeLazy(object $instance, callable $initializer, int $flags = 0): ReflectionLazyObject {}
+    public static function makeLazyGhost(object $instance, callable $initializer, int $flags = 0): ReflectionLazyObject {}
 
-    public static function newInstanceLazy(string $className, callable $initializer, int $flags = 0): object {}
+    public static function makeLazyVirtual(object $instance, callable $initializer, int $flags = 0): ReflectionLazyObject {}
+
+    public static function newInstanceLazyGhost(string $className, callable $initializer, int $flags = 0): object {}
+
+    public static function newInstanceLazyVirtual(string $className, callable $initializer, int $flags = 0): object {}
 
     public static function isLazyObject(object $instance): bool {}
 
