@@ -1,5 +1,5 @@
 --TEST--
-Lazy objects: Foreach initializes objet
+Lazy objects: Foreach initializes object
 --FILE--
 <?php
 
