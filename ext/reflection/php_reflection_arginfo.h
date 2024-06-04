@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: b4850617ae168d8a5003700a8ba817d942cd4157 */
+ * Stub hash: 8d67076be92dffbba859dea03527413a36c06e5d */
 
 ZEND_BEGIN_ARG_WITH_TENTATIVE_RETURN_TYPE_INFO_EX(arginfo_class_Reflection_getModifierNames, 0, 1, IS_ARRAY, 0)
 	ZEND_ARG_TYPE_INFO(0, modifiers, IS_LONG, 0)
@@ -332,6 +332,12 @@ ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_class_ReflectionLazyObject_makeLazy, 0, 2, ReflectionLazyObject, 0)
 	ZEND_ARG_TYPE_INFO(0, instance, IS_OBJECT, 0)
+	ZEND_ARG_TYPE_INFO(0, initializer, IS_CALLABLE, 0)
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, flags, IS_LONG, 0, "0")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_ReflectionLazyObject_newInstanceLazy, 0, 2, IS_OBJECT, 0)
+	ZEND_ARG_TYPE_INFO(0, className, IS_STRING, 0)
 	ZEND_ARG_TYPE_INFO(0, initializer, IS_CALLABLE, 0)
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, flags, IS_LONG, 0, "0")
 ZEND_END_ARG_INFO()
@@ -807,6 +813,7 @@ ZEND_METHOD(ReflectionClass, getShortName);
 ZEND_METHOD(ReflectionClass, getAttributes);
 ZEND_METHOD(ReflectionObject, __construct);
 ZEND_METHOD(ReflectionLazyObject, makeLazy);
+ZEND_METHOD(ReflectionLazyObject, newInstanceLazy);
 ZEND_METHOD(ReflectionLazyObject, isLazyObject);
 ZEND_METHOD(ReflectionLazyObject, fromInstance);
 ZEND_METHOD(ReflectionLazyObject, isInitialized);
@@ -1103,6 +1110,7 @@ static const zend_function_entry class_ReflectionObject_methods[] = {
 
 static const zend_function_entry class_ReflectionLazyObject_methods[] = {
 	ZEND_ME(ReflectionLazyObject, makeLazy, arginfo_class_ReflectionLazyObject_makeLazy, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(ReflectionLazyObject, newInstanceLazy, arginfo_class_ReflectionLazyObject_newInstanceLazy, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(ReflectionLazyObject, isLazyObject, arginfo_class_ReflectionLazyObject_isLazyObject, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(ReflectionLazyObject, fromInstance, arginfo_class_ReflectionLazyObject_fromInstance, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(ReflectionLazyObject, isInitialized, arginfo_class_ReflectionLazyObject_isInitialized, ZEND_ACC_PUBLIC)
