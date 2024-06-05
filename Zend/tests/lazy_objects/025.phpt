@@ -19,7 +19,7 @@ function test(string $name, object $obj) {
 
     var_dump($obj);
     printf("Initialized:\n");
-    var_dump(!ReflectionLazyObject::fromInstance($obj));
+    var_dump((bool) ReflectionLazyObject::fromInstance($obj)?->isInitialized());
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();

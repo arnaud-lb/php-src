@@ -5703,10 +5703,6 @@ ZEND_METHOD(ReflectionLazyObject, fromInstance)
 		Z_PARAM_OBJ(arg)
 	ZEND_PARSE_PARAMETERS_END();
 
-	if (!zend_object_is_lazy(arg) || zend_lazy_object_initialized(arg)) {
-		RETURN_NULL();
-	}
-
 	if (SUCCESS != object_init_ex(return_value, reflection_lazy_object_ptr)) {
 		RETURN_THROWS();
 	}

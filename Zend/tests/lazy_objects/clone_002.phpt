@@ -18,9 +18,9 @@ function test(string $name, object $obj) {
 
     $clone = clone $obj;
 
-    var_dump((bool) ReflectionLazyObject::fromInstance($obj));
+    var_dump(!ReflectionLazyObject::fromInstance($obj)?->isInitialized());
     var_dump($obj);
-    var_dump((bool) ReflectionLazyObject::fromInstance($clone));
+    var_dump(!ReflectionLazyObject::fromInstance($clone)?->isInitialized());
     var_dump($clone);
 }
 

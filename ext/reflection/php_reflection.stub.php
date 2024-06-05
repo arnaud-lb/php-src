@@ -436,7 +436,7 @@ class ReflectionLazyObject extends ReflectionObject
 
     public static function isLazyObject(object $instance): bool {}
 
-    public static function fromInstance(object $instance): ?ReflectionLazyObject {}
+    public static function fromInstance(object $instance): ReflectionLazyObject {}
 
     public function isInitialized(): bool {}
 

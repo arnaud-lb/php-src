@@ -17,7 +17,7 @@ function test(string $name, object $obj) {
         printf("%s\n", $e->getMessage());
     }
 
-    printf("Is lazy: %d\n", (bool) ReflectionLazyObject::fromInstance($obj));
+    printf("Is lazy: %d\n", !ReflectionLazyObject::fromInstance($obj)?->isInitialized());
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
