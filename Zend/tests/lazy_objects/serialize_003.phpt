@@ -12,7 +12,7 @@ class C {
 function test(string $name, object $obj) {
     printf("# %s:\n", $name);
 
-    (new ReflectionLazyObjectFactory($obj))->setRawProperty($obj, 'b', 1);
+    (new ReflectionLazyObjectFactory($obj))->setRawPropertyValue($obj, 'b', 1);
 
     $serialized = serialize($obj);
     $unserialized = unserialize($serialized);

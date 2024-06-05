@@ -13,7 +13,7 @@ class C {
 function test(string $name, object $obj) {
     printf("# %s:\n", $name);
 
-    (new ReflectionLazyObjectFactory($obj))->setRawProperty($obj, 'c', 0);
+    (new ReflectionLazyObjectFactory($obj))->setRawPropertyValue($obj, 'c', 0);
 
     try {
         ReflectionLazyObjectFactory::initialize($obj);

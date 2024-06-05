@@ -16,7 +16,7 @@ class C {
 function test(string $name, object $obj) {
     printf("# %s:\n", $name);
 
-    (new ReflectionLazyObjectFactory($obj))->setRawProperty($obj, 'a', 1);
+    (new ReflectionLazyObjectFactory($obj))->setRawPropertyValue($obj, 'a', 1);
 
     var_dump($obj);
     unset($obj->a);

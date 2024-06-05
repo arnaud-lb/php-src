@@ -5740,13 +5740,13 @@ static void reflection_lazy_object_set_property(zend_object *object,
 			if (UNEXPECTED(prop_info->flags & ZEND_ACC_STATIC)) {
 				zend_throw_exception_ex(reflection_exception_ptr, 0,
 						"Can not use %s on static property %s::$%s",
-						skip_hooks ? "setRawProperty" : "setProperty",
+						skip_hooks ? "setRawPropertyValue" : "setProperty",
 						ZSTR_VAL(scope->name), ZSTR_VAL(name));
 				goto fail;
 			}
 			if (UNEXPECTED(skip_hooks && (prop_info->flags & ZEND_ACC_VIRTUAL))) {
 				zend_throw_exception_ex(reflection_exception_ptr, 0,
-						"Can not use setRawProperty on virtual property %s::$%s",
+						"Can not use setRawPropertyValue on virtual property %s::$%s",
 						ZSTR_VAL(scope->name), ZSTR_VAL(name));
 				goto fail;
 			}
@@ -5794,7 +5794,7 @@ ZEND_METHOD(ReflectionLazyObjectFactory, setProperty)
 #endif
 
 /* {{{ Set property value withtout triggering initializer while skipping hooks if any */
-ZEND_METHOD(ReflectionLazyObjectFactory, setRawProperty)
+ZEND_METHOD(ReflectionLazyObjectFactory, setRawPropertyValue)
 {
 	reflection_object *intern;
 	zend_class_entry *ce;

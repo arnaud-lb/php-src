@@ -28,25 +28,25 @@ function test(string $name, object $obj) {
     $reflector = new ReflectionLazyObjectFactory($obj);
     var_dump($reflector->isInitialized($obj));
 
-    $reflector->setRawProperty($obj, 'a', 'a1');
+    $reflector->setRawPropertyValue($obj, 'a', 'a1');
     var_dump($reflector->isInitialized($obj));
 
     // Should not count a second prop initialization
-    $reflector->setRawProperty($obj, 'a', 'a2');
+    $reflector->setRawPropertyValue($obj, 'a', 'a2');
     var_dump($reflector->isInitialized($obj));
 
     try {
         // Should not count a prop initialization
-        $reflector->setRawProperty($obj, 'a', new stdClass);
+        $reflector->setRawPropertyValue($obj, 'a', new stdClass);
     } catch (Error $e) {
         printf("%s: %s\n", $e::class, $e->getMessage());
     }
 
     // Should not count a prop initialization
-    $reflector->setRawProperty($obj, 'b', 'dynamic B');
+    $reflector->setRawPropertyValue($obj, 'b', 'dynamic B');
     var_dump($reflector->isInitialized($obj));
 
-    $reflector->setRawProperty($obj, 'b', 'b', B::class);
+    $reflector->setRawPropertyValue($obj, 'b', 'b', B::class);
     var_dump($reflector->isInitialized($obj));
 
     var_dump($obj);

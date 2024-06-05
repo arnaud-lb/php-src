@@ -16,7 +16,7 @@ function test(string $name, object $obj) {
     // Builds properties hashtable
     var_dump(get_object_vars($obj));
 
-    (new ReflectionLazyObjectFactory($obj))->setRawProperty($obj, 'c', 0);
+    (new ReflectionLazyObjectFactory($obj))->setRawPropertyValue($obj, 'c', 0);
 
     try {
         ReflectionLazyObjectFactory::initialize($obj);

@@ -98,11 +98,11 @@ function testProperty(object $obj, $propReflector) {
     }
      */
 
-    printf("\nsetRawProperty():\n");
+    printf("\nsetRawPropertyValue():\n");
     $clone = clone $obj;
     $lazyReflector = new ReflectionLazyObjectFactory($clone);
     try {
-        $lazyReflector->setRawProperty($clone, $propReflector->getName(), 'value');
+        $lazyReflector->setRawPropertyValue($clone, $propReflector->getName(), 'value');
     } catch (ReflectionException $e) {
         printf("%s: %s\n", $e::class, $e->getMessage());
     }
@@ -169,7 +169,7 @@ test('Virtual', $obj);
 skipInitializerForProperty():
 getValue(): Error: Cannot access private property B::$priv
 
-setRawProperty():
+setRawPropertyValue():
 getValue(): Error: Cannot access private property B::$priv
 
 ## Property [ public $pubB = 'pubB' ]
@@ -177,7 +177,7 @@ getValue(): Error: Cannot access private property B::$priv
 skipInitializerForProperty():
 getValue(): string(4) "pubB"
 
-setRawProperty():
+setRawPropertyValue():
 getValue(): string(5) "value"
 
 ## Property [ private readonly string $readonly ]
@@ -185,7 +185,7 @@ getValue(): string(5) "value"
 skipInitializerForProperty():
 getValue(): Error: Cannot access private property B::$readonly
 
-setRawProperty():
+setRawPropertyValue():
 getValue(): Error: Cannot access private property B::$readonly
 
 ## Property [ protected $prot = 'prot' ]
@@ -193,7 +193,7 @@ getValue(): Error: Cannot access private property B::$readonly
 skipInitializerForProperty():
 getValue(): Error: Cannot access protected property B::$prot
 
-setRawProperty():
+setRawPropertyValue():
 getValue(): Error: Cannot access protected property B::$prot
 
 ## Property [ public $pubA = 'pubA' ]
@@ -201,7 +201,7 @@ getValue(): Error: Cannot access protected property B::$prot
 skipInitializerForProperty():
 getValue(): string(4) "pubA"
 
-setRawProperty():
+setRawPropertyValue():
 getValue(): string(5) "value"
 
 ## Property [ public static $static = 'static' ]
@@ -209,8 +209,8 @@ getValue(): string(5) "value"
 skipInitializerForProperty():
 ReflectionException: Can not initialize static property B::$static
 
-setRawProperty():
-ReflectionException: Can not use setRawProperty on static property B::$static
+setRawPropertyValue():
+ReflectionException: Can not use setRawPropertyValue on static property B::$static
 getValue(): Error: Accessing static property B::$static as non static
 
 ## Property [ public $noDefault = NULL ]
@@ -218,7 +218,7 @@ getValue(): Error: Accessing static property B::$static as non static
 skipInitializerForProperty():
 getValue(): NULL
 
-setRawProperty():
+setRawPropertyValue():
 getValue(): string(5) "value"
 
 ## Property [ public string $noDefaultTyped ]
@@ -226,7 +226,7 @@ getValue(): string(5) "value"
 skipInitializerForProperty():
 getValue(): Error: Typed property A::$noDefaultTyped must not be accessed before initialization
 
-setRawProperty():
+setRawPropertyValue():
 getValue(): string(5) "value"
 
 ## Property [ public $initialized = NULL ]
@@ -234,7 +234,7 @@ getValue(): string(5) "value"
 skipInitializerForProperty():
 getValue(): NULL
 
-setRawProperty():
+setRawPropertyValue():
 getValue(): string(5) "value"
 
 ## Property [ public $hooked = NULL ]
@@ -242,7 +242,7 @@ getValue(): string(5) "value"
 skipInitializerForProperty():
 getValue(): NULL
 
-setRawProperty():
+setRawPropertyValue():
 getValue(): string(5) "value"
 
 ## Property [ public $virtual ]
@@ -250,8 +250,8 @@ getValue(): string(5) "value"
 skipInitializerForProperty():
 ReflectionException: Can not initialize virtual property B::$virtual
 
-setRawProperty():
-ReflectionException: Can not use setRawProperty on virtual property B::$virtual
+setRawPropertyValue():
+ReflectionException: Can not use setRawPropertyValue on virtual property B::$virtual
 getValue(): string(7) "virtual"
 
 ## Property [ $dynamicProp ]
@@ -259,7 +259,7 @@ getValue(): string(7) "virtual"
 skipInitializerForProperty():
 ReflectionException: Property B::$dynamicProp does not exist
 
-setRawProperty():
+setRawPropertyValue():
 getValue(): string(5) "value"
 # Virtual:
 
@@ -268,7 +268,7 @@ getValue(): string(5) "value"
 skipInitializerForProperty():
 getValue(): Error: Cannot access private property B::$priv
 
-setRawProperty():
+setRawPropertyValue():
 getValue(): Error: Cannot access private property B::$priv
 
 ## Property [ public $pubB = 'pubB' ]
@@ -276,7 +276,7 @@ getValue(): Error: Cannot access private property B::$priv
 skipInitializerForProperty():
 getValue(): string(4) "pubB"
 
-setRawProperty():
+setRawPropertyValue():
 getValue(): string(5) "value"
 
 ## Property [ private readonly string $readonly ]
@@ -284,7 +284,7 @@ getValue(): string(5) "value"
 skipInitializerForProperty():
 getValue(): Error: Cannot access private property B::$readonly
 
-setRawProperty():
+setRawPropertyValue():
 getValue(): Error: Cannot access private property B::$readonly
 
 ## Property [ protected $prot = 'prot' ]
@@ -292,7 +292,7 @@ getValue(): Error: Cannot access private property B::$readonly
 skipInitializerForProperty():
 getValue(): Error: Cannot access protected property B::$prot
 
-setRawProperty():
+setRawPropertyValue():
 getValue(): Error: Cannot access protected property B::$prot
 
 ## Property [ public $pubA = 'pubA' ]
@@ -300,7 +300,7 @@ getValue(): Error: Cannot access protected property B::$prot
 skipInitializerForProperty():
 getValue(): string(4) "pubA"
 
-setRawProperty():
+setRawPropertyValue():
 getValue(): string(5) "value"
 
 ## Property [ public static $static = 'static' ]
@@ -308,8 +308,8 @@ getValue(): string(5) "value"
 skipInitializerForProperty():
 ReflectionException: Can not initialize static property B::$static
 
-setRawProperty():
-ReflectionException: Can not use setRawProperty on static property B::$static
+setRawPropertyValue():
+ReflectionException: Can not use setRawPropertyValue on static property B::$static
 getValue(): Error: Accessing static property B::$static as non static
 
 ## Property [ public $noDefault = NULL ]
@@ -317,7 +317,7 @@ getValue(): Error: Accessing static property B::$static as non static
 skipInitializerForProperty():
 getValue(): NULL
 
-setRawProperty():
+setRawPropertyValue():
 getValue(): string(5) "value"
 
 ## Property [ public string $noDefaultTyped ]
@@ -325,7 +325,7 @@ getValue(): string(5) "value"
 skipInitializerForProperty():
 getValue(): Error: Typed property A::$noDefaultTyped must not be accessed before initialization
 
-setRawProperty():
+setRawPropertyValue():
 getValue(): string(5) "value"
 
 ## Property [ public $initialized = NULL ]
@@ -333,7 +333,7 @@ getValue(): string(5) "value"
 skipInitializerForProperty():
 getValue(): NULL
 
-setRawProperty():
+setRawPropertyValue():
 getValue(): string(5) "value"
 
 ## Property [ public $hooked = NULL ]
@@ -341,7 +341,7 @@ getValue(): string(5) "value"
 skipInitializerForProperty():
 getValue(): NULL
 
-setRawProperty():
+setRawPropertyValue():
 getValue(): string(5) "value"
 
 ## Property [ public $virtual ]
@@ -349,8 +349,8 @@ getValue(): string(5) "value"
 skipInitializerForProperty():
 ReflectionException: Can not initialize virtual property B::$virtual
 
-setRawProperty():
-ReflectionException: Can not use setRawProperty on virtual property B::$virtual
+setRawPropertyValue():
+ReflectionException: Can not use setRawPropertyValue on virtual property B::$virtual
 getValue(): string(7) "virtual"
 
 ## Property [ $dynamicProp ]
@@ -358,5 +358,5 @@ getValue(): string(7) "virtual"
 skipInitializerForProperty():
 ReflectionException: Property B::$dynamicProp does not exist
 
-setRawProperty():
+setRawPropertyValue():
 getValue(): string(5) "value"

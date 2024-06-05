@@ -741,7 +741,7 @@ static bool is_in_hook(const zend_property_info *prop_info)
 	/* Check if we're in ReflectionLazyObject::setRawProperty(). */
 	if (EX(func)
 	 && EX(func)->common.scope == reflection_lazy_object_ptr
-	 && (zend_string_equals_literal(EX(func)->common.function_name, "setRawProperty"))) {
+	 && (zend_string_equals_literal(EX(func)->common.function_name, "setRawPropertyValue"))) {
 		return true;
 	}
 

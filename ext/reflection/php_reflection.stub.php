@@ -440,7 +440,7 @@ class ReflectionLazyObjectFactory extends ReflectionClass
 
     public static function initialize(object $object, bool $skipInitializer = false): object {}
 
-    public function setRawProperty(object $object, string $name, mixed $value, ?string $class = null): void {}
+    public function setRawPropertyValue(object $object, string $name, mixed $value, ?string $class = null): void {}
 
     public function skipInitializerForProperty(object $object, string $name, ?string $class = null): void {}
 }
