@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 2bde3f86526ca0533012c805642d019a1b840ba9 */
+ * Stub hash: 5a2f9e179071a3c2e6c41322f76798ad0c82ad06 */
 
 ZEND_BEGIN_ARG_WITH_TENTATIVE_RETURN_TYPE_INFO_EX(arginfo_class_Reflection_getModifierNames, 0, 1, IS_ARRAY, 0)
 	ZEND_ARG_TYPE_INFO(0, modifiers, IS_LONG, 0)
@@ -350,10 +350,6 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_ReflectionLazyObjectFactor
 	ZEND_ARG_TYPE_INFO(0, instance, IS_OBJECT, 0)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_class_ReflectionLazyObjectFactory_fromInstance, 0, 1, ReflectionLazyObjectFactory, 0)
-	ZEND_ARG_TYPE_INFO(0, instance, IS_OBJECT, 0)
-ZEND_END_ARG_INFO()
-
 #define arginfo_class_ReflectionLazyObjectFactory_isInitialized arginfo_class_ReflectionFunctionAbstract_hasTentativeReturnType
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_ReflectionLazyObjectFactory_initialize, 0, 0, IS_OBJECT, 0)
@@ -372,8 +368,6 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_ReflectionLazyObjectFactor
 	ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, class, IS_STRING, 1, "null")
 ZEND_END_ARG_INFO()
-
-#define arginfo_class_ReflectionLazyObjectFactory___construct arginfo_class_ReflectionObject___construct
 
 #define arginfo_class_ReflectionProperty___clone arginfo_class_ReflectionFunctionAbstract___clone
 
@@ -821,13 +815,11 @@ ZEND_METHOD(ReflectionLazyObjectFactory, makeLazyProxy);
 ZEND_METHOD(ReflectionLazyObjectFactory, newInstanceLazyGhost);
 ZEND_METHOD(ReflectionLazyObjectFactory, newInstanceLazyVirtual);
 ZEND_METHOD(ReflectionLazyObjectFactory, isLazyObject);
-ZEND_METHOD(ReflectionLazyObjectFactory, fromInstance);
 ZEND_METHOD(ReflectionLazyObjectFactory, isInitialized);
 ZEND_METHOD(ReflectionLazyObjectFactory, initialize);
 ZEND_METHOD(ReflectionLazyObjectFactory, setProperty);
 ZEND_METHOD(ReflectionLazyObjectFactory, setRawProperty);
 ZEND_METHOD(ReflectionLazyObjectFactory, skipProperty);
-ZEND_METHOD(ReflectionLazyObjectFactory, __construct);
 ZEND_METHOD(ReflectionProperty, __construct);
 ZEND_METHOD(ReflectionProperty, __toString);
 ZEND_METHOD(ReflectionProperty, getName);
@@ -1120,13 +1112,11 @@ static const zend_function_entry class_ReflectionLazyObjectFactory_methods[] = {
 	ZEND_ME(ReflectionLazyObjectFactory, newInstanceLazyGhost, arginfo_class_ReflectionLazyObjectFactory_newInstanceLazyGhost, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(ReflectionLazyObjectFactory, newInstanceLazyVirtual, arginfo_class_ReflectionLazyObjectFactory_newInstanceLazyVirtual, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(ReflectionLazyObjectFactory, isLazyObject, arginfo_class_ReflectionLazyObjectFactory_isLazyObject, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
-	ZEND_ME(ReflectionLazyObjectFactory, fromInstance, arginfo_class_ReflectionLazyObjectFactory_fromInstance, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(ReflectionLazyObjectFactory, isInitialized, arginfo_class_ReflectionLazyObjectFactory_isInitialized, ZEND_ACC_PUBLIC)
 	ZEND_ME(ReflectionLazyObjectFactory, initialize, arginfo_class_ReflectionLazyObjectFactory_initialize, ZEND_ACC_PUBLIC)
 	ZEND_ME(ReflectionLazyObjectFactory, setProperty, arginfo_class_ReflectionLazyObjectFactory_setProperty, ZEND_ACC_PUBLIC)
 	ZEND_ME(ReflectionLazyObjectFactory, setRawProperty, arginfo_class_ReflectionLazyObjectFactory_setRawProperty, ZEND_ACC_PUBLIC)
 	ZEND_ME(ReflectionLazyObjectFactory, skipProperty, arginfo_class_ReflectionLazyObjectFactory_skipProperty, ZEND_ACC_PUBLIC)
-	ZEND_ME(ReflectionLazyObjectFactory, __construct, arginfo_class_ReflectionLazyObjectFactory___construct, ZEND_ACC_PRIVATE)
 	ZEND_FE_END
 };
 
@@ -1513,12 +1503,12 @@ static zend_class_entry *register_class_ReflectionObject(zend_class_entry *class
 	return class_entry;
 }
 
-static zend_class_entry *register_class_ReflectionLazyObjectFactory(zend_class_entry *class_entry_ReflectionObject)
+static zend_class_entry *register_class_ReflectionLazyObjectFactory(zend_class_entry *class_entry_ReflectionClass)
 {
 	zend_class_entry ce, *class_entry;
 
 	INIT_CLASS_ENTRY(ce, "ReflectionLazyObjectFactory", class_ReflectionLazyObjectFactory_methods);
-	class_entry = zend_register_internal_class_ex(&ce, class_entry_ReflectionObject);
+	class_entry = zend_register_internal_class_ex(&ce, class_entry_ReflectionClass);
 
 	zval const_SKIP_INITIALIZATION_ON_SERIALIZE_value;
 	ZVAL_LONG(&const_SKIP_INITIALIZATION_ON_SERIALIZE_value, ZEND_LAZY_OBJECT_SKIP_INITIALIZATION_ON_SERIALIZE);

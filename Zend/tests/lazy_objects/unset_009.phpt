@@ -18,9 +18,9 @@ class C {
 function test(string $name, object $obj) {
     printf("# %s:\n", $name);
 
-    ReflectionLazyObjectFactory::fromInstance($obj)->skipProperty('a');
-    ReflectionLazyObjectFactory::fromInstance($obj)->skipProperty('b');
-    ReflectionLazyObjectFactory::fromInstance($obj)->skipProperty('c');
+    (new ReflectionLazyObjectFactory($obj))->skipProperty('a');
+    (new ReflectionLazyObjectFactory($obj))->skipProperty('b');
+    (new ReflectionLazyObjectFactory($obj))->skipProperty('c');
 
     var_dump($obj);
     unset($obj->a);

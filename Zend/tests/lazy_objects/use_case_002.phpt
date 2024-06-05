@@ -30,7 +30,7 @@ class EntityManager {
             $prop->setValue($obj, 'John Doe');
         });
 
-        ReflectionLazyObjectFactory::fromInstance($entity)->setProperty('id', $id);
+        (new ReflectionLazyObjectFactory($entity))->setProperty('id', $id);
 
         return $entity;
     }

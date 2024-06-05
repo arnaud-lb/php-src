@@ -49,7 +49,7 @@ function testProperty(object $obj, $propReflector) {
 
     printf("\nskipProperty():\n");
     $clone = clone $obj;
-    $lazyReflector = ReflectionLazyObjectFactory::fromInstance($clone);
+    $lazyReflector = new ReflectionLazyObjectFactory($clone);
     $skept = false;
     try {
         $lazyReflector->skipProperty($propReflector->getName());
@@ -77,7 +77,7 @@ function testProperty(object $obj, $propReflector) {
 
     printf("\nsetProperty():\n");
     $clone = clone $obj;
-    $lazyReflector = ReflectionLazyObjectFactory::fromInstance($clone);
+    $lazyReflector = new ReflectionLazyObjectFactory($clone);
     try {
         $lazyReflector->setProperty($propReflector->getName(), 'value');
     } catch (ReflectionException $e) {
@@ -98,7 +98,7 @@ function testProperty(object $obj, $propReflector) {
 
     printf("\nsetRawProperty():\n");
     $clone = clone $obj;
-    $lazyReflector = ReflectionLazyObjectFactory::fromInstance($clone);
+    $lazyReflector = new ReflectionLazyObjectFactory($clone);
     try {
         $lazyReflector->setRawProperty($propReflector->getName(), 'value');
     } catch (ReflectionException $e) {

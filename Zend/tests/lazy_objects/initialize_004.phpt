@@ -11,7 +11,7 @@ class C {
 
 class D {
     public function initialize($obj) {
-        $reflector = ReflectionLazyObjectFactory::fromInstance($obj);
+        $reflector = new ReflectionLazyObjectFactory($obj);
         $reflector->initialize($this->initializer(...));
     }
 
@@ -23,7 +23,7 @@ class D {
 
 class E {
     public function initialize($obj) {
-        $reflector = ReflectionLazyObjectFactory::fromInstance($obj);
+        $reflector = new ReflectionLazyObjectFactory($obj);
         $reflector->initialize($this->initializer(...));
     }
 
@@ -38,7 +38,7 @@ class E {
 function test(string $name, object $obj, object $initializer) {
     printf("# %s:\n", $name);
 
-    $reflector = ReflectionLazyObjectFactory::fromInstance($obj);
+    $reflector = new ReflectionLazyObjectFactory($obj);
 
     var_dump($reflector->isInitialized());
 

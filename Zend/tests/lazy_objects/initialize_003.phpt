@@ -12,7 +12,7 @@ class C {
 function test(string $name, object $obj, callable $initializer) {
     printf("# %s:\n", $name);
 
-    $reflector = ReflectionLazyObjectFactory::fromInstance($obj);
+    $reflector = new ReflectionLazyObjectFactory($obj);
 
     var_dump($reflector->isInitialized());
 

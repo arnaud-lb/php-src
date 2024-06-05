@@ -13,7 +13,7 @@ ReflectionLazyObjectFactory::makeLazyGhost($obj, function ($obj) {
     $obj->a = 1;
 });
 
-$reflector = ReflectionLazyObjectFactory::fromInstance($obj);
+$reflector = new ReflectionLazyObjectFactory($obj);
 var_dump($reflector?->isInitialized());
 
 var_dump($obj->a);

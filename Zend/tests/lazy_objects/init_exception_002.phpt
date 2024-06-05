@@ -12,16 +12,16 @@ class C {
 function test(string $name, object $obj) {
     printf("# %s:\n", $name);
 
-    ReflectionLazyObjectFactory::fromInstance($obj)->setProperty('c', 0);
+    (new ReflectionLazyObjectFactory($obj))->setProperty('c', 0);
 
     try {
-        ReflectionLazyObjectFactory::fromInstance($obj)->initialize();
+        (new ReflectionLazyObjectFactory($obj))->initialize();
     } catch (Exception $e) {
         printf("%s\n", $e->getMessage());
     }
 
     var_dump($obj);
-    printf("Is lazy: %d\n", !ReflectionLazyObjectFactory::fromInstance($obj)?->isInitialized());
+    printf("Is lazy: %d\n", !(new ReflectionLazyObjectFactory($obj))->isInitialized());
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();

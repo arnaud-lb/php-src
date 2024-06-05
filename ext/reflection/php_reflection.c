@@ -5565,16 +5565,6 @@ ZEND_METHOD(ReflectionObject, __construct)
 }
 /* }}} */
 
-/* {{{ Dummy constructor -- always throws ReflectionExceptions. */
-ZEND_METHOD(ReflectionLazyObjectFactory, __construct)
-{
-	_DO_THROW(
-		"Cannot directly instantiate ReflectionLazyObjectFactory. "
-		"Use ReflectionLazyObjectFactory::fromInstance() instead"
-	);
-}
-/* }}} */
-
 void reflection_lazy_object_make_lazy(INTERNAL_FUNCTION_PARAMETERS,
 		int strategy, bool is_make_lazy)
 {
@@ -5690,30 +5680,6 @@ ZEND_METHOD(ReflectionLazyObjectFactory, isLazyObject)
 	ZEND_PARSE_PARAMETERS_END();
 
 	RETURN_BOOL(zend_object_is_lazy(arg) && !zend_lazy_object_initialized(arg));
-}
-/* }}} */
-
-/* {{{ Create a ReflectionProxy from an instance. Returns null if not a lazy instance. */
-ZEND_METHOD(ReflectionLazyObjectFactory, fromInstance)
-{
-	zend_object *arg;
-	reflection_object *intern;
-
-	ZEND_PARSE_PARAMETERS_START(1, 1)
-		Z_PARAM_OBJ(arg)
-	ZEND_PARSE_PARAMETERS_END();
-
-	if (SUCCESS != object_init_ex(return_value, reflection_lazy_object_ptr)) {
-		RETURN_THROWS();
-	}
-
-	intern = Z_REFLECTION_P(return_value);
-
-	ZVAL_STR_COPY(reflection_prop_name(return_value), arg->ce->name);
-	intern->ptr = arg->ce;
-	ZVAL_OBJ_COPY(&intern->obj, arg);
-
-	intern->ref_type = REF_TYPE_OTHER;
 }
 /* }}} */
 

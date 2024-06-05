@@ -14,13 +14,13 @@ class C {
 function test(string $name, object $obj) {
     printf("# %s:\n", $name);
 
-    ReflectionLazyObjectFactory::fromInstance($obj)->setProperty('a', 2);
+    (new ReflectionLazyObjectFactory($obj))->setProperty('a', 2);
 
     $clone = clone $obj;
 
-    var_dump(!ReflectionLazyObjectFactory::fromInstance($obj)?->isInitialized());
+    var_dump(!(new ReflectionLazyObjectFactory($obj))->isInitialized());
     var_dump($obj);
-    var_dump(!ReflectionLazyObjectFactory::fromInstance($clone)?->isInitialized());
+    var_dump(!(new ReflectionLazyObjectFactory($clone))->isInitialized());
     var_dump($clone);
 }
 
