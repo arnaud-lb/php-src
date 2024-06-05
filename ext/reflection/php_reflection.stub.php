@@ -442,7 +442,7 @@ class ReflectionLazyObjectFactory extends ReflectionClass
 
     public function setRawProperty(object $object, string $name, mixed $value, ?string $class = null): void {}
 
-    public function skipProperty(object $object, string $name, ?string $class = null): void {}
+    public function skipInitializerForProperty(object $object, string $name, ?string $class = null): void {}
 }
 
 enum PropertyHookType: string

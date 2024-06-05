@@ -17,9 +17,9 @@ function test(string $name, object $obj) {
     printf("# %s:\n", $name);
 
     $reflector = new ReflectionLazyObjectFactory($obj);
-    $reflector->skipProperty($obj, 'a');
-    $reflector->skipProperty($obj, 'b');
-    $reflector->skipProperty($obj, 'c');
+    $reflector->skipInitializerForProperty($obj, 'a');
+    $reflector->skipInitializerForProperty($obj, 'b');
+    $reflector->skipInitializerForProperty($obj, 'c');
 
     var_dump($obj);
     var_dump($obj->a++);

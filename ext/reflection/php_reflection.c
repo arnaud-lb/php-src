@@ -5819,7 +5819,7 @@ ZEND_METHOD(ReflectionLazyObjectFactory, setRawProperty)
 /* }}} */
 
 /* {{{ Mark property as non-lazy, and initialize to default value */
-ZEND_METHOD(ReflectionLazyObjectFactory, skipProperty)
+ZEND_METHOD(ReflectionLazyObjectFactory, skipInitializerForProperty)
 {
 	reflection_object *intern;
 	zend_class_entry *ce;
