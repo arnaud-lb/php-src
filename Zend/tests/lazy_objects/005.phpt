@@ -20,7 +20,7 @@ class D extends C {
 print "# Ghost initializer must return NULL or no value:\n";
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazyGhost($obj, function ($obj) {
+ReflectionLazyObjectFactory::makeLazyGhost($obj, function ($obj) {
     var_dump("initializer");
     $obj->__construct();
     return new stdClass;
@@ -44,7 +44,7 @@ $tests = [
 
 foreach ($tests as [$class, $instance]) {
     $obj = (new ReflectionClass($class))->newInstanceWithoutConstructor();
-    ReflectionLazyObject::makeLazyProxy($obj, function ($obj) use ($instance) {
+    ReflectionLazyObjectFactory::makeLazyProxy($obj, function ($obj) use ($instance) {
         var_dump("initializer");
         return $instance;
     });
@@ -62,7 +62,7 @@ $tests = [
 
 foreach ($tests as [$class, $instance]) {
     $obj = (new ReflectionClass($class))->newInstanceWithoutConstructor();
-    ReflectionLazyObject::makeLazyProxy($obj, function ($obj) use ($instance) {
+    ReflectionLazyObjectFactory::makeLazyProxy($obj, function ($obj) use ($instance) {
         var_dump("initializer");
         return $instance;
     });
@@ -75,7 +75,7 @@ foreach ($tests as [$class, $instance]) {
 }
 
 $obj = (new ReflectionClass($class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazyProxy($obj, function ($obj) {
+ReflectionLazyObjectFactory::makeLazyProxy($obj, function ($obj) {
     var_dump("initializer");
     return $obj;
 });

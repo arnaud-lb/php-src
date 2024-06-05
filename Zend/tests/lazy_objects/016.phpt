@@ -13,14 +13,14 @@ class C {
 print "# Ghost:\n";
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazyGhost($obj, function () {
+ReflectionLazyObjectFactory::makeLazyGhost($obj, function () {
     var_dump("initializer");
 });
 
 print "# Virtual:\n";
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazyProxy($obj, function () {
+ReflectionLazyObjectFactory::makeLazyProxy($obj, function () {
     var_dump("initializer");
 });
 

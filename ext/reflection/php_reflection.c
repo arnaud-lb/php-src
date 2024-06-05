@@ -5566,11 +5566,11 @@ ZEND_METHOD(ReflectionObject, __construct)
 /* }}} */
 
 /* {{{ Dummy constructor -- always throws ReflectionExceptions. */
-ZEND_METHOD(ReflectionLazyObject, __construct)
+ZEND_METHOD(ReflectionLazyObjectFactory, __construct)
 {
 	_DO_THROW(
-		"Cannot directly instantiate ReflectionLazyObject. "
-		"Use ReflectionLazyObject::fromInstance() instead"
+		"Cannot directly instantiate ReflectionLazyObjectFactory. "
+		"Use ReflectionLazyObjectFactory::fromInstance() instead"
 	);
 }
 /* }}} */
@@ -5649,7 +5649,7 @@ void reflection_lazy_object_make_lazy(INTERNAL_FUNCTION_PARAMETERS,
 }
 
 /* {{{ Makes an object lazy, using the ghost strategy */
-PHP_METHOD(ReflectionLazyObject, makeLazyGhost)
+PHP_METHOD(ReflectionLazyObjectFactory, makeLazyGhost)
 {
 	reflection_lazy_object_make_lazy(INTERNAL_FUNCTION_PARAM_PASSTHRU,
 			ZEND_LAZY_OBJECT_STRATEGY_GHOST, /*is_make_lazy */ true);
@@ -5657,7 +5657,7 @@ PHP_METHOD(ReflectionLazyObject, makeLazyGhost)
 /* }}} */
 
 /* {{{ Makes an object lazy, using the virtual strategy */
-PHP_METHOD(ReflectionLazyObject, makeLazyProxy)
+PHP_METHOD(ReflectionLazyObjectFactory, makeLazyProxy)
 {
 	reflection_lazy_object_make_lazy(INTERNAL_FUNCTION_PARAM_PASSTHRU,
 			ZEND_LAZY_OBJECT_STRATEGY_VIRTUAL, /*is_make_lazy */ true);
@@ -5665,7 +5665,7 @@ PHP_METHOD(ReflectionLazyObject, makeLazyProxy)
 /* }}} */
 
 /* {{{ Instantiates a lazy instance, using the ghost strategy */
-PHP_METHOD(ReflectionLazyObject, newInstanceLazyGhost)
+PHP_METHOD(ReflectionLazyObjectFactory, newInstanceLazyGhost)
 {
 	reflection_lazy_object_make_lazy(INTERNAL_FUNCTION_PARAM_PASSTHRU,
 			ZEND_LAZY_OBJECT_STRATEGY_GHOST, /*is_make_lazy */ false);
@@ -5673,7 +5673,7 @@ PHP_METHOD(ReflectionLazyObject, newInstanceLazyGhost)
 /* }}} */
 
 /* {{{ Instantiates a lazy instance, using the virtual strategy */
-PHP_METHOD(ReflectionLazyObject, newInstanceLazyVirtual)
+PHP_METHOD(ReflectionLazyObjectFactory, newInstanceLazyVirtual)
 {
 	reflection_lazy_object_make_lazy(INTERNAL_FUNCTION_PARAM_PASSTHRU,
 			ZEND_LAZY_OBJECT_STRATEGY_VIRTUAL, /*is_make_lazy */ false);
@@ -5681,7 +5681,7 @@ PHP_METHOD(ReflectionLazyObject, newInstanceLazyVirtual)
 /* }}} */
 
 /* {{{ Returns whether instance is lazy */
-ZEND_METHOD(ReflectionLazyObject, isLazyObject)
+ZEND_METHOD(ReflectionLazyObjectFactory, isLazyObject)
 {
 	zend_object *arg;
 
@@ -5694,7 +5694,7 @@ ZEND_METHOD(ReflectionLazyObject, isLazyObject)
 /* }}} */
 
 /* {{{ Create a ReflectionProxy from an instance. Returns null if not a lazy instance. */
-ZEND_METHOD(ReflectionLazyObject, fromInstance)
+ZEND_METHOD(ReflectionLazyObjectFactory, fromInstance)
 {
 	zend_object *arg;
 	reflection_object *intern;
@@ -5718,7 +5718,7 @@ ZEND_METHOD(ReflectionLazyObject, fromInstance)
 /* }}} */
 
 /* {{{ Returns whether object is initialized */
-ZEND_METHOD(ReflectionLazyObject, isInitialized)
+ZEND_METHOD(ReflectionLazyObjectFactory, isInitialized)
 {
 	reflection_object *intern;
 
@@ -5731,7 +5731,7 @@ ZEND_METHOD(ReflectionLazyObject, isInitialized)
 /* }}} */
 
 /* {{{ Trigger object initialization */
-ZEND_METHOD(ReflectionLazyObject, initialize)
+ZEND_METHOD(ReflectionLazyObjectFactory, initialize)
 {
 	reflection_object *intern;
 	bool skipInitializer = false;
@@ -5811,7 +5811,7 @@ fail:
 }
 
 /* {{{ Set property value withtout triggering initializer while getting through hooks if any */
-ZEND_METHOD(ReflectionLazyObject, setProperty)
+ZEND_METHOD(ReflectionLazyObjectFactory, setProperty)
 {
 	reflection_object *intern;
 	zend_string *name;
@@ -5833,7 +5833,7 @@ ZEND_METHOD(ReflectionLazyObject, setProperty)
 /* }}} */
 
 /* {{{ Set property value withtout triggering initializer while skipping hooks if any */
-ZEND_METHOD(ReflectionLazyObject, setRawProperty)
+ZEND_METHOD(ReflectionLazyObjectFactory, setRawProperty)
 {
 	reflection_object *intern;
 	zend_string *name;
@@ -5855,7 +5855,7 @@ ZEND_METHOD(ReflectionLazyObject, setRawProperty)
 /* }}} */
 
 /* {{{ Mark property as non-lazy, and initialize to default value */
-ZEND_METHOD(ReflectionLazyObject, skipProperty)
+ZEND_METHOD(ReflectionLazyObjectFactory, skipProperty)
 {
 	reflection_object *intern;
 	zend_string *name;
@@ -7982,7 +7982,7 @@ PHP_MINIT_FUNCTION(reflection) /* {{{ */
 	reflection_object_ptr->create_object = reflection_objects_new;
 	reflection_object_ptr->default_object_handlers = &reflection_object_handlers;
 
-	reflection_lazy_object_ptr = register_class_ReflectionLazyObject(reflection_object_ptr);
+	reflection_lazy_object_ptr = register_class_ReflectionLazyObjectFactory(reflection_object_ptr);
 	reflection_lazy_object_ptr->create_object = reflection_objects_new;
 	reflection_lazy_object_ptr->default_object_handlers = &reflection_object_handlers;
 

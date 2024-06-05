@@ -20,14 +20,14 @@ function test(string $name, object $obj) {
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazyGhost($obj, function ($obj) {
+ReflectionLazyObjectFactory::makeLazyGhost($obj, function ($obj) {
     throw new \Exception('init exception');
 });
 
 test('Ghost', $obj);
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazyProxy($obj, function ($obj) {
+ReflectionLazyObjectFactory::makeLazyProxy($obj, function ($obj) {
     throw new \Exception('init exception');
 });
 

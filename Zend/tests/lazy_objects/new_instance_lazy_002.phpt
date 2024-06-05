@@ -8,7 +8,7 @@ class C extends ReflectionClass {}
 foreach (['makeLazyGhost', 'makeLazyProxy'] as $strategy) {
     $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
     try {
-        ReflectionLazyObject::$strategy($obj, function ($obj) {
+        ReflectionLazyObjectFactory::$strategy($obj, function ($obj) {
             var_dump("initializer");
         });
     } catch (Error $e) {

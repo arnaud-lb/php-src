@@ -17,11 +17,11 @@ function test(string $name, object $obj) {
     (new ReflectionObject($obj))->__toString();
 
     printf("Initialized:\n");
-    var_dump((bool) ReflectionLazyObject::fromInstance($obj)?->isInitialized());
+    var_dump((bool) ReflectionLazyObjectFactory::fromInstance($obj)?->isInitialized());
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazyGhost($obj, function ($obj) {
+ReflectionLazyObjectFactory::makeLazyGhost($obj, function ($obj) {
     var_dump("initializer");
     $obj->__construct();
 });
@@ -29,7 +29,7 @@ ReflectionLazyObject::makeLazyGhost($obj, function ($obj) {
 test('Ghost', $obj);
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazyProxy($obj, function ($obj) {
+ReflectionLazyObjectFactory::makeLazyProxy($obj, function ($obj) {
     var_dump("initializer");
     return new C();
 });

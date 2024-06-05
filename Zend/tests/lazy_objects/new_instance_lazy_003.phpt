@@ -8,7 +8,7 @@ class C extends B {}
 
 foreach (['makeLazyGhost', 'makeLazyProxy'] as $strategy) {
     $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-    ReflectionLazyObject::$strategy($obj, function ($obj) {
+    ReflectionLazyObjectFactory::$strategy($obj, function ($obj) {
         var_dump("initializer");
     });
     var_dump($obj);

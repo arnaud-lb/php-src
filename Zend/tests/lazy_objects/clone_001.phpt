@@ -15,14 +15,14 @@ function test(string $name, object $obj) {
 
     $clone = clone $obj;
 
-    var_dump(!ReflectionLazyObject::fromInstance($obj)?->isInitialized());
+    var_dump(!ReflectionLazyObjectFactory::fromInstance($obj)?->isInitialized());
     var_dump($obj);
-    var_dump(!ReflectionLazyObject::fromInstance($clone)?->isInitialized());
+    var_dump(!ReflectionLazyObjectFactory::fromInstance($clone)?->isInitialized());
     var_dump($clone);
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazyGhost($obj, function ($obj) {
+ReflectionLazyObjectFactory::makeLazyGhost($obj, function ($obj) {
     var_dump("initializer");
     $obj->__construct();
 });
@@ -30,7 +30,7 @@ ReflectionLazyObject::makeLazyGhost($obj, function ($obj) {
 test('Ghost', $obj);
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazyProxy($obj, function ($obj) {
+ReflectionLazyObjectFactory::makeLazyProxy($obj, function ($obj) {
     var_dump("initializer");
     return new C();
 });

@@ -19,17 +19,17 @@ function test(string $name, object $obj) {
     } catch (Exception $e) {
         printf("%s\n", $e->getMessage());
     }
-    var_dump(!ReflectionLazyObject::fromInstance($obj)?->isInitialized());
+    var_dump(!ReflectionLazyObjectFactory::fromInstance($obj)?->isInitialized());
     try {
         var_dump($obj->a);
     } catch (Exception $e) {
         printf("%s\n", $e->getMessage());
     }
-    var_dump(!ReflectionLazyObject::fromInstance($obj)?->isInitialized());
+    var_dump(!ReflectionLazyObjectFactory::fromInstance($obj)?->isInitialized());
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazyGhost($obj, function () {
+ReflectionLazyObjectFactory::makeLazyGhost($obj, function () {
     var_dump("initializer");
     throw new \Exception('initializer exception');
 });
@@ -37,7 +37,7 @@ ReflectionLazyObject::makeLazyGhost($obj, function () {
 test('Ghost', $obj);
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazyProxy($obj, function () {
+ReflectionLazyObjectFactory::makeLazyProxy($obj, function () {
     var_dump("initializer");
     throw new \Exception('initializer exception');
 });

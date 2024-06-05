@@ -13,20 +13,20 @@ class C {
 function test(string $name, object $obj) {
     printf("# %s:\n", $name);
 
-    ReflectionLazyObject::fromInstance($obj)->setProperty('c', 0);
+    ReflectionLazyObjectFactory::fromInstance($obj)->setProperty('c', 0);
 
     try {
-        ReflectionLazyObject::fromInstance($obj)->initialize();
+        ReflectionLazyObjectFactory::fromInstance($obj)->initialize();
     } catch (Exception $e) {
         printf("%s\n", $e->getMessage());
     }
 
     var_dump($obj);
-    printf("Is lazy: %d\n", !ReflectionLazyObject::fromInstance($obj)?->isInitialized());
+    printf("Is lazy: %d\n", !ReflectionLazyObjectFactory::fromInstance($obj)?->isInitialized());
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazyGhost($obj, function ($obj) {
+ReflectionLazyObjectFactory::makeLazyGhost($obj, function ($obj) {
     var_dump("initializer");
     $obj->a = 3;
     $obj->b = 4;
@@ -38,7 +38,7 @@ ReflectionLazyObject::makeLazyGhost($obj, function ($obj) {
 test('Ghost', $obj);
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazyProxy($obj, function ($obj) {
+ReflectionLazyObjectFactory::makeLazyProxy($obj, function ($obj) {
     var_dump("initializer");
     $obj->a = 3;
     $obj->b = 4;

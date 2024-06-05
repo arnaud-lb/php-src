@@ -1,5 +1,5 @@
 --TEST--
-Lazy objects: ReflectionLazyObject::skipProperty() prevent properties from triggering initializer
+Lazy objects: ReflectionLazyObjectFactory::skipProperty() prevent properties from triggering initializer
 --FILE--
 <?php
 
@@ -49,7 +49,7 @@ function testProperty(object $obj, $propReflector) {
 
     printf("\nskipProperty():\n");
     $clone = clone $obj;
-    $lazyReflector = ReflectionLazyObject::fromInstance($clone);
+    $lazyReflector = ReflectionLazyObjectFactory::fromInstance($clone);
     $skept = false;
     try {
         $lazyReflector->skipProperty($propReflector->getName());
@@ -77,7 +77,7 @@ function testProperty(object $obj, $propReflector) {
 
     printf("\nsetProperty():\n");
     $clone = clone $obj;
-    $lazyReflector = ReflectionLazyObject::fromInstance($clone);
+    $lazyReflector = ReflectionLazyObjectFactory::fromInstance($clone);
     try {
         $lazyReflector->setProperty($propReflector->getName(), 'value');
     } catch (ReflectionException $e) {
@@ -98,7 +98,7 @@ function testProperty(object $obj, $propReflector) {
 
     printf("\nsetRawProperty():\n");
     $clone = clone $obj;
-    $lazyReflector = ReflectionLazyObject::fromInstance($clone);
+    $lazyReflector = ReflectionLazyObjectFactory::fromInstance($clone);
     try {
         $lazyReflector->setRawProperty($propReflector->getName(), 'value');
     } catch (ReflectionException $e) {
@@ -144,14 +144,14 @@ function test(string $name, object $obj) {
 }
 
 $obj = (new ReflectionClass(B::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazyGhost($obj, function ($obj) {
+ReflectionLazyObjectFactory::makeLazyGhost($obj, function ($obj) {
     var_dump("initializer");
 });
 
 test('Ghost', $obj);
 
 $obj = (new ReflectionClass(B::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazyProxy($obj, function ($obj) {
+ReflectionLazyObjectFactory::makeLazyProxy($obj, function ($obj) {
     var_dump("initializer");
     return new A();
 });

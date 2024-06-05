@@ -12,7 +12,7 @@ class C {
 function test(string $name, object $obj) {
     printf("# %s:\n", $name);
 
-    ReflectionLazyObject::fromInstance($obj)->setProperty('b', 1);
+    ReflectionLazyObjectFactory::fromInstance($obj)->setProperty('b', 1);
 
     // Builds properties hashtable
     get_object_vars($obj);
@@ -23,16 +23,16 @@ function test(string $name, object $obj) {
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazyGhost($obj, function ($obj) {
+ReflectionLazyObjectFactory::makeLazyGhost($obj, function ($obj) {
     var_dump("initializer");
-}, ReflectionLazyObject::SKIP_INITIALIZATION_ON_SERIALIZE);
+}, ReflectionLazyObjectFactory::SKIP_INITIALIZATION_ON_SERIALIZE);
 
 test('Ghost', $obj);
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazyProxy($obj, function ($obj) {
+ReflectionLazyObjectFactory::makeLazyProxy($obj, function ($obj) {
     var_dump("initializer");
-}, ReflectionLazyObject::SKIP_INITIALIZATION_ON_SERIALIZE);
+}, ReflectionLazyObjectFactory::SKIP_INITIALIZATION_ON_SERIALIZE);
 
 test('Virtual', $obj);
 

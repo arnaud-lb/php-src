@@ -7,7 +7,7 @@ $obj = (new ReflectionClass(ReflectionClass::class))->newInstanceWithoutConstruc
 
 foreach (['makeLazyGhost', 'makeLazyProxy'] as $strategy) {
     try {
-        ReflectionLazyObject::$strategy($obj, function ($obj) {
+        ReflectionLazyObjectFactory::$strategy($obj, function ($obj) {
             var_dump("initializer");
         });
     } catch (Error $e) {

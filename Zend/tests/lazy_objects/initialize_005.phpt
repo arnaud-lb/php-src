@@ -1,5 +1,5 @@
 --TEST--
-Lazy objects: ReflectionLazyObject::initialize error
+Lazy objects: ReflectionLazyObjectFactory::initialize error
 --FILE--
 <?php
 
@@ -10,7 +10,7 @@ class C {
 function test(string $name, object $obj) {
     printf("# %s:\n", $name);
 
-    $reflector = ReflectionLazyObject::fromInstance($obj);
+    $reflector = ReflectionLazyObjectFactory::fromInstance($obj);
     var_dump($reflector?->isInitialized());
 
     try {
@@ -23,7 +23,7 @@ function test(string $name, object $obj) {
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazyGhost($obj, function ($obj) {
+ReflectionLazyObjectFactory::makeLazyGhost($obj, function ($obj) {
     var_dump("initializer");
     throw new \Exception('initializer exception');
 });
@@ -31,7 +31,7 @@ ReflectionLazyObject::makeLazyGhost($obj, function ($obj) {
 test('Ghost', $obj);
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazyProxy($obj, function ($obj) {
+ReflectionLazyObjectFactory::makeLazyProxy($obj, function ($obj) {
     var_dump("initializer");
     throw new \Exception('initializer exception');
 });

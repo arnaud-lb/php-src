@@ -20,7 +20,7 @@ try {
 } catch (\Error $e) {
     printf("%s: %s\n", $e::class, $e->getMessage());
 }
-ReflectionLazyObject::makeLazyGhost($obj, function ($obj) {
+ReflectionLazyObjectFactory::makeLazyGhost($obj, function ($obj) {
     var_dump("initializer");
     $obj->__construct();
 });
@@ -39,7 +39,7 @@ try {
 } catch (\Error $e) {
     printf("%s: %s\n", $e::class, $e->getMessage());
 }
-ReflectionLazyObject::makeLazyProxy($obj, function ($obj) {
+ReflectionLazyObjectFactory::makeLazyProxy($obj, function ($obj) {
     var_dump("initializer");
     return new C();
 });

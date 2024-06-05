@@ -421,14 +421,14 @@ class ReflectionObject extends ReflectionClass
     public function __construct(object $object) {}
 }
 
-class ReflectionLazyObject extends ReflectionObject
+class ReflectionLazyObjectFactory extends ReflectionObject
 {
     /** @cvalue ZEND_LAZY_OBJECT_SKIP_INITIALIZATION_ON_SERIALIZE */
     public const int SKIP_INITIALIZATION_ON_SERIALIZE = UNKNOWN;
 
-    public static function makeLazyGhost(object $instance, callable $initializer, int $flags = 0): ReflectionLazyObject {}
+    public static function makeLazyGhost(object $instance, callable $initializer, int $flags = 0): ReflectionLazyObjectFactory {}
 
-    public static function makeLazyProxy(object $instance, callable $initializer, int $flags = 0): ReflectionLazyObject {}
+    public static function makeLazyProxy(object $instance, callable $initializer, int $flags = 0): ReflectionLazyObjectFactory {}
 
     public static function newInstanceLazyGhost(string $className, callable $initializer, int $flags = 0): object {}
 
@@ -436,7 +436,7 @@ class ReflectionLazyObject extends ReflectionObject
 
     public static function isLazyObject(object $instance): bool {}
 
-    public static function fromInstance(object $instance): ReflectionLazyObject {}
+    public static function fromInstance(object $instance): ReflectionLazyObjectFactory {}
 
     public function isInitialized(): bool {}
 

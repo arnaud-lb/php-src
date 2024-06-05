@@ -24,13 +24,13 @@ class User {
 class EntityManager {
     public function lazyLoad(string $fqcn, int $id): object {
         $entity = (new ReflectionClass($fqcn))->newInstanceWithoutConstructor();
-        ReflectionLazyObject::makeLazyGhost($entity, function ($obj) {
+        ReflectionLazyObjectFactory::makeLazyGhost($entity, function ($obj) {
             var_dump('initializer');
             $prop = new ReflectionProperty($obj, 'name');
             $prop->setValue($obj, 'John Doe');
         });
 
-        ReflectionLazyObject::fromInstance($entity)->setProperty('id', $id);
+        ReflectionLazyObjectFactory::fromInstance($entity)->setProperty('id', $id);
 
         return $entity;
     }

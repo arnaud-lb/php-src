@@ -17,7 +17,7 @@ class C {
 function test(string $name, object $obj) {
     printf("# %s:\n", $name);
 
-    $r = ReflectionLazyObject::fromInstance($obj);
+    $r = ReflectionLazyObjectFactory::fromInstance($obj);
     $r->setProperty('a', null);
     $refA = &$obj->a;
     $r->setProperty('b', null);
@@ -45,7 +45,7 @@ function test(string $name, object $obj) {
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-$r = ReflectionLazyObject::makeLazyGhost($obj, function ($obj) {
+$r = ReflectionLazyObjectFactory::makeLazyGhost($obj, function ($obj) {
     var_dump("initializer");
     $obj->__construct();
 });
@@ -53,7 +53,7 @@ $r = ReflectionLazyObject::makeLazyGhost($obj, function ($obj) {
 test('Ghost', $obj);
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObject::makeLazyProxy($obj, function ($obj) {
+ReflectionLazyObjectFactory::makeLazyProxy($obj, function ($obj) {
     var_dump("initializer");
     return new C(null);
 });
