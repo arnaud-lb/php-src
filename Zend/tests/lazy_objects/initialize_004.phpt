@@ -12,7 +12,7 @@ class C {
 class D {
     public function initialize($obj) {
         $reflector = new ReflectionLazyObjectFactory($obj);
-        $reflector->initialize($this->initializer(...));
+        $reflector->initialize($obj, $this->initializer(...));
     }
 
     private function initializer($obj) {
@@ -24,7 +24,7 @@ class D {
 class E {
     public function initialize($obj) {
         $reflector = new ReflectionLazyObjectFactory($obj);
-        $reflector->initialize($this->initializer(...));
+        $reflector->initialize($obj, $this->initializer(...));
     }
 
     private function initializer($obj) {

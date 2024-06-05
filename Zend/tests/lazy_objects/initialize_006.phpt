@@ -16,7 +16,7 @@ function test(string $name, object $obj) {
     var_dump($reflector?->isInitialized($obj));
 
     printf("initialize(true) returns \$obj:\n");
-    var_dump($reflector?->initialize(true) === $obj);
+    var_dump($reflector?->initialize($obj, true) === $obj);
 
     printf("Initialized:\n");
     var_dump($reflector?->isInitialized($obj));

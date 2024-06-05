@@ -16,10 +16,10 @@ function test(string $name, object $obj) {
     // Builds properties hashtable
     var_dump(get_object_vars($obj));
 
-    (new ReflectionLazyObjectFactory($obj))->setProperty('c', 0);
+    (new ReflectionLazyObjectFactory($obj))->setRawProperty($obj, 'c', 0);
 
     try {
-        (new ReflectionLazyObjectFactory($obj))->initialize();
+        (new ReflectionLazyObjectFactory($obj))->initialize($obj);
     } catch (Exception $e) {
         printf("%s\n", $e->getMessage());
     }

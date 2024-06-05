@@ -23,7 +23,7 @@ function ghost() {
     $reflector = ReflectionLazyObjectFactory::makeLazyGhost($obj, function () use ($canary) {
     });
 
-    $reflector->setProperty('value', $obj);
+    $reflector->setRawProperty($obj, 'value', $obj);
     $reflector = null;
 
     $canary->value = $obj;
@@ -43,7 +43,7 @@ function virtual() {
         return new C();
     });
 
-    $reflector->setProperty('value', $obj);
+    $reflector->setRawProperty($obj, 'value', $obj);
     $reflector = null;
 
     $canary->value = $obj;

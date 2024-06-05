@@ -14,7 +14,7 @@ function test(string $name, object $obj) {
     var_dump($reflector?->isInitialized($obj));
 
     try {
-        var_dump($reflector?->initialize());
+        var_dump($reflector?->initialize($obj));
     } catch (Exception $e) {
         printf("%s\n", $e->getMessage());
     }

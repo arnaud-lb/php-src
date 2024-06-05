@@ -17,9 +17,9 @@ function test(string $name, object $obj) {
     printf("# %s:\n", $name);
 
     $r = new ReflectionLazyObjectFactory($obj);
-    $r->setProperty('a', null);
+    $r->setRawProperty($obj, 'a', null);
     $refA = &$obj->a;
-    $r->setProperty('b', null);
+    $r->setRawProperty($obj, 'b', null);
     $refB = &$obj->b;
 
     var_dump($obj);

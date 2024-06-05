@@ -16,7 +16,7 @@ function test(string $name, object $obj) {
 
     var_dump($reflector?->isInitialized($obj));
 
-    var_dump($reflector?->initialize());
+    var_dump($reflector?->initialize($obj));
 
     var_dump($reflector?->isInitialized($obj));
 }

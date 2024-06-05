@@ -14,7 +14,7 @@ class C {
 function test(string $name, object $obj) {
     printf("# %s:\n", $name);
 
-    (new ReflectionLazyObjectFactory($obj))->setProperty('a', 2);
+    (new ReflectionLazyObjectFactory($obj))->setRawProperty($obj, 'a', 2);
 
     $clone = clone $obj;
 

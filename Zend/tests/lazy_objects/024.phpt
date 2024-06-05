@@ -18,7 +18,7 @@ $r = ReflectionLazyObjectFactory::makeLazyGhost($obj, function ($obj) {
     $obj->__construct();
 });
 
-$r->setProperty('b', new stdClass);
+$r->setRawProperty($obj, 'b', new stdClass);
 
 var_dump($obj);
 var_dump($obj->c);

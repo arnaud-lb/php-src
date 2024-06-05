@@ -34,7 +34,7 @@ try {
 $obj = new C();
 ReflectionLazyObjectFactory::makeLazyProxy($obj, function () {
     return new C();
-})->initialize();
+})->initialize($obj);
 
 try {
     $r = ReflectionLazyObjectFactory::makeLazyProxy($obj, function ($obj) {

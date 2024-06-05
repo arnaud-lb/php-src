@@ -12,7 +12,7 @@ function test(string $name, object $obj) {
     printf("# %s:\n", $name);
 
     try {
-        (new ReflectionLazyObjectFactory($obj))->initialize();
+        (new ReflectionLazyObjectFactory($obj))->initialize($obj);
     } catch (Exception $e) {
         printf("%s\n", $e->getMessage());
     }

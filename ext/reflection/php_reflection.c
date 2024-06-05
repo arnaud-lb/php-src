@@ -23,6 +23,7 @@
 #include "zend_lazy_objects.h"
 #include "zend_object_handlers.h"
 #include "zend_type_info.h"
+#include "zend_types.h"
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -5565,6 +5566,13 @@ ZEND_METHOD(ReflectionObject, __construct)
 }
 /* }}} */
 
+/* {{{ Constructor. Takes a string or an instance as an argument */
+ZEND_METHOD(ReflectionLazyObjectFactory, __construct)
+{
+	reflection_class_object_ctor(INTERNAL_FUNCTION_PARAM_PASSTHRU, 0);
+}
+/* }}} */
+
 void reflection_lazy_object_make_lazy(INTERNAL_FUNCTION_PARAMETERS,
 		int strategy, bool is_make_lazy)
 {
@@ -5670,30 +5678,14 @@ PHP_METHOD(ReflectionLazyObjectFactory, newInstanceLazyVirtual)
 }
 /* }}} */
 
-/* {{{ Returns whether instance is lazy */
-ZEND_METHOD(ReflectionLazyObjectFactory, isLazyObject)
-{
-	zend_object *arg;
-
-	ZEND_PARSE_PARAMETERS_START(1, 1)
-		Z_PARAM_OBJ(arg)
-	ZEND_PARSE_PARAMETERS_END();
-
-	RETURN_BOOL(zend_object_is_lazy(arg) && !zend_lazy_object_initialized(arg));
-}
-/* }}} */
-
 /* {{{ Returns whether object is initialized */
 ZEND_METHOD(ReflectionLazyObjectFactory, isInitialized)
 {
-	reflection_object *intern;
 	zend_object *object;
 
 	ZEND_PARSE_PARAMETERS_START(1, 1)
 		Z_PARAM_OBJ(object)
 	ZEND_PARSE_PARAMETERS_END();
-
-	GET_REFLECTION_OBJECT();
 
 	RETURN_BOOL(!zend_object_is_lazy(object) || zend_lazy_object_initialized(object));
 }
@@ -5702,44 +5694,42 @@ ZEND_METHOD(ReflectionLazyObjectFactory, isInitialized)
 /* {{{ Trigger object initialization */
 ZEND_METHOD(ReflectionLazyObjectFactory, initialize)
 {
-	reflection_object *intern;
+	zend_object *object;
 	bool skipInitializer = false;
 
-	ZEND_PARSE_PARAMETERS_START(0, 1)
+	ZEND_PARSE_PARAMETERS_START(1, 2)
+		Z_PARAM_OBJ(object)
 		Z_PARAM_OPTIONAL
 		Z_PARAM_BOOL(skipInitializer)
 	ZEND_PARSE_PARAMETERS_END();
 
-	GET_REFLECTION_OBJECT();
-
-	if (zend_object_is_lazy(Z_OBJ(intern->obj))
-			&& !zend_lazy_object_initialized(Z_OBJ(intern->obj))) {
+	if (zend_object_is_lazy(object)
+			&& !zend_lazy_object_initialized(object)) {
 		if (skipInitializer) {
-			zend_lazy_object_init_with(Z_OBJ(intern->obj), NULL);
+			zend_lazy_object_init_with(object, NULL);
 		} else {
-			zend_lazy_object_init(Z_OBJ(intern->obj));
+			zend_lazy_object_init(object);
 		}
 	}
 
-	if (zend_lazy_object_initialized(Z_OBJ(intern->obj))) {
-		RETURN_OBJ_COPY(zend_lazy_object_get_instance(Z_OBJ(intern->obj)));
+	if (zend_lazy_object_initialized(object)) {
+		RETURN_OBJ_COPY(zend_lazy_object_get_instance(object));
 	} else {
 		ZEND_ASSERT(EG(exception));
 	}
 }
 /* }}} */
 
-static void reflection_lazy_object_set_property(reflection_object *intern,
+static void reflection_lazy_object_set_property(zend_object *object,
 		zend_string *name, zval *value, zend_class_entry *class,
 		bool skip_hooks)
 {
-	zend_object *object = Z_OBJ(intern->obj);
 	zend_property_info *prop_info;
 
 	ZEND_LAZY_OBJECT_PASSTHRU(object) {
 		uint32_t *guard;
 		uint32_t guard_backup;
-		zend_class_entry *scope = class ? class : Z_OBJCE(intern->obj);
+		zend_class_entry *scope = class ? class : object->ce;
 		zend_class_entry *old_scope = EG(fake_scope);
 
 		EG(fake_scope) = scope;
@@ -5762,15 +5752,15 @@ static void reflection_lazy_object_set_property(reflection_object *intern,
 			}
 		}
 
-		if (skip_hooks) {
-			guard = zend_get_property_guard(Z_OBJ(intern->obj), name);
+		if (skip_hooks && (object->ce->ce_flags & ZEND_ACC_USE_GUARDS)) {
+			guard = zend_get_property_guard(object, name);
 			guard_backup = *guard;
 			*guard |= ZEND_GUARD_PROPERTY_HOOK;
 		}
 
 		object->handlers->write_property(object, name, value, NULL);
 
-		if (skip_hooks) {
+		if (skip_hooks && (object->ce->ce_flags & ZEND_ACC_USE_GUARDS)) {
 			*guard = guard_backup;
 		}
 
@@ -5779,6 +5769,7 @@ fail:
 	} ZEND_LAZY_OBJECT_PASSTHRU_END();
 }
 
+#if 0
 /* {{{ Set property value withtout triggering initializer while getting through hooks if any */
 ZEND_METHOD(ReflectionLazyObjectFactory, setProperty)
 {
@@ -5800,25 +5791,29 @@ ZEND_METHOD(ReflectionLazyObjectFactory, setProperty)
 			/* skip_hooks */ false);
 }
 /* }}} */
+#endif
 
 /* {{{ Set property value withtout triggering initializer while skipping hooks if any */
 ZEND_METHOD(ReflectionLazyObjectFactory, setRawProperty)
 {
 	reflection_object *intern;
+	zend_class_entry *ce;
+	zend_object *object;
 	zend_string *name;
 	zval *value;
 	zend_class_entry *class = NULL;
 
-	ZEND_PARSE_PARAMETERS_START(2, 3)
+	GET_REFLECTION_OBJECT_PTR(ce);
+
+	ZEND_PARSE_PARAMETERS_START(3, 4)
+		Z_PARAM_OBJ_OF_CLASS(object, ce);
 		Z_PARAM_STR(name)
 		Z_PARAM_ZVAL(value)
 		Z_PARAM_OPTIONAL
 		Z_PARAM_CLASS_OR_NULL(class)
 	ZEND_PARSE_PARAMETERS_END();
 
-	GET_REFLECTION_OBJECT();
-
-	reflection_lazy_object_set_property(intern, name, value, class,
+	reflection_lazy_object_set_property(object, name, value, class,
 			/* skip_hooks */ true);
 }
 /* }}} */
@@ -5827,27 +5822,29 @@ ZEND_METHOD(ReflectionLazyObjectFactory, setRawProperty)
 ZEND_METHOD(ReflectionLazyObjectFactory, skipProperty)
 {
 	reflection_object *intern;
+	zend_class_entry *ce;
+	zend_object *object;
 	zend_string *name;
 	zend_class_entry *class = NULL;
 	zend_property_info *prop_info;
 	zend_class_entry *old_scope;
 	zend_class_entry *scope;
 
-	ZEND_PARSE_PARAMETERS_START(1, 2)
+	GET_REFLECTION_OBJECT_PTR(ce);
+
+	ZEND_PARSE_PARAMETERS_START(2, 3)
+		Z_PARAM_OBJ_OF_CLASS(object, ce)
 		Z_PARAM_STR(name)
 		Z_PARAM_OPTIONAL
 		Z_PARAM_CLASS_OR_NULL(class)
 	ZEND_PARSE_PARAMETERS_END();
 
-	GET_REFLECTION_OBJECT();
-
-	zend_object *object = Z_OBJ(intern->obj);
-	scope = class ? class : Z_OBJCE(intern->obj);
+	scope = class ? class : object->ce;
 
 	old_scope = EG(fake_scope);
 	EG(fake_scope) = scope;
 
-	prop_info = zend_get_property_info(Z_OBJCE(intern->obj), name, 1);
+	prop_info = zend_get_property_info(object->ce, name, 1);
 
 	EG(fake_scope) = old_scope;
 
@@ -5874,8 +5871,8 @@ ZEND_METHOD(ReflectionLazyObjectFactory, skipProperty)
 
 	bool prop_was_lazy = (Z_PROP_FLAG_P(OBJ_PROP(object, prop_info->offset)) & IS_PROP_LAZY);
 
-	zval *src = &Z_OBJCE(intern->obj)->default_properties_table[OBJ_PROP_TO_NUM(prop_info->offset)];
-	zval *dst = &Z_OBJ(intern->obj)->properties_table[OBJ_PROP_TO_NUM(prop_info->offset)];
+	zval *src = &object->ce->default_properties_table[OBJ_PROP_TO_NUM(prop_info->offset)];
+	zval *dst = &object->properties_table[OBJ_PROP_TO_NUM(prop_info->offset)];
 
 	zval_ptr_dtor(dst);
 

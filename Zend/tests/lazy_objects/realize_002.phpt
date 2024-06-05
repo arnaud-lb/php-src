@@ -28,28 +28,28 @@ function test(string $name, object $obj) {
     $reflector = new ReflectionLazyObjectFactory($obj);
     var_dump($reflector->isInitialized($obj));
 
-    $reflector->skipProperty('a');
+    $reflector->skipProperty($obj, 'a');
     var_dump($reflector->isInitialized($obj));
 
     // Should not count a second prop initialization
-    $reflector->skipProperty('a');
+    $reflector->skipProperty($obj, 'a');
     var_dump($reflector->isInitialized($obj));
 
     try {
         // Should not count a prop initialization
-        $reflector->skipProperty('xxx');
+        $reflector->skipProperty($obj, 'xxx');
     } catch (ReflectionException $e) {
         printf("%s: %s\n", $e::class, $e->getMessage());
     }
 
     try {
         // Should not count a prop initialization
-        $reflector->skipProperty('b');
+        $reflector->skipProperty($obj, 'b');
     } catch (ReflectionException $e) {
         printf("%s: %s\n", $e::class, $e->getMessage());
     }
 
-    $reflector->skipProperty('b', B::class);
+    $reflector->skipProperty($obj, 'b', B::class);
     var_dump($reflector->isInitialized($obj));
 
     var_dump($obj);

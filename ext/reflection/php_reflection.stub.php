@@ -426,6 +426,8 @@ class ReflectionLazyObjectFactory extends ReflectionClass
     /** @cvalue ZEND_LAZY_OBJECT_SKIP_INITIALIZATION_ON_SERIALIZE */
     public const int SKIP_INITIALIZATION_ON_SERIALIZE = UNKNOWN;
 
+    public function __construct(object|string $objectOrClass) {}
+
     public static function makeLazyGhost(object $instance, callable $initializer, int $flags = 0): ReflectionLazyObjectFactory {}
 
     public static function makeLazyProxy(object $instance, callable $initializer, int $flags = 0): ReflectionLazyObjectFactory {}
@@ -434,17 +436,13 @@ class ReflectionLazyObjectFactory extends ReflectionClass
 
     public static function newInstanceLazyVirtual(string $className, callable $initializer, int $flags = 0): object {}
 
-    public static function isLazyObject(object $instance): bool {}
+    public static function isInitialized(object $object): bool {}
 
-    public function isInitialized(object $object): bool {}
+    public static function initialize(object $object, bool $skipInitializer = false): object {}
 
-    public function initialize(bool $skipInitializer = false): object {}
+    public function setRawProperty(object $object, string $name, mixed $value, ?string $class = null): void {}
 
-    public function setProperty(string $name, mixed $value, ?string $class = null): void {}
-
-    public function setRawProperty(string $name, mixed $value, ?string $class = null): void {}
-
-    public function skipProperty(string $name, ?string $class = null): void {}
+    public function skipProperty(object $object, string $name, ?string $class = null): void {}
 }
 
 enum PropertyHookType: string
