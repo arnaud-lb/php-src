@@ -14,13 +14,13 @@ function test(string $name, object $obj) {
     var_dump(get_object_vars($obj));
 
     try {
-        (new ReflectionLazyObjectFactory($obj))->initialize($obj);
+        ReflectionLazyObjectFactory::initialize($obj);
     } catch (Exception $e) {
         printf("%s\n", $e->getMessage());
     }
 
     var_dump($obj);
-    printf("Is lazy: %d\n", !(new ReflectionLazyObjectFactory($obj))->isInitialized($obj));
+    printf("Is lazy: %d\n", !ReflectionLazyObjectFactory::isInitialized($obj));
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();

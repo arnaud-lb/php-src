@@ -12,12 +12,12 @@ function test(string $name, object $obj) {
     printf("# %s:\n", $name);
 
     try {
-        (new ReflectionLazyObjectFactory($obj))->initialize($obj);
+        ReflectionLazyObjectFactory::initialize($obj);
     } catch (Exception $e) {
         printf("%s\n", $e->getMessage());
     }
 
-    printf("Is lazy: %d\n", !(new ReflectionLazyObjectFactory($obj))->isInitialized($obj));
+    printf("Is lazy: %d\n", !ReflectionLazyObjectFactory::isInitialized($obj));
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
