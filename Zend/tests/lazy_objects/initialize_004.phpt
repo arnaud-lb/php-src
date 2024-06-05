@@ -40,11 +40,11 @@ function test(string $name, object $obj, object $initializer) {
 
     $reflector = new ReflectionLazyObjectFactory($obj);
 
-    var_dump($reflector->isInitialized());
+    var_dump($reflector->isInitialized($obj));
 
     $initializer->initialize($obj);
 
-    var_dump($reflector->isInitialized());
+    var_dump($reflector->isInitialized($obj));
     var_dump($obj);
 }
 

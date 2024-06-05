@@ -14,11 +14,11 @@ ReflectionLazyObjectFactory::makeLazyGhost($obj, function ($obj) {
 });
 
 $reflector = new ReflectionLazyObjectFactory($obj);
-var_dump($reflector?->isInitialized());
+var_dump($reflector?->isInitialized($obj));
 
 var_dump($obj->a);
 
-var_dump($reflector?->isInitialized());
+var_dump($reflector?->isInitialized($obj));
 --EXPECTF--
 bool(false)
 string(11) "initializer"

@@ -57,7 +57,7 @@ function testProperty(object $obj, $propReflector) {
     } catch (ReflectionException $e) {
         printf("%s: %s\n", $e::class, $e->getMessage());
     }
-    if ($lazyReflector->isInitialized()) {
+    if ($lazyReflector->isInitialized($obj)) {
         printf("Object was unexpectedly initialized (1)\n");
     }
     if ($skept) {
@@ -70,7 +70,7 @@ function testProperty(object $obj, $propReflector) {
         if (!$propReflector->isStatic()) {
             $propReflector->setValue($clone, '');
         }
-        if ($lazyReflector->isInitialized()) {
+        if ($lazyReflector->isInitialized($obj)) {
             printf("Object was unexpectedly initialized (1)\n");
         }
     }
@@ -83,7 +83,7 @@ function testProperty(object $obj, $propReflector) {
     } catch (ReflectionException $e) {
         printf("%s: %s\n", $e::class, $e->getMessage());
     }
-    if ($lazyReflector->isInitialized()) {
+    if ($lazyReflector->isInitialized($obj)) {
         printf("Object was unexpectedly initialized (1)\n");
     }
     try {
@@ -92,7 +92,7 @@ function testProperty(object $obj, $propReflector) {
     } catch (\Error $e) {
         printf("%s: %s\n", $e::class, $e->getMessage());
     }
-    if ($lazyReflector->isInitialized()) {
+    if ($lazyReflector->isInitialized($obj)) {
         printf("Object was unexpectedly initialized (1)\n");
     }
 
@@ -104,7 +104,7 @@ function testProperty(object $obj, $propReflector) {
     } catch (ReflectionException $e) {
         printf("%s: %s\n", $e::class, $e->getMessage());
     }
-    if ($lazyReflector->isInitialized()) {
+    if ($lazyReflector->isInitialized($obj)) {
         printf("Object was unexpectedly initialized (1)\n");
     }
     try {
@@ -113,7 +113,7 @@ function testProperty(object $obj, $propReflector) {
     } catch (\Error $e) {
         printf("%s: %s\n", $e::class, $e->getMessage());
     }
-    if ($lazyReflector->isInitialized()) {
+    if ($lazyReflector->isInitialized($obj)) {
         printf("Object was unexpectedly initialized (1)\n");
     }
 }

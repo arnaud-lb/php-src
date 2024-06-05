@@ -14,11 +14,11 @@ function test(string $name, object $obj, callable $initializer) {
 
     $reflector = new ReflectionLazyObjectFactory($obj);
 
-    var_dump($reflector->isInitialized());
+    var_dump($reflector->isInitialized($obj));
 
     var_dump($reflector->initialize($initializer));
 
-    var_dump($reflector->isInitialized());
+    var_dump($reflector->isInitialized($obj));
     var_dump($obj);
 }
 

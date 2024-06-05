@@ -436,7 +436,7 @@ class ReflectionLazyObjectFactory extends ReflectionClass
 
     public static function isLazyObject(object $instance): bool {}
 
-    public function isInitialized(): bool {}
+    public function isInitialized(object $object): bool {}
 
     public function initialize(bool $skipInitializer = false): object {}
 

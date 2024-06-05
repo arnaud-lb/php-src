@@ -11,7 +11,7 @@ function test(string $name, object $obj) {
     printf("# %s:\n", $name);
 
     $reflector = new ReflectionLazyObjectFactory($obj);
-    var_dump($reflector?->isInitialized());
+    var_dump($reflector?->isInitialized($obj));
 
     try {
         var_dump($reflector?->initialize());
@@ -19,7 +19,7 @@ function test(string $name, object $obj) {
         printf("%s\n", $e->getMessage());
     }
 
-    var_dump($reflector?->isInitialized());
+    var_dump($reflector?->isInitialized($obj));
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();

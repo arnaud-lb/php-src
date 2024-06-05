@@ -19,13 +19,13 @@ function test(string $name, object $obj) {
     } catch (Exception $e) {
         printf("%s\n", $e->getMessage());
     }
-    var_dump(!(new ReflectionLazyObjectFactory($obj))->isInitialized());
+    var_dump(!(new ReflectionLazyObjectFactory($obj))->isInitialized($obj));
     try {
         var_dump($obj->a);
     } catch (Exception $e) {
         printf("%s\n", $e->getMessage());
     }
-    var_dump(!(new ReflectionLazyObjectFactory($obj))->isInitialized());
+    var_dump(!(new ReflectionLazyObjectFactory($obj))->isInitialized($obj));
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();

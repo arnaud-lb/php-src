@@ -11,10 +11,10 @@ class D {}
 function test(string $name, object $obj, object $obj2) {
     printf("# %s:\n", $name);
 
-    var_dump(!(new ReflectionLazyObjectFactory($obj))->isInitialized());
+    var_dump(!(new ReflectionLazyObjectFactory($obj))->isInitialized($obj));
     var_dump($obj);
 
-    var_dump(!(new ReflectionLazyObjectFactory($obj2))->isInitialized());
+    var_dump(!(new ReflectionLazyObjectFactory($obj2))->isInitialized($obj2));
     var_dump($obj2);
 }
 

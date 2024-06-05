@@ -14,11 +14,11 @@ function test(string $name, object $obj) {
 
     var_dump($obj->a);
 
-    var_dump($reflector?->isInitialized());
+    var_dump($reflector?->isInitialized($obj));
 
     var_dump($reflector?->initialize());
 
-    var_dump($reflector?->isInitialized());
+    var_dump($reflector?->isInitialized($obj));
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();

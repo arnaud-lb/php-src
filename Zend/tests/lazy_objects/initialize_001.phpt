@@ -13,12 +13,12 @@ function test(string $name, object $obj) {
     $reflector = new ReflectionLazyObjectFactory($obj);
 
     printf("Initialized:\n");
-    var_dump($reflector?->isInitialized());
+    var_dump($reflector?->isInitialized($obj));
 
     var_dump($reflector?->initialize());
 
     printf("Initialized:\n");
-    var_dump($reflector?->isInitialized());
+    var_dump($reflector?->isInitialized($obj));
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();

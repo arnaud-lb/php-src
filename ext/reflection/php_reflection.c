@@ -5687,12 +5687,15 @@ ZEND_METHOD(ReflectionLazyObjectFactory, isLazyObject)
 ZEND_METHOD(ReflectionLazyObjectFactory, isInitialized)
 {
 	reflection_object *intern;
+	zend_object *object;
 
-	ZEND_PARSE_PARAMETERS_NONE();
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_OBJ(object)
+	ZEND_PARSE_PARAMETERS_END();
 
 	GET_REFLECTION_OBJECT();
 
-	RETURN_BOOL(zend_lazy_object_initialized(Z_OBJ(intern->obj)));
+	RETURN_BOOL(!zend_object_is_lazy(object) || zend_lazy_object_initialized(object));
 }
 /* }}} */
 
