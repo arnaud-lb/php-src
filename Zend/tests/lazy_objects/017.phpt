@@ -14,10 +14,12 @@ class C {
 function ghost() {
     print "# Ghost:\n";
 
+    print "In makeLazy\n";
     $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
     ReflectionLazyObjectFactory::makeLazyGhost($obj, function () {
         var_dump("initializer");
     });
+    print "After makeLazy\n";
 
     var_dump($obj->a);
 }
@@ -25,11 +27,13 @@ function ghost() {
 function virtual() {
     print "# Virtual:\n";
 
+    print "In makeLazy\n";
     $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
     ReflectionLazyObjectFactory::makeLazyProxy($obj, function () {
         var_dump("initializer");
         return new C();
     });
+    print "After makeLazy\n";
 
     var_dump($obj->a);
 }
@@ -39,6 +43,13 @@ virtual();
 
 --EXPECTF--
 # Ghost:
+In makeLazy
+string(13) "C::__destruct"
+object(C)#%d (1) {
+  ["a"]=>
+  int(1)
+}
+After makeLazy
 string(11) "initializer"
 int(1)
 string(13) "C::__destruct"
@@ -47,6 +58,13 @@ object(C)#%d (1) {
   int(1)
 }
 # Virtual:
+In makeLazy
+string(13) "C::__destruct"
+object(C)#%d (1) {
+  ["a"]=>
+  int(1)
+}
+After makeLazy
 string(11) "initializer"
 int(1)
 string(13) "C::__destruct"

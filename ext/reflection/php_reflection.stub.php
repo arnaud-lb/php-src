@@ -426,6 +426,9 @@ class ReflectionLazyObjectFactory extends ReflectionClass
     /** @cvalue ZEND_LAZY_OBJECT_SKIP_INITIALIZATION_ON_SERIALIZE */
     public const int SKIP_INITIALIZATION_ON_SERIALIZE = UNKNOWN;
 
+    /** @cvalue ZEND_LAZY_OBJECT_SKIP_DESTRUCTOR */
+    public const int SKIP_DESTRUCTOR = UNKNOWN;
+
     public function __construct(object|string $objectOrClass) {}
 
     public static function makeLazyGhost(object $instance, callable $initializer, int $flags = 0): ReflectionLazyObjectFactory {}

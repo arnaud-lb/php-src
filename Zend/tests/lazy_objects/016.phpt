@@ -12,18 +12,34 @@ class C {
 
 print "# Ghost:\n";
 
+print "In makeLazy\n";
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
 ReflectionLazyObjectFactory::makeLazyGhost($obj, function () {
     var_dump("initializer");
 });
+print "After makeLazy\n";
+
+// Does not call destructor
+$obj = null;
 
 print "# Virtual:\n";
 
+print "In makeLazy\n";
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
 ReflectionLazyObjectFactory::makeLazyProxy($obj, function () {
     var_dump("initializer");
 });
+print "After makeLazy\n";
 
---EXPECTF--
+// Does not call destructor
+$obj = null;
+
+--EXPECT--
 # Ghost:
+In makeLazy
+string(13) "C::__destruct"
+After makeLazy
 # Virtual:
+In makeLazy
+string(13) "C::__destruct"
+After makeLazy

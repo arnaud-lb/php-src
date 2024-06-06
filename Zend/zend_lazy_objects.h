@@ -21,20 +21,24 @@
 
 #include "zend.h"
 
-/* Serialization skips initialization */
-#define ZEND_LAZY_OBJECT_SKIP_INITIALIZATION_ON_SERIALIZE   (1<<0)
-
 /* Lazy object is a virtual proxy */
-#define ZEND_LAZY_OBJECT_STRATEGY_VIRTUAL                   (1<<1)
+#define ZEND_LAZY_OBJECT_STRATEGY_VIRTUAL                   (1<<0)
 
 /* Lazy object is a ghost object */
-#define ZEND_LAZY_OBJECT_STRATEGY_GHOST                     (1<<2)
+#define ZEND_LAZY_OBJECT_STRATEGY_GHOST                     (1<<1)
 
 /* Lazy object is initialized (info.u is an instance) */
-#define ZEND_LAZY_OBJECT_INITIALIZED                        (1<<3)
+#define ZEND_LAZY_OBJECT_INITIALIZED                        (1<<2)
+
+/* Serialization skips initialization */
+#define ZEND_LAZY_OBJECT_SKIP_INITIALIZATION_ON_SERIALIZE   (1<<3)
+
+/* Do not call destructor when making existing object lazy */
+#define ZEND_LAZY_OBJECT_SKIP_DESTRUCTOR                    (1<<4)
 
 #define ZEND_LAZY_OBJECT_USER_FLAGS (                                       \
-	ZEND_LAZY_OBJECT_SKIP_INITIALIZATION_ON_SERIALIZE                       \
+	ZEND_LAZY_OBJECT_SKIP_INITIALIZATION_ON_SERIALIZE |                     \
+	ZEND_LAZY_OBJECT_SKIP_DESTRUCTOR                                        \
 )
 
 #define ZEND_LAZY_OBJECT_STRATEGY_FLAGS (                                   \

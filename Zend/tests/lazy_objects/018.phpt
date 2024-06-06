@@ -5,10 +5,6 @@ Lazy objects: exception during initializer leaves object uninitialized
 
 class C {
     public int $a;
-
-    public function __destruct() {
-        var_dump(__METHOD__);
-    }
 }
 
 function test(string $name, object $obj) {
@@ -43,7 +39,8 @@ ReflectionLazyObjectFactory::makeLazyProxy($obj, function () {
 });
 
 test('Virtual', $obj);
---EXPECTF--
+
+--EXPECT--
 # Ghost:
 string(11) "initializer"
 initializer exception

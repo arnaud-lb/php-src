@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 07963c71cd0d2f537e9d3ed9d2788c798d748da5 */
+ * Stub hash: eba30ab8b5433639b946fbaf1b6c56a654c2a12f */
 
 ZEND_BEGIN_ARG_WITH_TENTATIVE_RETURN_TYPE_INFO_EX(arginfo_class_Reflection_getModifierNames, 0, 1, IS_ARRAY, 0)
 	ZEND_ARG_TYPE_INFO(0, modifiers, IS_LONG, 0)
@@ -1514,6 +1514,12 @@ static zend_class_entry *register_class_ReflectionLazyObjectFactory(zend_class_e
 	zend_string *const_SKIP_INITIALIZATION_ON_SERIALIZE_name = zend_string_init_interned("SKIP_INITIALIZATION_ON_SERIALIZE", sizeof("SKIP_INITIALIZATION_ON_SERIALIZE") - 1, 1);
 	zend_declare_typed_class_constant(class_entry, const_SKIP_INITIALIZATION_ON_SERIALIZE_name, &const_SKIP_INITIALIZATION_ON_SERIALIZE_value, ZEND_ACC_PUBLIC, NULL, (zend_type) ZEND_TYPE_INIT_MASK(MAY_BE_LONG));
 	zend_string_release(const_SKIP_INITIALIZATION_ON_SERIALIZE_name);
+
+	zval const_SKIP_DESTRUCTOR_value;
+	ZVAL_LONG(&const_SKIP_DESTRUCTOR_value, ZEND_LAZY_OBJECT_SKIP_DESTRUCTOR);
+	zend_string *const_SKIP_DESTRUCTOR_name = zend_string_init_interned("SKIP_DESTRUCTOR", sizeof("SKIP_DESTRUCTOR") - 1, 1);
+	zend_declare_typed_class_constant(class_entry, const_SKIP_DESTRUCTOR_name, &const_SKIP_DESTRUCTOR_value, ZEND_ACC_PUBLIC, NULL, (zend_type) ZEND_TYPE_INIT_MASK(MAY_BE_LONG));
+	zend_string_release(const_SKIP_DESTRUCTOR_name);
 
 	return class_entry;
 }

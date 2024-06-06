@@ -43,6 +43,7 @@
 #include "zend_types.h"
 #include "zend_variables.h"
 #include "zend_lazy_objects.h"
+#include "zend_fibers.h"
 
 /**
  * Information about each lazy object is stored outside of zend_objects, in
@@ -226,6 +227,24 @@ ZEND_API zend_object *zend_object_make_lazy(zend_object *obj,
 			Z_PROP_FLAG_P(p) = IS_PROP_UNINIT | IS_PROP_LAZY;
 		}
 	} else {
+		if (!(flags & ZEND_LAZY_OBJECT_SKIP_DESTRUCTOR)
+				&& !(OBJ_FLAGS(obj) & IS_OBJ_DESTRUCTOR_CALLED)) {
+			if (obj->handlers->dtor_obj != zend_objects_destroy_object
+					|| obj->ce->destructor) {
+				GC_ADD_FLAGS(obj, IS_OBJ_DESTRUCTOR_CALLED);
+				zend_fiber_switch_block();
+				GC_ADDREF(obj);
+				obj->handlers->dtor_obj(obj);
+				GC_DELREF(obj);
+				zend_fiber_switch_unblock();
+				if (EG(exception)) {
+					return NULL;
+				}
+			}
+		}
+
+		GC_DEL_FLAGS(obj, IS_OBJ_DESTRUCTOR_CALLED);
+
 		/* unset() dynamic properties */
 		zend_object_dtor_dynamic_properties(obj);
 		obj->properties = NULL;
