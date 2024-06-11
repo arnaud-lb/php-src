@@ -5663,7 +5663,7 @@ PHP_METHOD(ReflectionLazyObjectFactory, makeLazyProxy)
 /* }}} */
 
 /* {{{ Instantiates a lazy instance, using the ghost strategy */
-PHP_METHOD(ReflectionLazyObjectFactory, newInstanceLazyGhost)
+PHP_METHOD(ReflectionLazyObjectFactory, newLazyGhostInstance)
 {
 	reflection_lazy_object_make_lazy(INTERNAL_FUNCTION_PARAM_PASSTHRU,
 			ZEND_LAZY_OBJECT_STRATEGY_GHOST, /*is_make_lazy */ false);
@@ -5671,7 +5671,7 @@ PHP_METHOD(ReflectionLazyObjectFactory, newInstanceLazyGhost)
 /* }}} */
 
 /* {{{ Instantiates a lazy instance, using the virtual strategy */
-PHP_METHOD(ReflectionLazyObjectFactory, newInstanceLazyVirtual)
+PHP_METHOD(ReflectionLazyObjectFactory, newLazyProxyInstance)
 {
 	reflection_lazy_object_make_lazy(INTERNAL_FUNCTION_PARAM_PASSTHRU,
 			ZEND_LAZY_OBJECT_STRATEGY_VIRTUAL, /*is_make_lazy */ false);

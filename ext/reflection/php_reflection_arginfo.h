@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: eba30ab8b5433639b946fbaf1b6c56a654c2a12f */
+ * Stub hash: de9ae40827841951a54ad8dec9053ddc6bf14ca3 */
 
 ZEND_BEGIN_ARG_WITH_TENTATIVE_RETURN_TYPE_INFO_EX(arginfo_class_Reflection_getModifierNames, 0, 1, IS_ARRAY, 0)
 	ZEND_ARG_TYPE_INFO(0, modifiers, IS_LONG, 0)
@@ -340,17 +340,19 @@ ZEND_END_ARG_INFO()
 
 #define arginfo_class_ReflectionLazyObjectFactory_makeLazyProxy arginfo_class_ReflectionLazyObjectFactory_makeLazyGhost
 
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_ReflectionLazyObjectFactory_newInstanceLazyGhost, 0, 2, IS_OBJECT, 0)
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_ReflectionLazyObjectFactory_newLazyGhostInstance, 0, 2, IS_OBJECT, 0)
 	ZEND_ARG_TYPE_INFO(0, className, IS_STRING, 0)
 	ZEND_ARG_TYPE_INFO(0, initializer, IS_CALLABLE, 0)
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, flags, IS_LONG, 0, "0")
 ZEND_END_ARG_INFO()
 
-#define arginfo_class_ReflectionLazyObjectFactory_newInstanceLazyVirtual arginfo_class_ReflectionLazyObjectFactory_newInstanceLazyGhost
+#define arginfo_class_ReflectionLazyObjectFactory_newLazyProxyInstance arginfo_class_ReflectionLazyObjectFactory_newLazyGhostInstance
 
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_ReflectionLazyObjectFactory_isInitialized, 0, 1, _IS_BOOL, 0)
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_ReflectionLazyObjectFactory_isLazyObject, 0, 1, _IS_BOOL, 0)
 	ZEND_ARG_TYPE_INFO(0, object, IS_OBJECT, 0)
 ZEND_END_ARG_INFO()
+
+#define arginfo_class_ReflectionLazyObjectFactory_isInitialized arginfo_class_ReflectionLazyObjectFactory_isLazyObject
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_ReflectionLazyObjectFactory_initialize, 0, 1, IS_OBJECT, 0)
 	ZEND_ARG_TYPE_INFO(0, object, IS_OBJECT, 0)
@@ -814,8 +816,9 @@ ZEND_METHOD(ReflectionObject, __construct);
 ZEND_METHOD(ReflectionLazyObjectFactory, __construct);
 ZEND_METHOD(ReflectionLazyObjectFactory, makeLazyGhost);
 ZEND_METHOD(ReflectionLazyObjectFactory, makeLazyProxy);
-ZEND_METHOD(ReflectionLazyObjectFactory, newInstanceLazyGhost);
-ZEND_METHOD(ReflectionLazyObjectFactory, newInstanceLazyVirtual);
+ZEND_METHOD(ReflectionLazyObjectFactory, newLazyGhostInstance);
+ZEND_METHOD(ReflectionLazyObjectFactory, newLazyProxyInstance);
+ZEND_METHOD(ReflectionLazyObjectFactory, isLazyObject);
 ZEND_METHOD(ReflectionLazyObjectFactory, isInitialized);
 ZEND_METHOD(ReflectionLazyObjectFactory, initialize);
 ZEND_METHOD(ReflectionLazyObjectFactory, setRawPropertyValue);
@@ -1110,8 +1113,9 @@ static const zend_function_entry class_ReflectionLazyObjectFactory_methods[] = {
 	ZEND_ME(ReflectionLazyObjectFactory, __construct, arginfo_class_ReflectionLazyObjectFactory___construct, ZEND_ACC_PUBLIC)
 	ZEND_ME(ReflectionLazyObjectFactory, makeLazyGhost, arginfo_class_ReflectionLazyObjectFactory_makeLazyGhost, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(ReflectionLazyObjectFactory, makeLazyProxy, arginfo_class_ReflectionLazyObjectFactory_makeLazyProxy, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
-	ZEND_ME(ReflectionLazyObjectFactory, newInstanceLazyGhost, arginfo_class_ReflectionLazyObjectFactory_newInstanceLazyGhost, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
-	ZEND_ME(ReflectionLazyObjectFactory, newInstanceLazyVirtual, arginfo_class_ReflectionLazyObjectFactory_newInstanceLazyVirtual, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(ReflectionLazyObjectFactory, newLazyGhostInstance, arginfo_class_ReflectionLazyObjectFactory_newLazyGhostInstance, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(ReflectionLazyObjectFactory, newLazyProxyInstance, arginfo_class_ReflectionLazyObjectFactory_newLazyProxyInstance, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(ReflectionLazyObjectFactory, isLazyObject, arginfo_class_ReflectionLazyObjectFactory_isLazyObject, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(ReflectionLazyObjectFactory, isInitialized, arginfo_class_ReflectionLazyObjectFactory_isInitialized, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(ReflectionLazyObjectFactory, initialize, arginfo_class_ReflectionLazyObjectFactory_initialize, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(ReflectionLazyObjectFactory, setRawPropertyValue, arginfo_class_ReflectionLazyObjectFactory_setRawPropertyValue, ZEND_ACC_PUBLIC)
