@@ -14,7 +14,7 @@ class C {
 print "# Ghost:\n";
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObjectFactory::makeLazyGhost($obj, function ($obj) {
+ReflectionLazyObjectFactory::makeInstanceLazyGhost($obj, function ($obj) {
     var_dump("initializer");
     $obj->__construct();
 });
@@ -24,7 +24,7 @@ var_dump(json_encode($obj));
 print "# Virtual:\n";
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObjectFactory::makeLazyProxy($obj, function ($obj) {
+ReflectionLazyObjectFactory::makeInstanceLazyProxy($obj, function ($obj) {
     var_dump("initializer");
     return new C();
 });

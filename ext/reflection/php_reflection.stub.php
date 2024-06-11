@@ -431,9 +431,9 @@ class ReflectionLazyObjectFactory extends ReflectionClass
 
     public function __construct(object|string $objectOrClass) {}
 
-    public static function makeLazyGhost(object $instance, callable $initializer, int $flags = 0): ReflectionLazyObjectFactory {}
+    public static function makeInstanceLazyGhost(object $instance, callable $initializer, int $flags = 0): ReflectionLazyObjectFactory {}
 
-    public static function makeLazyProxy(object $instance, callable $initializer, int $flags = 0): ReflectionLazyObjectFactory {}
+    public static function makeInstanceLazyProxy(object $instance, callable $initializer, int $flags = 0): ReflectionLazyObjectFactory {}
 
     public static function newLazyGhostInstance(string $className, callable $initializer, int $flags = 0): object {}
 

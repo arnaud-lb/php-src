@@ -20,7 +20,7 @@ class C {
 print "# Ghost:\n";
 
 $obj = new C();
-ReflectionLazyObjectFactory::makeLazyGhost($obj, function ($obj) {
+ReflectionLazyObjectFactory::makeInstanceLazyGhost($obj, function ($obj) {
     var_dump("initializer");
     $obj->__construct();
 });
@@ -32,7 +32,7 @@ var_dump($obj);
 print "# Virtual:\n";
 
 $obj = new C();
-ReflectionLazyObjectFactory::makeLazyProxy($obj, function ($obj) {
+ReflectionLazyObjectFactory::makeInstanceLazyProxy($obj, function ($obj) {
     var_dump("initializer");
     return new C();
 });

@@ -8,7 +8,7 @@ class C {
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObjectFactory::makeLazyGhost($obj, function ($obj) {
+ReflectionLazyObjectFactory::makeInstanceLazyGhost($obj, function ($obj) {
     var_dump("initializer");
     $obj->a = 1;
 });

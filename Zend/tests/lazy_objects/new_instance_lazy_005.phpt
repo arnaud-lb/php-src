@@ -5,7 +5,7 @@ Lazy objects: newInstanceLazy can instantiate sub-class of stdClass
 
 class C extends stdClass {}
 
-foreach (['makeLazyGhost', 'makeLazyProxy'] as $strategy) {
+foreach (['makeInstanceLazyGhost', 'makeInstanceLazyProxy'] as $strategy) {
     $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
     ReflectionLazyObjectFactory::$strategy($obj, function ($obj) {
         var_dump("initializer");

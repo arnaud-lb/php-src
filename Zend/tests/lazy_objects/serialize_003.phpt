@@ -20,14 +20,14 @@ function test(string $name, object $obj) {
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObjectFactory::makeLazyGhost($obj, function ($obj) {
+ReflectionLazyObjectFactory::makeInstanceLazyGhost($obj, function ($obj) {
     var_dump("initializer");
 }, ReflectionLazyObjectFactory::SKIP_INITIALIZATION_ON_SERIALIZE);
 
 test('Ghost', $obj);
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObjectFactory::makeLazyProxy($obj, function ($obj) {
+ReflectionLazyObjectFactory::makeInstanceLazyProxy($obj, function ($obj) {
     var_dump("initializer");
 }, ReflectionLazyObjectFactory::SKIP_INITIALIZATION_ON_SERIALIZE);
 

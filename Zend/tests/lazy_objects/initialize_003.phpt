@@ -23,7 +23,7 @@ function test(string $name, object $obj, callable $initializer) {
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObjectFactory::makeLazyGhost($obj, function ($obj) {
+ReflectionLazyObjectFactory::makeInstanceLazyGhost($obj, function ($obj) {
     var_dump("initializer");
     $obj->a = 1;
 });
@@ -34,7 +34,7 @@ test('Ghost', $obj, function ($obj) {
 });
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObjectFactory::makeLazyProxy($obj, function ($obj) {
+ReflectionLazyObjectFactory::makeInstanceLazyProxy($obj, function ($obj) {
     var_dump("initializer");
     $c = new C();
     $c->a = 1;

@@ -19,26 +19,26 @@ function test(string $name, object $obj, object $obj2) {
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObjectFactory::makeLazyGhost($obj, function ($obj) {
+ReflectionLazyObjectFactory::makeInstanceLazyGhost($obj, function ($obj) {
     var_dump("initializer");
 });
 
 $obj2 = new D();
 $obj2->dynamic = 'value';
-ReflectionLazyObjectFactory::makeLazyGhost($obj2, function ($obj2) {
+ReflectionLazyObjectFactory::makeInstanceLazyGhost($obj2, function ($obj2) {
     var_dump("initializer");
 });
 
 test('Ghost', $obj, $obj2);
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObjectFactory::makeLazyProxy($obj, function ($obj) {
+ReflectionLazyObjectFactory::makeInstanceLazyProxy($obj, function ($obj) {
     var_dump("initializer");
 });
 
 $obj2 = new D();
 $obj2->dynamic = 'value';
-ReflectionLazyObjectFactory::makeLazyProxy($obj2, function ($obj2) {
+ReflectionLazyObjectFactory::makeInstanceLazyProxy($obj2, function ($obj2) {
     var_dump("initializer");
 });
 
