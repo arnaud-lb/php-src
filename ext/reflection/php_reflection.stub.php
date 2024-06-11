@@ -439,6 +439,8 @@ class ReflectionLazyObjectFactory extends ReflectionClass
 
     public static function newInstanceLazyVirtual(string $className, callable $initializer, int $flags = 0): object {}
 
+    public static function isLazyObject(object $object): bool {}
+
     public static function isInitialized(object $object): bool {}
 
     public static function initialize(object $object, bool $skipInitializer = false): object {}

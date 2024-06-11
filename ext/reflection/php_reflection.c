@@ -5678,6 +5678,19 @@ PHP_METHOD(ReflectionLazyObjectFactory, newInstanceLazyVirtual)
 }
 /* }}} */
 
+/* {{{ Returns whether object is lazy */
+ZEND_METHOD(ReflectionLazyObjectFactory, isLazyObject)
+{
+       zend_object *arg;
+
+       ZEND_PARSE_PARAMETERS_START(1, 1)
+               Z_PARAM_OBJ(arg)
+       ZEND_PARSE_PARAMETERS_END();
+
+       RETURN_BOOL(zend_object_is_lazy(arg) && !zend_lazy_object_initialized(arg));
+}
+/* }}} */
+
 /* {{{ Returns whether object is initialized */
 ZEND_METHOD(ReflectionLazyObjectFactory, isInitialized)
 {

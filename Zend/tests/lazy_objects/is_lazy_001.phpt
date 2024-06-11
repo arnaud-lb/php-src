@@ -1,7 +1,5 @@
 --TEST--
 Lazy objects: isLazyObject() returns true if object is lazy and non initialized
---XFAIL--
-isLazyObject method was removed
 --FILE--
 <?php
 
