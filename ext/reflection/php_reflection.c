@@ -5578,7 +5578,7 @@ void reflection_lazy_object_make_lazy(INTERNAL_FUNCTION_PARAMETERS,
 {
 	reflection_object *intern;
 	zend_object *obj;
-	zend_class_entry *ce = NULL;
+	zend_class_entry *ce;
 	zend_fcall_info fci;
 	zend_fcall_info_cache fcc;
 	zend_long flags = 0;
@@ -5586,16 +5586,18 @@ void reflection_lazy_object_make_lazy(INTERNAL_FUNCTION_PARAMETERS,
 	ZEND_ASSERT(strategy == ZEND_LAZY_OBJECT_STRATEGY_GHOST
 			|| strategy == ZEND_LAZY_OBJECT_STRATEGY_VIRTUAL);
 
+	GET_REFLECTION_OBJECT_PTR(ce);
+
 	if (is_make_lazy) {
 		ZEND_PARSE_PARAMETERS_START(2, 3)
+			// TODO: check that obj->ce matches ce
 			Z_PARAM_OBJ(obj)
 			Z_PARAM_FUNC(fci, fcc)
 			Z_PARAM_OPTIONAL
 			Z_PARAM_LONG(flags)
 		ZEND_PARSE_PARAMETERS_END();
 	} else {
-		ZEND_PARSE_PARAMETERS_START(2, 3)
-			Z_PARAM_CLASS(ce)
+		ZEND_PARSE_PARAMETERS_START(1, 2)
 			Z_PARAM_FUNC(fci, fcc)
 			Z_PARAM_OPTIONAL
 			Z_PARAM_LONG(flags)
@@ -5765,6 +5767,8 @@ static void reflection_lazy_object_set_property(zend_object *object,
 			}
 		}
 
+		// TODO: check readonly
+
 		if (skip_hooks && (object->ce->ce_flags & ZEND_ACC_USE_GUARDS)) {
 			guard = zend_get_property_guard(object, name);
 			guard_backup = *guard;
@@ -5881,6 +5885,8 @@ ZEND_METHOD(ReflectionLazyObjectFactory, skipInitializerForProperty)
 				ZSTR_VAL(scope->name), ZSTR_VAL(name));
 		RETURN_THROWS();
 	}
+
+	// TODO: check readonly
 
 	bool prop_was_lazy = (Z_PROP_FLAG_P(OBJ_PROP(object, prop_info->offset)) & IS_PROP_LAZY);
 
