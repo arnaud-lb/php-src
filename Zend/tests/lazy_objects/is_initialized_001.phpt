@@ -1,5 +1,5 @@
 --TEST--
-Lazy objects: ReflectionLazyObjectFactory::isInitialized
+Lazy objects: ReflectionClass::isInitialized
 --FILE--
 <?php
 
@@ -8,12 +8,12 @@ class C {
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObjectFactory::makeInstanceLazyGhost($obj, function ($obj) {
+(new ReflectionClass($obj))->resetAsLazyGhost($obj, function ($obj) {
     var_dump("initializer");
     $obj->a = 1;
 });
 
-$reflector = new ReflectionLazyObjectFactory($obj);
+$reflector = new ReflectionClass($obj);
 var_dump($reflector?->isInitialized($obj));
 
 var_dump($obj->a);

@@ -25,35 +25,35 @@ class C extends B {
 function test(string $name, object $obj) {
     printf("# %s:\n", $name);
 
-    $reflector = new ReflectionLazyObjectFactory($obj);
+    $reflector = new ReflectionClass($obj);
     var_dump($reflector->isInitialized($obj));
 
-    $reflector->setRawPropertyValue($obj, 'a', 'a1');
+    $reflector->getProperty('a')->setRawValueWithoutLazyInitialization($obj, 'a1');
     var_dump($reflector->isInitialized($obj));
 
     // Should not count a second prop initialization
-    $reflector->setRawPropertyValue($obj, 'a', 'a2');
+    $reflector->getProperty('a')->setRawValueWithoutLazyInitialization($obj, 'a2');
     var_dump($reflector->isInitialized($obj));
 
     try {
         // Should not count a prop initialization
-        $reflector->setRawPropertyValue($obj, 'a', new stdClass);
+        $reflector->getProperty('a')->setRawValueWithoutLazyInitialization($obj, new stdClass);
     } catch (Error $e) {
         printf("%s: %s\n", $e::class, $e->getMessage());
     }
 
     // Should not count a prop initialization
-    $reflector->setRawPropertyValue($obj, 'b', 'dynamic B');
-    var_dump($reflector->isInitialized($obj));
+    //$reflector->getProperty('b')->setRawValueWithoutLazyInitialization($obj, 'dynamic B');
+    //var_dump($reflector->isInitialized($obj));
 
-    $reflector->setRawPropertyValue($obj, 'b', 'b', B::class);
+    (new ReflectionProperty(B::class, 'b'))->setRawValueWithoutLazyInitialization($obj, 'b');
     var_dump($reflector->isInitialized($obj));
 
     var_dump($obj);
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObjectFactory::makeInstanceLazyGhost($obj, function ($obj) {
+(new ReflectionClass($obj))->resetAsLazyGhost($obj, function ($obj) {
     var_dump("initializer");
     $obj->__construct();
 });
@@ -61,41 +61,35 @@ ReflectionLazyObjectFactory::makeInstanceLazyGhost($obj, function ($obj) {
 test('Ghost', $obj);
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObjectFactory::makeInstanceLazyProxy($obj, function ($obj) {
+(new ReflectionClass($obj))->resetAsLazyProxy($obj, function ($obj) {
     var_dump("initializer");
     return new C();
 });
 
 test('Virtual', $obj);
 
---EXPECT--
+--EXPECTF--
 # Ghost:
 bool(false)
 bool(false)
 bool(false)
 TypeError: Cannot assign stdClass to property C::$a of type string
-bool(false)
 bool(true)
-object(C)#2 (3) {
+object(C)#%d (2) {
   ["b":"B":private]=>
   string(1) "b"
   ["a"]=>
   string(2) "a2"
-  ["b"]=>
-  string(9) "dynamic B"
 }
 # Virtual:
 bool(false)
 bool(false)
 bool(false)
 TypeError: Cannot assign stdClass to property C::$a of type string
-bool(false)
 bool(true)
-object(C)#4 (3) {
+object(C)#%d (2) {
   ["b":"B":private]=>
   string(1) "b"
   ["a"]=>
   string(2) "a2"
-  ["b"]=>
-  string(9) "dynamic B"
 }

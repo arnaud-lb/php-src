@@ -19,18 +19,18 @@ function test(string $name, object $obj) {
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObjectFactory::makeInstanceLazyGhost($obj, function ($obj) {
+(new ReflectionClass($obj))->resetAsLazyGhost($obj, function ($obj) {
     var_dump("initializer");
     $obj->a = 1;
-}, ReflectionLazyObjectFactory::SKIP_INITIALIZATION_ON_SERIALIZE);
+}, ReflectionClass::SKIP_INITIALIZATION_ON_SERIALIZE);
 
 test('Ghost', $obj);
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObjectFactory::makeInstanceLazyProxy($obj, function ($obj) {
+(new ReflectionClass($obj))->resetAsLazyProxy($obj, function ($obj) {
     var_dump("initializer");
     $obj->a = 1;
-}, ReflectionLazyObjectFactory::SKIP_INITIALIZATION_ON_SERIALIZE);
+}, ReflectionClass::SKIP_INITIALIZATION_ON_SERIALIZE);
 
 test('Virtual', $obj);
 

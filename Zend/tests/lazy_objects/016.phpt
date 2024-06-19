@@ -14,7 +14,7 @@ print "# Ghost:\n";
 
 print "In makeLazy\n";
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObjectFactory::makeInstanceLazyGhost($obj, function () {
+(new ReflectionClass($obj))->resetAsLazyGhost($obj, function () {
     var_dump("initializer");
 });
 print "After makeLazy\n";
@@ -26,7 +26,7 @@ print "# Virtual:\n";
 
 print "In makeLazy\n";
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObjectFactory::makeInstanceLazyProxy($obj, function () {
+(new ReflectionClass($obj))->resetAsLazyProxy($obj, function () {
     var_dump("initializer");
 });
 print "After makeLazy\n";

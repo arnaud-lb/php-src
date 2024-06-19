@@ -1,5 +1,7 @@
 --TEST--
 Lazy objects: isLazyObject() returns true if object is lazy and non initialized
+--XFAIL--
+isLazyObject removed
 --FILE--
 <?php
 
@@ -14,13 +16,13 @@ class C {
 function test(string $name, object $obj) {
     printf("# %s:\n", $name);
 
-    var_dump(ReflectionLazyObjectFactory::isLazyObject($obj));
+    var_dump(ReflectionClass::isLazyObject($obj));
     var_dump($obj->a);
-    var_dump(ReflectionLazyObjectFactory::isLazyObject($obj));
+    var_dump(ReflectionClass::isLazyObject($obj));
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObjectFactory::makeInstanceLazyGhost($obj, function ($obj) {
+(new ReflectionClass($obj))->resetAsLazyGhost($obj, function ($obj) {
     var_dump("initializer");
     $obj->__construct();
 });
@@ -28,7 +30,7 @@ ReflectionLazyObjectFactory::makeInstanceLazyGhost($obj, function ($obj) {
 test('Ghost', $obj);
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObjectFactory::makeInstanceLazyProxy($obj, function ($obj) {
+(new ReflectionClass($obj))->resetAsLazyProxy($obj, function ($obj) {
     var_dump("initializer");
     return new C();
 });

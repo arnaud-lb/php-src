@@ -7,7 +7,7 @@ print "# Ghost:\n";
 
 $obj = (new ReflectionClass(DateTime::class))->newInstanceWithoutConstructor();
 try {
-    ReflectionLazyObjectFactory::makeInstanceLazyGhost($obj, function ($obj) {
+    (new ReflectionClass($obj))->resetAsLazyGhost($obj, function ($obj) {
         var_dump("initializer");
         $obj->__construct();
     });
@@ -19,7 +19,7 @@ print "# Virtual:\n";
 
 $obj = (new ReflectionClass(DateTime::class))->newInstanceWithoutConstructor();
 try {
-    ReflectionLazyObjectFactory::makeInstanceLazyProxy($obj, function ($obj) {
+    (new ReflectionClass($obj))->resetAsLazyProxy($obj, function ($obj) {
         var_dump("initializer");
         $obj->__construct();
     });

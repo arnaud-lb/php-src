@@ -11,34 +11,34 @@ class D {}
 function test(string $name, object $obj, object $obj2) {
     printf("# %s:\n", $name);
 
-    var_dump(!ReflectionLazyObjectFactory::isInitialized($obj));
+    var_dump(!(new ReflectionClass($obj))->isInitialized($obj));
     var_dump($obj);
 
-    var_dump(!ReflectionLazyObjectFactory::isInitialized($obj2));
+    var_dump(!(new ReflectionClass($obj2))->isInitialized($obj2));
     var_dump($obj2);
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObjectFactory::makeInstanceLazyGhost($obj, function ($obj) {
+(new ReflectionClass($obj))->resetAsLazyGhost($obj, function ($obj) {
     var_dump("initializer");
 });
 
 $obj2 = new D();
 $obj2->dynamic = 'value';
-ReflectionLazyObjectFactory::makeInstanceLazyGhost($obj2, function ($obj2) {
+(new ReflectionClass($obj2))->resetAsLazyGhost($obj2, function ($obj2) {
     var_dump("initializer");
 });
 
 test('Ghost', $obj, $obj2);
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObjectFactory::makeInstanceLazyProxy($obj, function ($obj) {
+(new ReflectionClass($obj))->resetAsLazyProxy($obj, function ($obj) {
     var_dump("initializer");
 });
 
 $obj2 = new D();
 $obj2->dynamic = 'value';
-ReflectionLazyObjectFactory::makeInstanceLazyProxy($obj2, function ($obj2) {
+(new ReflectionClass($obj2))->resetAsLazyProxy($obj2, function ($obj2) {
     var_dump("initializer");
 });
 

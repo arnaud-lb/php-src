@@ -22,7 +22,7 @@
 #include "zend.h"
 
 /* Lazy object is a virtual proxy */
-#define ZEND_LAZY_OBJECT_STRATEGY_VIRTUAL                   (1<<0)
+#define ZEND_LAZY_OBJECT_STRATEGY_PROXY                     (1<<0)
 
 /* Lazy object is a ghost object */
 #define ZEND_LAZY_OBJECT_STRATEGY_GHOST                     (1<<1)
@@ -42,7 +42,7 @@
 )
 
 #define ZEND_LAZY_OBJECT_STRATEGY_FLAGS (                                   \
-		ZEND_LAZY_OBJECT_STRATEGY_VIRTUAL |                                 \
+		ZEND_LAZY_OBJECT_STRATEGY_PROXY |                                   \
 		ZEND_LAZY_OBJECT_STRATEGY_GHOST                                     \
 )
 

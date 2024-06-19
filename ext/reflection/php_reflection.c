@@ -92,7 +92,6 @@ PHPAPI zend_class_entry *reflection_intersection_type_ptr;
 PHPAPI zend_class_entry *reflection_union_type_ptr;
 PHPAPI zend_class_entry *reflection_class_ptr;
 PHPAPI zend_class_entry *reflection_object_ptr;
-PHPAPI zend_class_entry *reflection_lazy_object_ptr;
 PHPAPI zend_class_entry *reflection_method_ptr;
 PHPAPI zend_class_entry *reflection_property_ptr;
 PHPAPI zend_class_entry *reflection_class_constant_ptr;
@@ -5190,6 +5189,168 @@ ZEND_METHOD(ReflectionClass, newInstanceArgs)
 }
 /* }}} */
 
+void reflection_class_new_lazy(INTERNAL_FUNCTION_PARAMETERS,
+		int strategy, bool is_reset)
+{
+	reflection_object *intern;
+	zend_object *obj;
+	zend_class_entry *ce;
+	zend_fcall_info fci;
+	zend_fcall_info_cache fcc;
+	zend_long flags = 0;
+
+	ZEND_ASSERT(strategy == ZEND_LAZY_OBJECT_STRATEGY_GHOST
+			|| strategy == ZEND_LAZY_OBJECT_STRATEGY_PROXY);
+
+	GET_REFLECTION_OBJECT();
+
+	if (is_reset) {
+		ZEND_PARSE_PARAMETERS_START(2, 3)
+			// TODO: check that obj->ce matches ce
+			Z_PARAM_OBJ_OF_CLASS(obj, intern->ce)
+			Z_PARAM_FUNC(fci, fcc)
+			Z_PARAM_OPTIONAL
+			// TODO: check named param
+			Z_PARAM_LONG(flags)
+		ZEND_PARSE_PARAMETERS_END();
+	} else {
+		ZEND_PARSE_PARAMETERS_START(1, 2)
+			Z_PARAM_FUNC(fci, fcc)
+			Z_PARAM_OPTIONAL
+			Z_PARAM_LONG(flags)
+		ZEND_PARSE_PARAMETERS_END();
+	}
+
+	if (flags & ~ZEND_LAZY_OBJECT_USER_FLAGS) {
+		zend_throw_exception_ex(reflection_exception_ptr, 0, "Invalid flags");
+		RETURN_THROWS();
+	}
+
+	if (is_reset) {
+		if (zend_object_is_lazy(obj)) {
+			zend_throw_exception_ex(reflection_exception_ptr, 0, "Object is already lazy");
+			RETURN_THROWS();
+		}
+		ce = obj->ce;
+	} else {
+		obj = NULL;
+		ce = intern->ce;
+	}
+
+	if (!fcc.function_handler) {
+		/* Call trampoline has been cleared by zpp. Refetch it, because we want to deal
+		 * with it outselves. It is important that it is not refetched on every call,
+		 * because calls may occur from different scopes. */
+		zend_is_callable_ex(&fci.function_name, NULL, 0, NULL, &fcc, NULL);
+	}
+
+	obj = zend_object_make_lazy(obj, ce, &fcc, strategy | flags);
+	if (!obj) {
+		RETURN_THROWS();
+	}
+
+	if (!is_reset) {
+		RETURN_OBJ(obj);
+	}
+}
+
+/* {{{ Instantiates a lazy instance, using the ghost strategy */
+PHP_METHOD(ReflectionClass, newLazyGhost)
+{
+	reflection_class_new_lazy(INTERNAL_FUNCTION_PARAM_PASSTHRU,
+			ZEND_LAZY_OBJECT_STRATEGY_GHOST, /*is_make_lazy */ false);
+}
+/* }}} */
+
+/* {{{ Instantiates a lazy instance, using the proxy strategy */
+PHP_METHOD(ReflectionClass, newLazyProxy)
+{
+	reflection_class_new_lazy(INTERNAL_FUNCTION_PARAM_PASSTHRU,
+			ZEND_LAZY_OBJECT_STRATEGY_PROXY, /*is_make_lazy */ false);
+}
+/* }}} */
+
+/* {{{ Reset an object and make it lazy, using the ghost strategy */
+PHP_METHOD(ReflectionClass, resetAsLazyGhost)
+{
+	reflection_class_new_lazy(INTERNAL_FUNCTION_PARAM_PASSTHRU,
+			ZEND_LAZY_OBJECT_STRATEGY_GHOST, /* is_reset */ true);
+}
+/* }}} */
+
+/* {{{ Reset an object and make it lazy, using the proxy strategy */
+PHP_METHOD(ReflectionClass, resetAsLazyProxy)
+{
+	reflection_class_new_lazy(INTERNAL_FUNCTION_PARAM_PASSTHRU,
+			ZEND_LAZY_OBJECT_STRATEGY_PROXY, /*is_reset */ true);
+}
+/* }}} */
+
+/* {{{ Returns whether object is lazy */
+ZEND_METHOD(ReflectionClass, isLazyObject)
+{
+	reflection_object *intern;
+	zend_object *object;
+
+	GET_REFLECTION_OBJECT();
+
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_OBJ_OF_CLASS(object, intern->ce)
+		ZEND_PARSE_PARAMETERS_END();
+
+	RETURN_BOOL(zend_object_is_lazy(object) && !zend_lazy_object_initialized(object));
+}
+/* }}} */
+
+/* {{{ Returns whether object is initialized */
+ZEND_METHOD(ReflectionClass, isInitialized)
+{
+	reflection_object *intern;
+	zend_object *object;
+
+	GET_REFLECTION_OBJECT();
+
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_OBJ_OF_CLASS(object, intern->ce)
+	ZEND_PARSE_PARAMETERS_END();
+
+	RETURN_BOOL(!zend_object_is_lazy(object) || zend_lazy_object_initialized(object));
+}
+/* }}} */
+
+/* {{{ Trigger object initialization */
+ZEND_METHOD(ReflectionClass, initialize)
+{
+	reflection_object *intern;
+	zend_object *object;
+	bool skipInitializer = false;
+
+	GET_REFLECTION_OBJECT();
+
+	ZEND_PARSE_PARAMETERS_START(1, 2)
+		Z_PARAM_OBJ_OF_CLASS(object, intern->ce)
+		Z_PARAM_OPTIONAL
+		Z_PARAM_BOOL(skipInitializer)
+	ZEND_PARSE_PARAMETERS_END();
+
+	if (zend_object_is_lazy(object)
+			&& !zend_lazy_object_initialized(object)) {
+		if (skipInitializer) {
+			zend_lazy_object_init_with(object, NULL);
+		} else {
+			zend_lazy_object_init(object);
+		}
+	}
+
+	if (zend_lazy_object_initialized(object)) {
+		RETURN_OBJ_COPY(zend_lazy_object_get_instance(object));
+	} else {
+		ZEND_ASSERT(EG(exception));
+	}
+}
+/* }}} */
+
+
 /* {{{ Returns an array of interfaces this class implements */
 ZEND_METHOD(ReflectionClass, getInterfaces)
 {
@@ -5566,347 +5727,6 @@ ZEND_METHOD(ReflectionObject, __construct)
 }
 /* }}} */
 
-/* {{{ Constructor. Takes a string or an instance as an argument */
-ZEND_METHOD(ReflectionLazyObjectFactory, __construct)
-{
-	reflection_class_object_ctor(INTERNAL_FUNCTION_PARAM_PASSTHRU, 0);
-}
-/* }}} */
-
-void reflection_lazy_object_make_lazy(INTERNAL_FUNCTION_PARAMETERS,
-		int strategy, bool is_make_lazy)
-{
-	reflection_object *intern;
-	zend_object *obj;
-	zend_class_entry *ce;
-	zend_fcall_info fci;
-	zend_fcall_info_cache fcc;
-	zend_long flags = 0;
-
-	ZEND_ASSERT(strategy == ZEND_LAZY_OBJECT_STRATEGY_GHOST
-			|| strategy == ZEND_LAZY_OBJECT_STRATEGY_VIRTUAL);
-
-	GET_REFLECTION_OBJECT_PTR(ce);
-
-	if (is_make_lazy) {
-		ZEND_PARSE_PARAMETERS_START(2, 3)
-			// TODO: check that obj->ce matches ce
-			Z_PARAM_OBJ(obj)
-			Z_PARAM_FUNC(fci, fcc)
-			Z_PARAM_OPTIONAL
-			Z_PARAM_LONG(flags)
-		ZEND_PARSE_PARAMETERS_END();
-	} else {
-		ZEND_PARSE_PARAMETERS_START(1, 2)
-			Z_PARAM_FUNC(fci, fcc)
-			Z_PARAM_OPTIONAL
-			Z_PARAM_LONG(flags)
-		ZEND_PARSE_PARAMETERS_END();
-	}
-
-	if (flags & ~ZEND_LAZY_OBJECT_USER_FLAGS) {
-		zend_throw_exception_ex(reflection_exception_ptr, 0, "Invalid flags");
-		RETURN_THROWS();
-	}
-
-	if (is_make_lazy) {
-		if (zend_object_is_lazy(obj)) {
-			zend_throw_exception_ex(reflection_exception_ptr, 0, "Object is already lazy");
-			RETURN_THROWS();
-		}
-		ce = obj->ce;
-	} else {
-		obj = NULL;
-	}
-
-	if (!fcc.function_handler) {
-		/* Call trampoline has been cleared by zpp. Refetch it, because we want to deal
-		 * with it outselves. It is important that it is not refetched on every call,
-		 * because calls may occur from different scopes. */
-		zend_is_callable_ex(&fci.function_name, NULL, 0, NULL, &fcc, NULL);
-	}
-
-	obj = zend_object_make_lazy(obj, ce, &fcc, strategy | flags);
-	if (!obj) {
-		RETURN_THROWS();
-	}
-
-	if (is_make_lazy) {
-		if (SUCCESS != object_init_ex(return_value, reflection_lazy_object_ptr)) {
-			RETURN_THROWS();
-		}
-
-		intern = Z_REFLECTION_P(return_value);
-
-		ZVAL_STR_COPY(reflection_prop_name(return_value), obj->ce->name);
-		intern->ptr = obj->ce;
-		ZVAL_OBJ_COPY(&intern->obj, obj);
-
-		intern->ref_type = REF_TYPE_OTHER;
-	} else {
-		RETURN_OBJ(obj);
-	}
-}
-
-/* {{{ Makes an object lazy, using the ghost strategy */
-PHP_METHOD(ReflectionLazyObjectFactory, makeInstanceLazyGhost)
-{
-	reflection_lazy_object_make_lazy(INTERNAL_FUNCTION_PARAM_PASSTHRU,
-			ZEND_LAZY_OBJECT_STRATEGY_GHOST, /*is_make_lazy */ true);
-}
-/* }}} */
-
-/* {{{ Makes an object lazy, using the virtual strategy */
-PHP_METHOD(ReflectionLazyObjectFactory, makeInstanceLazyProxy)
-{
-	reflection_lazy_object_make_lazy(INTERNAL_FUNCTION_PARAM_PASSTHRU,
-			ZEND_LAZY_OBJECT_STRATEGY_VIRTUAL, /*is_make_lazy */ true);
-}
-/* }}} */
-
-/* {{{ Instantiates a lazy instance, using the ghost strategy */
-PHP_METHOD(ReflectionLazyObjectFactory, newLazyGhostInstance)
-{
-	reflection_lazy_object_make_lazy(INTERNAL_FUNCTION_PARAM_PASSTHRU,
-			ZEND_LAZY_OBJECT_STRATEGY_GHOST, /*is_make_lazy */ false);
-}
-/* }}} */
-
-/* {{{ Instantiates a lazy instance, using the virtual strategy */
-PHP_METHOD(ReflectionLazyObjectFactory, newLazyProxyInstance)
-{
-	reflection_lazy_object_make_lazy(INTERNAL_FUNCTION_PARAM_PASSTHRU,
-			ZEND_LAZY_OBJECT_STRATEGY_VIRTUAL, /*is_make_lazy */ false);
-}
-/* }}} */
-
-/* {{{ Returns whether object is lazy */
-ZEND_METHOD(ReflectionLazyObjectFactory, isLazyObject)
-{
-       zend_object *arg;
-
-       ZEND_PARSE_PARAMETERS_START(1, 1)
-               Z_PARAM_OBJ(arg)
-       ZEND_PARSE_PARAMETERS_END();
-
-       RETURN_BOOL(zend_object_is_lazy(arg) && !zend_lazy_object_initialized(arg));
-}
-/* }}} */
-
-/* {{{ Returns whether object is initialized */
-ZEND_METHOD(ReflectionLazyObjectFactory, isInitialized)
-{
-	zend_object *object;
-
-	ZEND_PARSE_PARAMETERS_START(1, 1)
-		Z_PARAM_OBJ(object)
-	ZEND_PARSE_PARAMETERS_END();
-
-	RETURN_BOOL(!zend_object_is_lazy(object) || zend_lazy_object_initialized(object));
-}
-/* }}} */
-
-/* {{{ Trigger object initialization */
-ZEND_METHOD(ReflectionLazyObjectFactory, initialize)
-{
-	zend_object *object;
-	bool skipInitializer = false;
-
-	ZEND_PARSE_PARAMETERS_START(1, 2)
-		Z_PARAM_OBJ(object)
-		Z_PARAM_OPTIONAL
-		Z_PARAM_BOOL(skipInitializer)
-	ZEND_PARSE_PARAMETERS_END();
-
-	if (zend_object_is_lazy(object)
-			&& !zend_lazy_object_initialized(object)) {
-		if (skipInitializer) {
-			zend_lazy_object_init_with(object, NULL);
-		} else {
-			zend_lazy_object_init(object);
-		}
-	}
-
-	if (zend_lazy_object_initialized(object)) {
-		RETURN_OBJ_COPY(zend_lazy_object_get_instance(object));
-	} else {
-		ZEND_ASSERT(EG(exception));
-	}
-}
-/* }}} */
-
-static void reflection_lazy_object_set_property(zend_object *object,
-		zend_string *name, zval *value, zend_class_entry *class,
-		bool skip_hooks)
-{
-	zend_property_info *prop_info;
-
-	ZEND_LAZY_OBJECT_PASSTHRU(object) {
-		uint32_t *guard;
-		uint32_t guard_backup;
-		zend_class_entry *scope = class ? class : object->ce;
-		zend_class_entry *old_scope = EG(fake_scope);
-
-		EG(fake_scope) = scope;
-
-		prop_info = zend_get_property_info(object->ce, name, 1);
-
-		if (prop_info && prop_info != ZEND_WRONG_PROPERTY_INFO) {
-			if (UNEXPECTED(prop_info->flags & ZEND_ACC_STATIC)) {
-				zend_throw_exception_ex(reflection_exception_ptr, 0,
-						"Can not use %s on static property %s::$%s",
-						skip_hooks ? "setRawPropertyValue" : "setProperty",
-						ZSTR_VAL(scope->name), ZSTR_VAL(name));
-				goto fail;
-			}
-			if (UNEXPECTED(skip_hooks && (prop_info->flags & ZEND_ACC_VIRTUAL))) {
-				zend_throw_exception_ex(reflection_exception_ptr, 0,
-						"Can not use setRawPropertyValue on virtual property %s::$%s",
-						ZSTR_VAL(scope->name), ZSTR_VAL(name));
-				goto fail;
-			}
-		}
-
-		// TODO: check readonly
-
-		if (skip_hooks && (object->ce->ce_flags & ZEND_ACC_USE_GUARDS)) {
-			guard = zend_get_property_guard(object, name);
-			guard_backup = *guard;
-			*guard |= ZEND_GUARD_PROPERTY_HOOK;
-		}
-
-		object->handlers->write_property(object, name, value, NULL);
-
-		if (skip_hooks && (object->ce->ce_flags & ZEND_ACC_USE_GUARDS)) {
-			*guard = guard_backup;
-		}
-
-fail:
-		EG(fake_scope) = old_scope;
-	} ZEND_LAZY_OBJECT_PASSTHRU_END();
-}
-
-#if 0
-/* {{{ Set property value withtout triggering initializer while getting through hooks if any */
-ZEND_METHOD(ReflectionLazyObjectFactory, setProperty)
-{
-	reflection_object *intern;
-	zend_string *name;
-	zval *value;
-	zend_class_entry *class = NULL;
-
-	ZEND_PARSE_PARAMETERS_START(2, 3)
-		Z_PARAM_STR(name)
-		Z_PARAM_ZVAL(value)
-		Z_PARAM_OPTIONAL
-		Z_PARAM_CLASS_OR_NULL(class)
-	ZEND_PARSE_PARAMETERS_END();
-
-	GET_REFLECTION_OBJECT();
-
-	reflection_lazy_object_set_property(intern, name, value, class,
-			/* skip_hooks */ false);
-}
-/* }}} */
-#endif
-
-/* {{{ Set property value withtout triggering initializer while skipping hooks if any */
-ZEND_METHOD(ReflectionLazyObjectFactory, setRawPropertyValue)
-{
-	reflection_object *intern;
-	zend_class_entry *ce;
-	zend_object *object;
-	zend_string *name;
-	zval *value;
-	zend_class_entry *class = NULL;
-
-	GET_REFLECTION_OBJECT_PTR(ce);
-
-	ZEND_PARSE_PARAMETERS_START(3, 4)
-		Z_PARAM_OBJ_OF_CLASS(object, ce);
-		Z_PARAM_STR(name)
-		Z_PARAM_ZVAL(value)
-		Z_PARAM_OPTIONAL
-		Z_PARAM_CLASS_OR_NULL(class)
-	ZEND_PARSE_PARAMETERS_END();
-
-	reflection_lazy_object_set_property(object, name, value, class,
-			/* skip_hooks */ true);
-}
-/* }}} */
-
-/* {{{ Mark property as non-lazy, and initialize to default value */
-ZEND_METHOD(ReflectionLazyObjectFactory, skipInitializerForProperty)
-{
-	reflection_object *intern;
-	zend_class_entry *ce;
-	zend_object *object;
-	zend_string *name;
-	zend_class_entry *class = NULL;
-	zend_property_info *prop_info;
-	zend_class_entry *old_scope;
-	zend_class_entry *scope;
-
-	GET_REFLECTION_OBJECT_PTR(ce);
-
-	ZEND_PARSE_PARAMETERS_START(2, 3)
-		Z_PARAM_OBJ_OF_CLASS(object, ce)
-		Z_PARAM_STR(name)
-		Z_PARAM_OPTIONAL
-		Z_PARAM_CLASS_OR_NULL(class)
-	ZEND_PARSE_PARAMETERS_END();
-
-	scope = class ? class : object->ce;
-
-	old_scope = EG(fake_scope);
-	EG(fake_scope) = scope;
-
-	prop_info = zend_get_property_info(object->ce, name, 1);
-
-	EG(fake_scope) = old_scope;
-
-	if (UNEXPECTED(!prop_info || prop_info == ZEND_WRONG_PROPERTY_INFO)) {
-		zend_throw_exception_ex(reflection_exception_ptr, 0,
-				"Property %s::$%s does not exist",
-				ZSTR_VAL(scope->name), ZSTR_VAL(name));
-		RETURN_THROWS();
-	}
-
-	if (UNEXPECTED(prop_info->flags & ZEND_ACC_STATIC)) {
-		zend_throw_exception_ex(reflection_exception_ptr, 0,
-				"Can not initialize static property %s::$%s",
-				ZSTR_VAL(scope->name), ZSTR_VAL(name));
-		RETURN_THROWS();
-	}
-
-	if (UNEXPECTED(prop_info->flags & ZEND_ACC_VIRTUAL)) {
-		zend_throw_exception_ex(reflection_exception_ptr, 0,
-				"Can not initialize virtual property %s::$%s",
-				ZSTR_VAL(scope->name), ZSTR_VAL(name));
-		RETURN_THROWS();
-	}
-
-	// TODO: check readonly
-
-	bool prop_was_lazy = (Z_PROP_FLAG_P(OBJ_PROP(object, prop_info->offset)) & IS_PROP_LAZY);
-
-	zval *src = &object->ce->default_properties_table[OBJ_PROP_TO_NUM(prop_info->offset)];
-	zval *dst = &object->properties_table[OBJ_PROP_TO_NUM(prop_info->offset)];
-
-	zval_ptr_dtor(dst);
-
-	ZVAL_COPY_OR_DUP_PROP(dst, src);
-	Z_PROP_FLAG_P(dst) &= ~IS_PROP_LAZY;
-
-	if (prop_was_lazy && zend_object_is_lazy(object)
-			&& !zend_lazy_object_initialized(object)) {
-		if (zend_lazy_object_decr_lazy_props(object)) {
-			zend_lazy_object_realize(object);
-		}
-	}
-}
-/* }}} */
-
 /* {{{ Constructor. Throws an Exception in case the given property does not exist */
 ZEND_METHOD(ReflectionProperty, __construct)
 {
@@ -6250,6 +6070,138 @@ ZEND_METHOD(ReflectionProperty, setRawValue)
 	zend_update_property_ex(intern->ce, Z_OBJ_P(object), ref->unmangled_name, value);
 
 	*guard = guard_backup;
+}
+
+/* {{{ Set property value withtout triggering initializer while skipping hooks if any */
+ZEND_METHOD(ReflectionProperty, setRawValueWithoutLazyInitialization)
+{
+	reflection_object *intern;
+	property_reference *ref;
+	zend_object *object;
+	zval *value;
+
+	GET_REFLECTION_OBJECT_PTR(ref);
+
+	if (!ref->prop) {
+		zend_throw_exception_ex(reflection_exception_ptr, 0,
+				"Can not use setRawValueWithoutLazyInitialization on dynamic property %s::$%s",
+				ZSTR_VAL(intern->ce->name), ZSTR_VAL(ref->prop->name));
+		RETURN_THROWS();
+	}
+
+	if (ref->prop->flags & ZEND_ACC_STATIC) {
+		zend_throw_exception_ex(reflection_exception_ptr, 0,
+				"Can not use setRawValueWithoutLazyInitialization on static property %s::$%s",
+				ZSTR_VAL(intern->ce->name), ZSTR_VAL(ref->prop->name));
+		RETURN_THROWS();
+	}
+
+	if (ref->prop->flags & ZEND_ACC_VIRTUAL) {
+		zend_throw_exception_ex(reflection_exception_ptr, 0,
+				"Can not use setRawValueWithoutLazyInitialization on virtual property %s::$%s",
+				ZSTR_VAL(intern->ce->name), ZSTR_VAL(ref->prop->name));
+		RETURN_THROWS();
+	}
+
+	ZEND_PARSE_PARAMETERS_START(2, 2) {
+		Z_PARAM_OBJ(object)
+		Z_PARAM_ZVAL(value)
+	} ZEND_PARSE_PARAMETERS_END();
+
+	if (object->handlers->write_property != zend_std_write_property) {
+		zend_throw_exception_ex(reflection_exception_ptr, 0,
+				"Can not use setRawValueWithoutLazyInitialization on internal class %s",
+				ZSTR_VAL(intern->ce->name));
+		RETURN_THROWS();
+	}
+
+	ZEND_ASSERT(IS_VALID_PROPERTY_OFFSET(ref->prop->offset));
+
+	ZEND_LAZY_OBJECT_PASSTHRU(object) {
+		uint32_t *guard;
+		uint32_t guard_backup;
+
+		// TODO: check readonly
+		// TODO: side-effects
+
+		if (object->ce->ce_flags & ZEND_ACC_USE_GUARDS) {
+			guard = zend_get_property_guard(object, ref->unmangled_name);
+			guard_backup = *guard;
+			*guard |= ZEND_GUARD_PROPERTY_HOOK;
+		}
+
+		zend_update_property_ex(intern->ce, object, ref->unmangled_name, value);
+
+		if (object->ce->ce_flags & ZEND_ACC_USE_GUARDS) {
+			*guard = guard_backup;
+		}
+	} ZEND_LAZY_OBJECT_PASSTHRU_END();
+}
+
+/* {{{ Mark property as non-lazy, and initialize to default value */
+ZEND_METHOD(ReflectionProperty, skipLazyInitialization)
+{
+	reflection_object *intern;
+	property_reference *ref;
+	zend_object *object;
+
+	GET_REFLECTION_OBJECT_PTR(ref);
+
+	if (!ref->prop) {
+		zend_throw_exception_ex(reflection_exception_ptr, 0,
+				"Can not use skipLazyInitialization on dynamic property %s::$%s",
+				ZSTR_VAL(intern->ce->name), ZSTR_VAL(ref->prop->name));
+		RETURN_THROWS();
+	}
+
+	if (ref->prop->flags & ZEND_ACC_STATIC) {
+		zend_throw_exception_ex(reflection_exception_ptr, 0,
+				"Can not use skipLazyInitialization on static property %s::$%s",
+				ZSTR_VAL(intern->ce->name), ZSTR_VAL(ref->prop->name));
+		RETURN_THROWS();
+	}
+
+	if (ref->prop->flags & ZEND_ACC_VIRTUAL) {
+		zend_throw_exception_ex(reflection_exception_ptr, 0,
+				"Can not use skipLazyInitialization on virtual property %s::$%s",
+				ZSTR_VAL(intern->ce->name), ZSTR_VAL(ref->prop->name));
+		RETURN_THROWS();
+	}
+
+	ZEND_PARSE_PARAMETERS_START(1, 1) {
+		Z_PARAM_OBJ(object)
+	} ZEND_PARSE_PARAMETERS_END();
+
+	if (object->handlers->write_property != zend_std_write_property) {
+		zend_throw_exception_ex(reflection_exception_ptr, 0,
+				"Can not use skipLazyInitialization on internal class %s",
+				ZSTR_VAL(intern->ce->name));
+		RETURN_THROWS();
+	}
+
+	ZEND_ASSERT(IS_VALID_PROPERTY_OFFSET(ref->prop->offset));
+
+	// TODO: check readonly
+	// TODO: side-effects
+
+	bool prop_was_lazy = (Z_PROP_FLAG_P(OBJ_PROP(object, ref->prop->offset)) & IS_PROP_LAZY);
+
+	zval *src = &object->ce->default_properties_table[OBJ_PROP_TO_NUM(ref->prop->offset)];
+	zval *dst = &object->properties_table[OBJ_PROP_TO_NUM(ref->prop->offset)];
+
+	if (Z_PROP_FLAG_P(dst) & IS_PROP_LAZY) {
+		zval_ptr_dtor(dst);
+
+		ZVAL_COPY_OR_DUP_PROP(dst, src);
+		Z_PROP_FLAG_P(dst) &= ~IS_PROP_LAZY;
+
+		if (prop_was_lazy && zend_object_is_lazy(object)
+				&& !zend_lazy_object_initialized(object)) {
+			if (zend_lazy_object_decr_lazy_props(object)) {
+				zend_lazy_object_realize(object);
+			}
+		}
+	}
 }
 
 /* {{{ Returns true if property was initialized */
@@ -7966,10 +7918,6 @@ PHP_MINIT_FUNCTION(reflection) /* {{{ */
 	reflection_object_ptr = register_class_ReflectionObject(reflection_class_ptr);
 	reflection_object_ptr->create_object = reflection_objects_new;
 	reflection_object_ptr->default_object_handlers = &reflection_object_handlers;
-
-	reflection_lazy_object_ptr = register_class_ReflectionLazyObjectFactory(reflection_object_ptr);
-	reflection_lazy_object_ptr->create_object = reflection_objects_new;
-	reflection_lazy_object_ptr->default_object_handlers = &reflection_object_handlers;
 
 	reflection_property_ptr = register_class_ReflectionProperty(reflector_ptr);
 	reflection_property_ptr->create_object = reflection_objects_new;

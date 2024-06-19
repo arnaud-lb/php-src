@@ -24,7 +24,7 @@ class Application {
 class Container {
     public function getEntityManagerService(): EntityManager {
         $obj = (new ReflectionClass(EntityManager::class))->newInstanceWithoutConstructor();
-        ReflectionLazyObjectFactory::makeInstanceLazyProxy($obj, function ($obj) {
+        (new ReflectionClass($obj))->resetAsLazyProxy($obj, function ($obj) {
             return new EntityManager();
         });
         return $obj;

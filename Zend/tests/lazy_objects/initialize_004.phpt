@@ -1,5 +1,5 @@
 --TEST--
-Lazy objects: ReflectionLazyObjectFactory::initialize with custom initializer from scope
+Lazy objects: ReflectionClass::initialize with custom initializer from scope
 --XFAIL--
 initialize() takes a boolean
 --FILE--
@@ -11,7 +11,7 @@ class C {
 
 class D {
     public function initialize($obj) {
-        $reflector = new ReflectionLazyObjectFactory($obj);
+        $reflector = new ReflectionClass($obj);
         $reflector->initialize($obj, $this->initializer(...));
     }
 
@@ -23,7 +23,7 @@ class D {
 
 class E {
     public function initialize($obj) {
-        $reflector = new ReflectionLazyObjectFactory($obj);
+        $reflector = new ReflectionClass($obj);
         $reflector->initialize($obj, $this->initializer(...));
     }
 
@@ -38,7 +38,7 @@ class E {
 function test(string $name, object $obj, object $initializer) {
     printf("# %s:\n", $name);
 
-    $reflector = new ReflectionLazyObjectFactory($obj);
+    $reflector = new ReflectionClass($obj);
 
     var_dump($reflector->isInitialized($obj));
 
@@ -49,7 +49,7 @@ function test(string $name, object $obj, object $initializer) {
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObjectFactory::makeInstanceLazyGhost($obj, function ($obj) {
+(new ReflectionClass($obj))->resetAsLazyGhost($obj, function ($obj) {
     var_dump("initializer");
     $obj->a = 1;
 });
@@ -57,7 +57,7 @@ ReflectionLazyObjectFactory::makeInstanceLazyGhost($obj, function ($obj) {
 test('Ghost', $obj, new D());
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObjectFactory::makeInstanceLazyProxy($obj, function ($obj) {
+(new ReflectionClass($obj))->resetAsLazyProxy($obj, function ($obj) {
     var_dump("initializer");
     $c = new C();
     $c->a = 1;

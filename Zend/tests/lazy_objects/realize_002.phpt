@@ -25,38 +25,38 @@ class C extends B {
 function test(string $name, object $obj) {
     printf("# %s:\n", $name);
 
-    $reflector = new ReflectionLazyObjectFactory($obj);
+    $reflector = new ReflectionClass($obj);
     var_dump($reflector->isInitialized($obj));
 
-    $reflector->skipInitializerForProperty($obj, 'a');
+    $reflector->getProperty('a')->skipLazyInitialization($obj);
     var_dump($reflector->isInitialized($obj));
 
     // Should not count a second prop initialization
-    $reflector->skipInitializerForProperty($obj, 'a');
+    $reflector->getProperty('a')->skipLazyInitialization($obj);
     var_dump($reflector->isInitialized($obj));
 
     try {
         // Should not count a prop initialization
-        $reflector->skipInitializerForProperty($obj, 'xxx');
+        $reflector->getProperty('xxx')->skipLazyInitialization($obj);
     } catch (ReflectionException $e) {
         printf("%s: %s\n", $e::class, $e->getMessage());
     }
 
     try {
         // Should not count a prop initialization
-        $reflector->skipInitializerForProperty($obj, 'b');
+        $reflector->getProperty('b')->skipLazyInitialization($obj);
     } catch (ReflectionException $e) {
         printf("%s: %s\n", $e::class, $e->getMessage());
     }
 
-    $reflector->skipInitializerForProperty($obj, 'b', B::class);
+    (new ReflectionProperty(B::class, 'b'))->skipLazyInitialization($obj);
     var_dump($reflector->isInitialized($obj));
 
     var_dump($obj);
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObjectFactory::makeInstanceLazyGhost($obj, function ($obj) {
+(new ReflectionClass($obj))->resetAsLazyGhost($obj, function ($obj) {
     var_dump("initializer");
     $obj->__construct();
 });
@@ -64,14 +64,14 @@ ReflectionLazyObjectFactory::makeInstanceLazyGhost($obj, function ($obj) {
 test('Ghost', $obj);
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObjectFactory::makeInstanceLazyProxy($obj, function ($obj) {
+(new ReflectionClass($obj))->resetAsLazyProxy($obj, function ($obj) {
     var_dump("initializer");
     return new C();
 });
 
 test('Virtual', $obj);
 
---EXPECT--
+--EXPECTF--
 # Ghost:
 bool(false)
 bool(false)
@@ -79,7 +79,7 @@ bool(false)
 ReflectionException: Property C::$xxx does not exist
 ReflectionException: Property C::$b does not exist
 bool(true)
-object(C)#2 (0) {
+object(C)#%d (0) {
   ["b":"B":private]=>
   uninitialized(string)
   ["a"]=>
@@ -92,7 +92,7 @@ bool(false)
 ReflectionException: Property C::$xxx does not exist
 ReflectionException: Property C::$b does not exist
 bool(true)
-object(C)#3 (0) {
+object(C)#%d (0) {
   ["b":"B":private]=>
   uninitialized(string)
   ["a"]=>

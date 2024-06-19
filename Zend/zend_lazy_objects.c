@@ -66,7 +66,7 @@ static void zend_lazy_object_info_dtor_func(zval *pElement)
 	zend_lazy_object_info *info = (zend_lazy_object_info*) Z_PTR_P(pElement);
 
 	if (info->flags & ZEND_LAZY_OBJECT_INITIALIZED) {
-		ZEND_ASSERT(info->flags & ZEND_LAZY_OBJECT_STRATEGY_VIRTUAL);
+		ZEND_ASSERT(info->flags & ZEND_LAZY_OBJECT_STRATEGY_PROXY);
 		zend_object_release(info->u.instance);
 	} else {
 		zend_fcc_dtor(&info->u.initializer);
@@ -189,7 +189,7 @@ ZEND_API zend_object *zend_object_make_lazy(zend_object *obj,
 {
 	ZEND_ASSERT(!(flags & ~(ZEND_LAZY_OBJECT_USER_FLAGS|ZEND_LAZY_OBJECT_STRATEGY_FLAGS)));
 	ZEND_ASSERT((flags & ZEND_LAZY_OBJECT_STRATEGY_FLAGS) == ZEND_LAZY_OBJECT_STRATEGY_GHOST
-			|| (flags & ZEND_LAZY_OBJECT_STRATEGY_FLAGS) == ZEND_LAZY_OBJECT_STRATEGY_VIRTUAL);
+			|| (flags & ZEND_LAZY_OBJECT_STRATEGY_FLAGS) == ZEND_LAZY_OBJECT_STRATEGY_PROXY);
 
 	ZEND_ASSERT(!obj || !zend_object_is_lazy(obj));
 	ZEND_ASSERT(!obj || obj->ce == class_type);
@@ -267,7 +267,7 @@ ZEND_API zend_object *zend_object_make_lazy(zend_object *obj,
 
 	OBJ_EXTRA_FLAGS(obj) |= IS_OBJ_LAZY;
 
-	if (flags & ZEND_LAZY_OBJECT_STRATEGY_VIRTUAL) {
+	if (flags & ZEND_LAZY_OBJECT_STRATEGY_PROXY) {
 		OBJ_EXTRA_FLAGS(obj) |= IS_OBJ_VIRTUAL_LAZY;
 	} else {
 		ZEND_ASSERT(flags & ZEND_LAZY_OBJECT_STRATEGY_GHOST);

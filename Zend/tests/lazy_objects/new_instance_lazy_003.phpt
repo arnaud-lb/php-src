@@ -6,9 +6,10 @@ Lazy objects: newInstanceLazy can instantiate sub-class of user classes
 class B {}
 class C extends B {}
 
-foreach (['makeInstanceLazyGhost', 'makeInstanceLazyProxy'] as $strategy) {
-    $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-    ReflectionLazyObjectFactory::$strategy($obj, function ($obj) {
+foreach (['resetAsLazyGhost', 'resetAsLazyProxy'] as $strategy) {
+    $reflector = new ReflectionClass(C::class);
+    $obj = $reflector->newInstanceWithoutConstructor();
+    $reflector->$strategy($obj, function ($obj) {
         var_dump("initializer");
     });
     var_dump($obj);

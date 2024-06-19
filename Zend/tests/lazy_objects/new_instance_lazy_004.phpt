@@ -3,9 +3,10 @@ Lazy objects: newInstanceLazy can instantiate stdClass
 --FILE--
 <?php
 
-foreach (['makeInstanceLazyGhost', 'makeInstanceLazyProxy'] as $strategy) {
-    $obj = (new ReflectionClass(stdClass::class))->newInstanceWithoutConstructor();
-    ReflectionLazyObjectFactory::$strategy($obj, function ($obj) {
+foreach (['resetAsLazyGhost', 'resetAsLazyProxy'] as $strategy) {
+    $reflector =new ReflectionClass(stdClass::class);
+    $obj = $reflector->newInstanceWithoutConstructor();
+    $reflector->$strategy($obj, function ($obj) {
         var_dump("initializer");
     });
     var_dump($obj);

@@ -12,13 +12,14 @@ class C {
     }
 }
 
-$obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-$r = ReflectionLazyObjectFactory::makeInstanceLazyGhost($obj, function ($obj) {
+$reflector = new ReflectionClass(C::class);
+$obj = $reflector->newInstanceWithoutConstructor();
+$reflector->resetAsLazyGhost($obj, function ($obj) {
     var_dump("initializer");
     $obj->__construct();
 });
 
-$r->setRawPropertyValue($obj, 'b', new stdClass);
+$reflector->getProperty('b')->setRawValueWithoutLazyInitialization($obj, new stdClass);
 
 var_dump($obj);
 var_dump($obj->c);

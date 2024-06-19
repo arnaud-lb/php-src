@@ -12,23 +12,23 @@ class C {
 function test(string $name, object $obj) {
     printf("# %s:\n", $name);
 
-    (new ReflectionLazyObjectFactory($obj))->setRawPropertyValue($obj, 'c', 0);
+    (new ReflectionProperty($obj, 'c'))->setRawValueWithoutLazyInitialization($obj, 0);
 
     // Builds properties hashtable
     var_dump(get_object_vars($obj));
 
     try {
-        ReflectionLazyObjectFactory::initialize($obj);
+        (new ReflectionClass($obj))->initialize($obj);
     } catch (Exception $e) {
         printf("%s\n", $e->getMessage());
     }
 
     var_dump($obj);
-    printf("Is lazy: %d\n", !ReflectionLazyObjectFactory::isInitialized($obj));
+    printf("Is lazy: %d\n", !(new ReflectionClass($obj))->isInitialized($obj));
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObjectFactory::makeInstanceLazyGhost($obj, function ($obj) {
+(new ReflectionClass($obj))->resetAsLazyGhost($obj, function ($obj) {
     var_dump("initializer");
     $obj->a = 3;
     $obj->b = 4;
@@ -39,7 +39,7 @@ ReflectionLazyObjectFactory::makeInstanceLazyGhost($obj, function ($obj) {
 test('Ghost', $obj);
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObjectFactory::makeInstanceLazyProxy($obj, function ($obj) {
+(new ReflectionClass($obj))->resetAsLazyProxy($obj, function ($obj) {
     var_dump("initializer");
     $obj->a = 3;
     $obj->b = 4;

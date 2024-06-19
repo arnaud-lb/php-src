@@ -1,5 +1,5 @@
 --TEST--
-Lazy objects: ReflectionLazyObjectFactory::initialize with custom initializer
+Lazy objects: ReflectionClass::initialize with custom initializer
 --XFAIL--
 initialize() takes a boolean
 --FILE--
@@ -12,7 +12,7 @@ class C {
 function test(string $name, object $obj, callable $initializer) {
     printf("# %s:\n", $name);
 
-    $reflector = new ReflectionLazyObjectFactory($obj);
+    $reflector = new ReflectionClass($obj);
 
     var_dump($reflector->isInitialized($obj));
 
@@ -23,7 +23,7 @@ function test(string $name, object $obj, callable $initializer) {
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObjectFactory::makeInstanceLazyGhost($obj, function ($obj) {
+(new ReflectionClass($obj))->resetAsLazyGhost($obj, function ($obj) {
     var_dump("initializer");
     $obj->a = 1;
 });
@@ -34,7 +34,7 @@ test('Ghost', $obj, function ($obj) {
 });
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObjectFactory::makeInstanceLazyProxy($obj, function ($obj) {
+(new ReflectionClass($obj))->resetAsLazyProxy($obj, function ($obj) {
     var_dump("initializer");
     $c = new C();
     $c->a = 1;

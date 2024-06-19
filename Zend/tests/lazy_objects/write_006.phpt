@@ -16,10 +16,10 @@ class C {
 function test(string $name, object $obj) {
     printf("# %s:\n", $name);
 
-    $reflector = new ReflectionLazyObjectFactory($obj);
-    $reflector->skipInitializerForProperty($obj, 'a');
-    $reflector->skipInitializerForProperty($obj, 'b');
-    $reflector->skipInitializerForProperty($obj, 'c');
+    $reflector = new ReflectionClass($obj);
+    $reflector->getProperty('a')->skipLazyInitialization($obj);
+    $reflector->getProperty('b')->skipLazyInitialization($obj);
+    $reflector->getProperty('c')->skipLazyInitialization($obj);
 
     var_dump($obj);
     $obj->a = 2;
@@ -29,7 +29,7 @@ function test(string $name, object $obj) {
 }
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObjectFactory::makeInstanceLazyGhost($obj, function ($obj) {
+(new ReflectionClass($obj))->resetAsLazyGhost($obj, function ($obj) {
     var_dump("initializer");
     $obj->__construct();
 });
@@ -37,7 +37,7 @@ ReflectionLazyObjectFactory::makeInstanceLazyGhost($obj, function ($obj) {
 test('Ghost', $obj);
 
 $obj = (new ReflectionClass(C::class))->newInstanceWithoutConstructor();
-ReflectionLazyObjectFactory::makeInstanceLazyProxy($obj, function ($obj) {
+(new ReflectionClass($obj))->resetAsLazyProxy($obj, function ($obj) {
     var_dump("initializer");
     return new C();
 });

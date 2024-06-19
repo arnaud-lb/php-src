@@ -19,7 +19,7 @@ print "# Ghost:\n";
 
 $obj = new C();
 try {
-    ReflectionLazyObjectFactory::makeInstanceLazyGhost($obj, function ($obj) {
+    (new ReflectionClass($obj))->resetAsLazyGhost($obj, function ($obj) {
         var_dump("initializer");
         $obj->__construct();
     });
@@ -28,13 +28,13 @@ try {
 }
 
 // Object was not made lazy
-var_dump(ReflectionLazyObjectFactory::isInitialized($obj));
+var_dump((new ReflectionClass($obj))->isInitialized($obj));
 
 print "# Virtual:\n";
 
 $obj = new C();
 try {
-    ReflectionLazyObjectFactory::makeInstanceLazyProxy($obj, function ($obj) {
+    (new ReflectionClass($obj))->resetAsLazyProxy($obj, function ($obj) {
         var_dump("initializer");
         return new C();
     });
@@ -43,7 +43,7 @@ try {
 }
 
 // Object was not made lazy
-var_dump(ReflectionLazyObjectFactory::isInitialized($obj));
+var_dump((new ReflectionClass($obj))->isInitialized($obj));
 
 ?>
 --EXPECT--
