@@ -512,12 +512,8 @@ static inline HashTable* spl_heap_object_get_debug_info(zend_class_entry *ce, ze
 	HashTable *debug_info;
 	int  i;
 
-	if (!intern->std.properties) {
-		rebuild_object_properties(&intern->std);
-	}
-
-	debug_info = zend_new_array(zend_hash_num_elements(intern->std.properties) + 1);
-	zend_hash_copy(debug_info, intern->std.properties, (copy_ctor_func_t) zval_add_ref);
+	debug_info = zend_new_array(zend_hash_num_elements(zend_std_get_properties(&intern->std)) + 1);
+	zend_hash_copy(debug_info, zend_std_get_properties(&intern->std), (copy_ctor_func_t) zval_add_ref);
 
 	pnstr = spl_gen_private_prop_name(ce, "flags", sizeof("flags")-1);
 	ZVAL_LONG(&tmp, intern->flags);

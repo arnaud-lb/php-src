@@ -240,6 +240,7 @@ ZEND_API zval *zend_std_get_static_property(zend_class_entry *ce, zend_string *p
 ZEND_API ZEND_COLD bool zend_std_unset_static_property(zend_class_entry *ce, zend_string *property_name);
 ZEND_API zend_function *zend_std_get_constructor(zend_object *object);
 ZEND_API struct _zend_property_info *zend_get_property_info(const zend_class_entry *ce, zend_string *member, int silent);
+ZEND_API HashTable **zend_std_get_properties_ptr(zend_object *object);
 ZEND_API HashTable *zend_std_get_properties(zend_object *object);
 ZEND_API HashTable *zend_std_get_gc(zend_object *object, zval **table, int *n);
 ZEND_API HashTable *zend_std_get_debug_info(zend_object *object, int *is_temp);
@@ -257,7 +258,6 @@ ZEND_API zend_function *zend_std_get_method(zend_object **obj_ptr, zend_string *
 ZEND_API zend_string *zend_std_get_class_name(const zend_object *zobj);
 ZEND_API int zend_std_compare_objects(zval *o1, zval *o2);
 ZEND_API zend_result zend_std_get_closure(zend_object *obj, zend_class_entry **ce_ptr, zend_function **fptr_ptr, zend_object **obj_ptr, bool check_only);
-ZEND_API void rebuild_object_properties(zend_object *zobj);
 
 ZEND_API HashTable *zend_std_build_object_properties_array(zend_object *zobj);
 
@@ -276,6 +276,8 @@ ZEND_API uint32_t *zend_get_property_guard(zend_object *zobj, zend_string *membe
 ZEND_API uint32_t *zend_get_property_guard(zend_object *zobj, zend_string *member);
 
 ZEND_API uint32_t *zend_get_recursion_guard(zend_object *zobj);
+
+void zend_mask_property_guards(zend_object *zobj, uint32_t mask);
 
 /* Default behavior for get_properties_for. For use as a fallback in custom
  * get_properties_for implementations. */

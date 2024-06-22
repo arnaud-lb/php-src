@@ -771,6 +771,7 @@ ZEND_FUNCTION(get_object_vars)
 	zval obj_zv;
 	ZVAL_OBJ(&obj_zv, zobj);
 	properties = zend_get_properties_for(&obj_zv, ZEND_PROP_PURPOSE_GET_OBJECT_VARS);
+
 	if (properties == NULL) {
 		RETURN_EMPTY_ARRAY();
 	}
@@ -852,7 +853,10 @@ ZEND_FUNCTION(get_mangled_object_vars)
 		Z_PARAM_OBJ(obj)
 	ZEND_PARSE_PARAMETERS_END();
 
-	properties = obj->handlers->get_properties(obj);
+	ZEND_LAZY_OBJECT_PASSTHRU(obj) {
+		properties = obj->handlers->get_properties(obj);
+	} ZEND_LAZY_OBJECT_PASSTHRU_END();
+
 	if (!properties) {
 		ZVAL_EMPTY_ARRAY(return_value);
 		return;
