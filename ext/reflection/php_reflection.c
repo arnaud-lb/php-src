@@ -6119,25 +6119,42 @@ ZEND_METHOD(ReflectionProperty, setRawValueWithoutLazyInitialization)
 
 	ZEND_ASSERT(IS_VALID_PROPERTY_OFFSET(ref->prop->offset));
 
-	ZEND_LAZY_OBJECT_PASSTHRU(object) {
-		uint32_t *guard;
-		uint32_t guard_backup;
+	uint32_t *guard;
+	uint32_t guard_backup;
+	zval *var_ptr = OBJ_PROP(object, ref->prop->offset);
+	bool prop_was_lazy = Z_PROP_FLAG_P(var_ptr) & IS_PROP_LAZY;
 
-		// TODO: check readonly
-		// TODO: side-effects
+	/* Skip hooks */
+	if (object->ce->ce_flags & ZEND_ACC_USE_GUARDS) {
+		guard = zend_get_property_guard(object, ref->unmangled_name);
+		guard_backup = *guard;
+		*guard |= ZEND_GUARD_PROPERTY_HOOK;
+	}
 
-		if (object->ce->ce_flags & ZEND_ACC_USE_GUARDS) {
-			guard = zend_get_property_guard(object, ref->unmangled_name);
-			guard_backup = *guard;
-			*guard |= ZEND_GUARD_PROPERTY_HOOK;
+	/* Do not trigger initialization */
+	Z_PROP_FLAG_P(var_ptr) &= ~IS_PROP_LAZY;
+
+	zend_update_property_ex(intern->ce, object, ref->unmangled_name, value);
+
+	if (object->ce->ce_flags & ZEND_ACC_USE_GUARDS) {
+		*guard = guard_backup;
+	}
+
+	/* Mark property as lazy again if an exception prevented update */
+	if (EG(exception) && Z_TYPE_P(var_ptr) == IS_UNDEF
+			&& zend_object_is_lazy(object)
+			&& !zend_lazy_object_initialized(object)) {
+		Z_PROP_FLAG_P(var_ptr) |= IS_PROP_LAZY;
+	}
+
+	/* Object becomes non-lazy if this was the last lazy prop */
+	if (prop_was_lazy && !(Z_PROP_FLAG_P(var_ptr) & IS_PROP_LAZY)
+			&& zend_object_is_lazy(object)
+			&& !zend_lazy_object_initialized(object)) {
+		if (zend_lazy_object_decr_lazy_props(object)) {
+			zend_lazy_object_realize(object);
 		}
-
-		zend_update_property_ex(intern->ce, object, ref->unmangled_name, value);
-
-		if (object->ce->ce_flags & ZEND_ACC_USE_GUARDS) {
-			*guard = guard_backup;
-		}
-	} ZEND_LAZY_OBJECT_PASSTHRU_END();
+	}
 }
 
 /* {{{ Mark property as non-lazy, and initialize to default value */
@@ -6183,25 +6200,26 @@ ZEND_METHOD(ReflectionProperty, skipLazyInitialization)
 
 	ZEND_ASSERT(IS_VALID_PROPERTY_OFFSET(ref->prop->offset));
 
-	// TODO: check readonly
-	// TODO: side-effects
-
 	bool prop_was_lazy = (Z_PROP_FLAG_P(OBJ_PROP(object, ref->prop->offset)) & IS_PROP_LAZY);
 
 	zval *src = &object->ce->default_properties_table[OBJ_PROP_TO_NUM(ref->prop->offset)];
-	zval *dst = &object->properties_table[OBJ_PROP_TO_NUM(ref->prop->offset)];
+	zval *dst = OBJ_PROP(object, ref->prop->offset);
 
-	if (Z_PROP_FLAG_P(dst) & IS_PROP_LAZY) {
-		zval_ptr_dtor(dst);
+	if (!(Z_PROP_FLAG_P(dst) & IS_PROP_LAZY)) {
+		/* skipLazyInitialization has no effect on non-lazy properties */
+		return;
+	}
 
-		ZVAL_COPY_OR_DUP_PROP(dst, src);
-		Z_PROP_FLAG_P(dst) &= ~IS_PROP_LAZY;
+	ZEND_ASSERT(Z_TYPE_P(dst) == IS_UNDEF && "Lazy property should be UNDEF");
 
-		if (prop_was_lazy && zend_object_is_lazy(object)
-				&& !zend_lazy_object_initialized(object)) {
-			if (zend_lazy_object_decr_lazy_props(object)) {
-				zend_lazy_object_realize(object);
-			}
+	ZVAL_COPY_OR_DUP_PROP(dst, src);
+	Z_PROP_FLAG_P(dst) &= ~(IS_PROP_LAZY | IS_PROP_REINITABLE);
+
+	/* Object becomes non-lazy if this was the last lazy prop */
+	if (prop_was_lazy && zend_object_is_lazy(object)
+			&& !zend_lazy_object_initialized(object)) {
+		if (zend_lazy_object_decr_lazy_props(object)) {
+			zend_lazy_object_realize(object);
 		}
 	}
 }
