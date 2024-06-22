@@ -5202,12 +5202,12 @@ void reflection_class_new_lazy(INTERNAL_FUNCTION_PARAMETERS,
 	ZEND_ASSERT(strategy == ZEND_LAZY_OBJECT_STRATEGY_GHOST
 			|| strategy == ZEND_LAZY_OBJECT_STRATEGY_PROXY);
 
-	GET_REFLECTION_OBJECT();
+	GET_REFLECTION_OBJECT_PTR(ce);
 
 	if (is_reset) {
 		ZEND_PARSE_PARAMETERS_START(2, 3)
 			// TODO: check that obj->ce matches ce
-			Z_PARAM_OBJ_OF_CLASS(obj, intern->ce)
+			Z_PARAM_OBJ_OF_CLASS(obj, ce)
 			Z_PARAM_FUNC(fci, fcc)
 			Z_PARAM_OPTIONAL
 			// TODO: check named param
@@ -5234,7 +5234,6 @@ void reflection_class_new_lazy(INTERNAL_FUNCTION_PARAMETERS,
 		ce = obj->ce;
 	} else {
 		obj = NULL;
-		ce = intern->ce;
 	}
 
 	if (!fcc.function_handler) {
@@ -5290,12 +5289,13 @@ PHP_METHOD(ReflectionClass, resetAsLazyProxy)
 ZEND_METHOD(ReflectionClass, isLazyObject)
 {
 	reflection_object *intern;
+	zend_class_entry *ce;
 	zend_object *object;
 
-	GET_REFLECTION_OBJECT();
+	GET_REFLECTION_OBJECT_PTR(ce);
 
 	ZEND_PARSE_PARAMETERS_START(1, 1)
-		Z_PARAM_OBJ_OF_CLASS(object, intern->ce)
+		Z_PARAM_OBJ_OF_CLASS(object, ce)
 		ZEND_PARSE_PARAMETERS_END();
 
 	RETURN_BOOL(zend_object_is_lazy(object) && !zend_lazy_object_initialized(object));
@@ -5306,12 +5306,13 @@ ZEND_METHOD(ReflectionClass, isLazyObject)
 ZEND_METHOD(ReflectionClass, isInitialized)
 {
 	reflection_object *intern;
+	zend_class_entry *ce;
 	zend_object *object;
 
-	GET_REFLECTION_OBJECT();
+	GET_REFLECTION_OBJECT_PTR(ce);
 
 	ZEND_PARSE_PARAMETERS_START(1, 1)
-		Z_PARAM_OBJ_OF_CLASS(object, intern->ce)
+		Z_PARAM_OBJ_OF_CLASS(object, ce)
 	ZEND_PARSE_PARAMETERS_END();
 
 	RETURN_BOOL(!zend_object_is_lazy(object) || zend_lazy_object_initialized(object));
@@ -5322,13 +5323,14 @@ ZEND_METHOD(ReflectionClass, isInitialized)
 ZEND_METHOD(ReflectionClass, initialize)
 {
 	reflection_object *intern;
+	zend_class_entry *ce;
 	zend_object *object;
 	bool skipInitializer = false;
 
-	GET_REFLECTION_OBJECT();
+	GET_REFLECTION_OBJECT_PTR(ce);
 
 	ZEND_PARSE_PARAMETERS_START(1, 2)
-		Z_PARAM_OBJ_OF_CLASS(object, intern->ce)
+		Z_PARAM_OBJ_OF_CLASS(object, ce)
 		Z_PARAM_OPTIONAL
 		Z_PARAM_BOOL(skipInitializer)
 	ZEND_PARSE_PARAMETERS_END();
