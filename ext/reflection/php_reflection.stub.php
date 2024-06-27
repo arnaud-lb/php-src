@@ -233,6 +233,14 @@ class ReflectionMethod extends ReflectionFunctionAbstract
     public function setAccessible(bool $accessible): void {}
 }
 
+enum LazyObjectOption
+{
+    case SkipInitializationOnSerialize;
+    case SkipDestructor;
+    case SkipInitializedReadonly;
+    case ResetInitializedReadonly;
+}
+
 /** @not-serializable */
 class ReflectionClass implements Reflector
 {
@@ -374,13 +382,13 @@ class ReflectionClass implements Reflector
     /** @tentative-return-type */
     public function newInstanceArgs(array $args = []): ?object {}
 
-    public function newLazyGhost(callable $initializer, int $options = 0): object {}
+    public function newLazyGhost(callable $initializer, array $options = []): object {}
 
-    public function newLazyProxy(callable $factory, int $options = 0): object {}
+    public function newLazyProxy(callable $factory, array $options = []): object {}
 
-    public function resetAsLazyGhost(object $object, callable $factory, int $options = 0): void {}
+    public function resetAsLazyGhost(object $object, callable $factory, array $options = []): void {}
 
-    public function resetAsLazyProxy(object $object, callable $factory, int $options = 0): void {}
+    public function resetAsLazyProxy(object $object, callable $factory, array $options = []): void {}
 
     public function initialize(object $object, bool $skipInitializer = false): object {}
 

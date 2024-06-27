@@ -20,8 +20,10 @@
 
 #include "zend_compile.h"
 #include "zend_execute.h"
+#include "zend_hash.h"
 #include "zend_lazy_objects.h"
 #include "zend_object_handlers.h"
+#include "zend_portability.h"
 #include "zend_type_info.h"
 #include "zend_types.h"
 #ifdef HAVE_CONFIG_H
@@ -105,6 +107,7 @@ PHPAPI zend_class_entry *reflection_enum_backed_case_ptr;
 PHPAPI zend_class_entry *reflection_fiber_ptr;
 PHPAPI zend_class_entry *reflection_constant_ptr;
 PHPAPI zend_class_entry *reflection_property_hook_type_ptr;
+PHPAPI zend_class_entry *reflection_lazy_object_option_ptr;
 
 /* Exception throwing macro */
 #define _DO_THROW(msg) \
@@ -5197,6 +5200,7 @@ void reflection_class_new_lazy(INTERNAL_FUNCTION_PARAMETERS,
 	zend_class_entry *ce;
 	zend_fcall_info fci;
 	zend_fcall_info_cache fcc;
+	zend_array *flags_ht = NULL;
 	zend_long flags = 0;
 
 	ZEND_ASSERT(strategy == ZEND_LAZY_OBJECT_STRATEGY_GHOST
@@ -5211,15 +5215,35 @@ void reflection_class_new_lazy(INTERNAL_FUNCTION_PARAMETERS,
 			Z_PARAM_FUNC(fci, fcc)
 			Z_PARAM_OPTIONAL
 			// TODO: check named param
-			Z_PARAM_LONG(flags)
+			Z_PARAM_ARRAY_HT(flags_ht)
 		ZEND_PARSE_PARAMETERS_END();
 	} else {
 		ZEND_PARSE_PARAMETERS_START(1, 2)
 			Z_PARAM_FUNC(fci, fcc)
 			Z_PARAM_OPTIONAL
-			Z_PARAM_LONG(flags)
+			Z_PARAM_ARRAY_HT(flags_ht)
 		ZEND_PARSE_PARAMETERS_END();
 		obj = NULL;
+	}
+
+	zval *elem;
+	if (flags_ht) {
+		ZEND_HASH_FOREACH_VAL(flags_ht, elem) {
+			if (Z_TYPE_P(elem) != IS_OBJECT
+					|| !instanceof_function(Z_CE_P(elem), reflection_lazy_object_option_ptr)) {
+				zend_argument_type_error(is_reset ? 3 : 2,
+						"must be an array of LazyObjectOption, array of %s given",
+						zend_zval_value_name(elem));
+			}
+			zend_object *enum_case = Z_OBJ_P(elem);
+			if (zend_string_equals_literal(Z_STR_P(zend_enum_fetch_case_name(enum_case)), "SkipInitializationOnSerialize")) {
+				flags |= ZEND_LAZY_OBJECT_SKIP_INITIALIZATION_ON_SERIALIZE;
+			} else if (zend_string_equals_literal(Z_STR_P(zend_enum_fetch_case_name(enum_case)), "SkipDestructor")) {
+				flags |= ZEND_LAZY_OBJECT_SKIP_DESTRUCTOR;
+			} else {
+				ZEND_UNREACHABLE();
+			}
+		} ZEND_HASH_FOREACH_END();
 	}
 
 	if (flags & ~ZEND_LAZY_OBJECT_USER_FLAGS) {
@@ -7988,6 +8012,8 @@ PHP_MINIT_FUNCTION(reflection) /* {{{ */
 	reflection_constant_ptr->default_object_handlers = &reflection_object_handlers;
 
 	reflection_property_hook_type_ptr = register_class_PropertyHookType();
+
+	reflection_lazy_object_option_ptr = register_class_LazyObjectOption();
 
 	REFLECTION_G(key_initialized) = 0;
 

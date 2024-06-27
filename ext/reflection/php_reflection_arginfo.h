@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: aeacfe46ab3e2fb9f3775cdd5e2ff1e84bfac32e */
+ * Stub hash: d4849b0f146461cc994a8be1a2afa177fd9791fd */
 
 ZEND_BEGIN_ARG_WITH_TENTATIVE_RETURN_TYPE_INFO_EX(arginfo_class_Reflection_getModifierNames, 0, 1, IS_ARRAY, 0)
 	ZEND_ARG_TYPE_INFO(0, modifiers, IS_LONG, 0)
@@ -287,18 +287,18 @@ ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_ReflectionClass_newLazyGhost, 0, 1, IS_OBJECT, 0)
 	ZEND_ARG_TYPE_INFO(0, initializer, IS_CALLABLE, 0)
-	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_LONG, 0, "0")
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 0, "[]")
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_ReflectionClass_newLazyProxy, 0, 1, IS_OBJECT, 0)
 	ZEND_ARG_TYPE_INFO(0, factory, IS_CALLABLE, 0)
-	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_LONG, 0, "0")
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 0, "[]")
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_ReflectionClass_resetAsLazyGhost, 0, 2, IS_VOID, 0)
 	ZEND_ARG_TYPE_INFO(0, object, IS_OBJECT, 0)
 	ZEND_ARG_TYPE_INFO(0, factory, IS_CALLABLE, 0)
-	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_LONG, 0, "0")
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 0, "[]")
 ZEND_END_ARG_INFO()
 
 #define arginfo_class_ReflectionClass_resetAsLazyProxy arginfo_class_ReflectionClass_resetAsLazyGhost
@@ -1033,6 +1033,10 @@ static const zend_function_entry class_ReflectionMethod_methods[] = {
 	ZEND_FE_END
 };
 
+static const zend_function_entry class_LazyObjectOption_methods[] = {
+	ZEND_FE_END
+};
+
 static const zend_function_entry class_ReflectionClass_methods[] = {
 	ZEND_ME(ReflectionClass, __clone, arginfo_class_ReflectionClass___clone, ZEND_ACC_PRIVATE)
 	ZEND_ME(ReflectionClass, __construct, arginfo_class_ReflectionClass___construct, ZEND_ACC_PUBLIC)
@@ -1433,6 +1437,21 @@ static zend_class_entry *register_class_ReflectionMethod(zend_class_entry *class
 	zend_string *property_class_name = zend_string_init("class", sizeof("class") - 1, 1);
 	zend_declare_typed_property(class_entry, property_class_name, &property_class_default_value, ZEND_ACC_PUBLIC, NULL, (zend_type) ZEND_TYPE_INIT_MASK(MAY_BE_STRING));
 	zend_string_release(property_class_name);
+
+	return class_entry;
+}
+
+static zend_class_entry *register_class_LazyObjectOption(void)
+{
+	zend_class_entry *class_entry = zend_register_internal_enum("LazyObjectOption", IS_UNDEF, class_LazyObjectOption_methods);
+
+	zend_enum_add_case_cstr(class_entry, "SkipInitializationOnSerialize", NULL);
+
+	zend_enum_add_case_cstr(class_entry, "SkipDestructor", NULL);
+
+	zend_enum_add_case_cstr(class_entry, "SkipInitializedReadonly", NULL);
+
+	zend_enum_add_case_cstr(class_entry, "ResetInitializedReadonly", NULL);
 
 	return class_entry;
 }
