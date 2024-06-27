@@ -5219,6 +5219,7 @@ void reflection_class_new_lazy(INTERNAL_FUNCTION_PARAMETERS,
 			Z_PARAM_OPTIONAL
 			Z_PARAM_LONG(flags)
 		ZEND_PARSE_PARAMETERS_END();
+		obj = NULL;
 	}
 
 	if (flags & ~ZEND_LAZY_OBJECT_USER_FLAGS) {
@@ -6129,6 +6130,9 @@ ZEND_METHOD(ReflectionProperty, setRawValueWithoutLazyInitialization)
 		guard = zend_get_property_guard(object, ref->unmangled_name);
 		guard_backup = *guard;
 		*guard |= ZEND_GUARD_PROPERTY_HOOK;
+	} else {
+		guard = NULL;
+		guard_backup = 0;
 	}
 
 	/* Do not trigger initialization */
