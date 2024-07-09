@@ -5480,6 +5480,41 @@ ZEND_METHOD(ReflectionClass, getExtensionName)
 }
 /* }}} */
 
+/* {{{ Returns whether this class is defined in a module */
+ZEND_METHOD(ReflectionClass, inModule)
+{
+	reflection_object *intern;
+	zend_class_entry *ce;
+
+	if (zend_parse_parameters_none() == FAILURE) {
+		RETURN_THROWS();
+	}
+
+	GET_REFLECTION_OBJECT_PTR(ce);
+
+	RETURN_BOOL(ce->module);
+}
+/* }}} */
+
+/* {{{ Returns the name of the module where this class is defined */
+ZEND_METHOD(ReflectionClass, getModuleName)
+{
+	reflection_object *intern;
+	zend_class_entry *ce;
+
+	if (zend_parse_parameters_none() == FAILURE) {
+		RETURN_THROWS();
+	}
+
+	GET_REFLECTION_OBJECT_PTR(ce);
+
+	if (ce->module) {
+		RETURN_STR(ce->module);
+	}
+	RETURN_EMPTY_STRING();
+}
+/* }}} */
+
 /* {{{ Returns whether this class is defined in namespace */
 ZEND_METHOD(ReflectionClass, inNamespace)
 {

@@ -220,6 +220,7 @@ struct _zend_class_entry {
 	HashTable *backed_enum_table;
 
 	zend_string *doc_comment;
+	zend_string *module;
 
 	union {
 		struct {

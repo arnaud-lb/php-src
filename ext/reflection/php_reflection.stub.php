@@ -407,6 +407,12 @@ class ReflectionClass implements Reflector
     public function getExtensionName(): string|false {}
 
     /** @tentative-return-type */
+    public function inModule(): bool {}
+
+    /** @tentative-return-type */
+    public function getModuleName(): string {}
+
+    /** @tentative-return-type */
     public function inNamespace(): bool {}
 
     /** @tentative-return-type */

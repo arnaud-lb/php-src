@@ -8571,6 +8571,11 @@ static void zend_compile_class_decl(znode *result, zend_ast *ast, bool toplevel)
 
 	ce->type = ZEND_USER_CLASS;
 	ce->name = name;
+	if (FC(current_module)) {
+		ce->module = zend_string_copy(FC(current_module));
+	} else {
+		ce->module = NULL;
+	}
 	zend_initialize_class_data(ce, 1);
 	if (!(decl->flags & ZEND_ACC_ANON_CLASS)) {
 		zend_alloc_ce_cache(ce->name);
@@ -8998,8 +9003,8 @@ static void zend_compile_module(zend_ast *ast)
 
 	name = zend_ast_get_str(name_ast);
 
-	FC(current_module) = zend_string_copy(name);
-	FC(current_namespace) = zend_string_copy(name);
+	FC(current_module) = zend_new_interned_string(name);
+	FC(current_namespace) = zend_string_copy(FC(current_module));
 
 	zend_reset_import_tables();
 
