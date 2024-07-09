@@ -166,6 +166,7 @@ static YYSIZE_T zend_yytnamerr(char*, const char*);
 %token <ident> T_ENUM          "'enum'"
 %token <ident> T_EXTENDS       "'extends'"
 %token <ident> T_IMPLEMENTS    "'implements'"
+%token <ident> T_MODULE        "'module'"
 %token <ident> T_NAMESPACE     "'namespace'"
 %token <ident> T_LIST            "'list'"
 %token <ident> T_ARRAY           "'array'"
@@ -178,6 +179,8 @@ static YYSIZE_T zend_yytnamerr(char*, const char*);
 %token <ident> T_METHOD_C        "'__METHOD__'"
 %token <ident> T_FUNC_C          "'__FUNCTION__'"
 %token <ident> T_NS_C            "'__NAMESPACE__'"
+%token <ident> T_MODULE_C        "'__MODULE__'"
+// TODO: __MODULE__
 
 %token END 0 "end of file"
 %token T_ATTRIBUTE    "'#['"
@@ -275,7 +278,7 @@ static YYSIZE_T zend_yytnamerr(char*, const char*);
 %type <ast> identifier type_expr_without_static union_type_without_static_element union_type_without_static intersection_type_without_static
 %type <ast> inline_function union_type_element union_type intersection_type
 %type <ast> attributed_statement attributed_class_statement attributed_parameter
-%type <ast> attribute_decl attribute attributes attribute_group namespace_declaration_name
+%type <ast> attribute_decl attribute attributes attribute_group module_declaration_name namespace_declaration_name
 %type <ast> match match_arm_list non_empty_match_arm_list match_arm match_arm_cond_list
 %type <ast> enum_declaration_statement enum_backing_type enum_case enum_case_expr
 %type <ast> function_name non_empty_member_modifiers
@@ -301,8 +304,8 @@ reserved_non_modifiers:
 	| T_FOR | T_ENDFOR | T_FOREACH | T_ENDFOREACH | T_DECLARE | T_ENDDECLARE | T_AS | T_TRY | T_CATCH | T_FINALLY
 	| T_THROW | T_USE | T_INSTEADOF | T_GLOBAL | T_VAR | T_UNSET | T_ISSET | T_EMPTY | T_CONTINUE | T_GOTO
 	| T_FUNCTION | T_CONST | T_RETURN | T_PRINT | T_YIELD | T_LIST | T_SWITCH | T_ENDSWITCH | T_CASE | T_DEFAULT | T_BREAK
-	| T_ARRAY | T_CALLABLE | T_EXTENDS | T_IMPLEMENTS | T_NAMESPACE | T_TRAIT | T_INTERFACE | T_CLASS
-	| T_CLASS_C | T_TRAIT_C | T_FUNC_C | T_METHOD_C | T_LINE | T_FILE | T_DIR | T_NS_C | T_FN | T_MATCH | T_ENUM
+	| T_ARRAY | T_CALLABLE | T_EXTENDS | T_IMPLEMENTS | T_MODULE | T_NAMESPACE | T_TRAIT | T_INTERFACE | T_CLASS
+	| T_CLASS_C | T_TRAIT_C | T_FUNC_C | T_METHOD_C | T_LINE | T_FILE | T_DIR | T_MODULE_C | T_NS_C | T_FN | T_MATCH | T_ENUM
 ;
 
 semi_reserved:
@@ -327,6 +330,12 @@ identifier:
 top_statement_list:
 		top_statement_list top_statement { $$ = zend_ast_list_add($1, $2); }
 	|	%empty { $$ = zend_ast_create_list(0, ZEND_AST_STMT_LIST); }
+;
+
+/* Name usable in a module declaration. */
+module_declaration_name:
+		identifier								{ $$ = $1; }
+	|	T_NAME_QUALIFIED						{ $$ = $1; }
 ;
 
 /* Name usable in a namespace declaration. */
@@ -393,6 +402,9 @@ top_statement:
 			{ $$ = zend_ast_create(ZEND_AST_HALT_COMPILER,
 			      zend_ast_create_zval_from_long(zend_get_scanned_file_offset()));
 			  zend_stop_lexing(); }
+	|	T_MODULE module_declaration_name ';'
+			{ $$ = zend_ast_create(ZEND_AST_MODULE, $2, NULL);
+			  RESET_DOC_COMMENT(); }
 	|	T_NAMESPACE namespace_declaration_name ';'
 			{ $$ = zend_ast_create(ZEND_AST_NAMESPACE, $2, NULL);
 			  RESET_DOC_COMMENT(); }
@@ -1395,6 +1407,7 @@ constant:
 	|	T_TRAIT_C	{ $$ = zend_ast_create_ex(ZEND_AST_MAGIC_CONST, T_TRAIT_C); }
 	|	T_METHOD_C	{ $$ = zend_ast_create_ex(ZEND_AST_MAGIC_CONST, T_METHOD_C); }
 	|	T_FUNC_C	{ $$ = zend_ast_create_ex(ZEND_AST_MAGIC_CONST, T_FUNC_C); }
+	|	T_MODULE_C	{ $$ = zend_ast_create_ex(ZEND_AST_MAGIC_CONST, T_MODULE_C); }
 	|	T_NS_C		{ $$ = zend_ast_create_ex(ZEND_AST_MAGIC_CONST, T_NS_C); }
 	|	T_CLASS_C	{ $$ = zend_ast_create_ex(ZEND_AST_MAGIC_CONST, T_CLASS_C); }
 ;

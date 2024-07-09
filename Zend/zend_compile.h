@@ -109,6 +109,9 @@ typedef struct _zend_declarables {
 typedef struct _zend_file_context {
 	zend_declarables declarables;
 
+	zend_string *current_module;
+	bool in_module;
+
 	zend_string *current_namespace;
 	bool in_namespace;
 	bool has_bracketed_namespaces;
