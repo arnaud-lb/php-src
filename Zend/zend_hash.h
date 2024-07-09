@@ -1382,6 +1382,10 @@ static zend_always_inline void *zend_hash_get_current_data_ptr_ex(HashTable *ht,
 	_key = _p->key; \
 	_val = _z;
 
+#define ZEND_HASH_MAP_FOREACH_STR_KEY_FROM(ht, _key, _from) \
+	ZEND_HASH_MAP_FOREACH_FROM(ht, 0, _from); \
+	_key = _p->key; \
+
 #define ZEND_HASH_MAP_REVERSE_FOREACH_STR_KEY_VAL(ht, _key, _val) \
 	ZEND_HASH_MAP_REVERSE_FOREACH(ht, 0); \
 	_key = _p->key; \

@@ -421,6 +421,13 @@ zend_op_array* zend_accel_load_script(zend_persistent_script *persistent_script,
 		free_persistent_script(persistent_script, 0); /* free only hashes */
 	}
 
+	if (CG(active_module) && persistent_script->script.main_op_array.user_module) {
+		zend_op_array *op_array = &persistent_script->script.main_op_array;
+		ZEND_ASSERT(zend_string_equals(op_array->user_module, CG(active_module)->desc.lcname));
+		zend_hash_update_ptr(&CG(active_module)->scripts,
+			op_array->filename, persistent_script);
+	}
+
 	return op_array;
 }
 

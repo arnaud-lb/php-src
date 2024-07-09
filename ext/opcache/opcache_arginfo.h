@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: c416c231c5d1270b7e5961f84cc3ca3e29db4959 */
+ * Stub hash: 38ccfbe9fdf851de4c377bd55bf957bb0160511b */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_opcache_reset, 0, 0, _IS_BOOL, 0)
 ZEND_END_ARG_INFO()
@@ -26,6 +26,10 @@ ZEND_END_ARG_INFO()
 
 #define arginfo_opcache_is_script_cached arginfo_opcache_compile_file
 
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_require_modules, 0, 1, IS_VOID, 0)
+	ZEND_ARG_TYPE_INFO(0, modules, IS_ARRAY, 0)
+ZEND_END_ARG_INFO()
+
 ZEND_FUNCTION(opcache_reset);
 ZEND_FUNCTION(opcache_get_status);
 ZEND_FUNCTION(opcache_compile_file);
@@ -33,6 +37,7 @@ ZEND_FUNCTION(opcache_invalidate);
 ZEND_FUNCTION(opcache_jit_blacklist);
 ZEND_FUNCTION(opcache_get_configuration);
 ZEND_FUNCTION(opcache_is_script_cached);
+ZEND_FUNCTION(require_modules);
 
 static const zend_function_entry ext_functions[] = {
 	ZEND_FE(opcache_reset, arginfo_opcache_reset)
@@ -42,5 +47,6 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_FE(opcache_jit_blacklist, arginfo_opcache_jit_blacklist)
 	ZEND_FE(opcache_get_configuration, arginfo_opcache_get_configuration)
 	ZEND_FE(opcache_is_script_cached, arginfo_opcache_is_script_cached)
+	ZEND_FE(require_modules, arginfo_require_modules)
 	ZEND_FE_END
 };

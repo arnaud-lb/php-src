@@ -591,6 +591,7 @@ static zend_op_array *zend_compile(int type)
 {
 	zend_op_array *op_array = NULL;
 	bool original_in_compilation = CG(in_compilation);
+	uint32_t original_compiler_options = CG(compiler_options);
 
 	CG(in_compilation) = 1;
 	CG(ast) = NULL;
@@ -625,12 +626,26 @@ static zend_op_array *zend_compile(int type)
 		zend_file_context_end(&original_file_context);
 
 		CG(active_op_array) = original_active_op_array;
+
+#if 0
+		if (CG(active_module) && op_array->user_module) {
+			ZEND_ASSERT(op_array->user_module == CG(active_module)->name);
+			if (op_array->refcount) {
+				(*op_array->refcount)++;
+			}
+			zend_op_array *new_op_array = (zend_op_array *) emalloc(sizeof(zend_op_array));
+			*new_op_array = *op_array;
+			zend_hash_update_ptr(&CG(active_module)->op_arrays,
+				op_array->filename, new_op_array);
+		}
+#endif
 	}
 
 	zend_ast_destroy(CG(ast));
 	zend_arena_destroy(CG(ast_arena));
 
 	CG(in_compilation) = original_in_compilation;
+	CG(compiler_options) = original_compiler_options;
 
 	return op_array;
 }
@@ -1677,6 +1692,10 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
 	RETURN_TOKEN_WITH_IDENT(T_REQUIRE_ONCE);
 }
 
+<ST_IN_SCRIPTING>"module" {
+	RETURN_TOKEN_WITH_IDENT(T_MODULE);
+}
+
 <ST_IN_SCRIPTING>"namespace" {
 	RETURN_TOKEN_WITH_IDENT(T_NAMESPACE);
 }
@@ -2218,6 +2237,10 @@ string:
 
 <ST_IN_SCRIPTING>"__DIR__" {
 	RETURN_TOKEN_WITH_IDENT(T_DIR);
+}
+
+<ST_IN_SCRIPTING>"__MODULE__" {
+	RETURN_TOKEN_WITH_IDENT(T_MODULE_C);
 }
 
 <ST_IN_SCRIPTING>"__NAMESPACE__" {

@@ -73,6 +73,7 @@
 typedef unsigned short mode_t;
 
 #define DEFAULT_SLASH '\\'
+#define DEFAULT_SLASH_STR "\\"
 #define DEFAULT_DIR_SEPARATOR	';'
 #define IS_SLASH(c)	((c) == '/' || (c) == '\\')
 // IS_SLASH_P() may read the previous char on Windows, which may be OOB; use IS_SLASH_P_EX() instead
@@ -105,6 +106,7 @@ typedef unsigned short mode_t;
 #endif
 
 #define DEFAULT_SLASH '/'
+#define DEFAULT_SLASH_STR "/"
 
 #ifdef __riscos__
 #define DEFAULT_DIR_SEPARATOR  ';'
