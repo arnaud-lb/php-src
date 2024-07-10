@@ -31,6 +31,7 @@
 #include "zend_accelerator_blacklist.h"
 #include "zend_list.h"
 #include "zend_execute.h"
+#include "zend_string.h"
 #include "zend_vm.h"
 #include "zend_inheritance.h"
 #include "zend_exceptions.h"
@@ -1981,7 +1982,11 @@ zend_op_array *persistent_compile_file(zend_file_handle *file_handle, int type)
 	zend_string *key = NULL;
 	bool from_shared_memory; /* if the script we've got is stored in SHM */
 
-	if (!file_handle->filename || !ZCG(accelerator_enabled)) {
+	if (CG(active_module)
+			&& zend_string_starts_with(file_handle->opened_path, CG(active_module)->resolved_path)) {
+		/* Do not cache/optimize individual module files */
+		return accelerator_orig_compile_file(file_handle, type);
+	} else if (!file_handle->filename || !ZCG(accelerator_enabled)) {
 		/* The Accelerator is disabled, act as if without the Accelerator */
 		ZCG(cache_opline) = NULL;
 		ZCG(cache_persistent_script) = NULL;

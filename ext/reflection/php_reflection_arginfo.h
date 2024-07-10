@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 53cb11e3aaa2215f8dbb39778dfbc1bd28f629af */
+ * Stub hash: 3292cee8b3f95e698d949593d70e5badc75210f6 */
 
 ZEND_BEGIN_ARG_WITH_TENTATIVE_RETURN_TYPE_INFO_EX(arginfo_class_Reflection_getModifierNames, 0, 1, IS_ARRAY, 0)
 	ZEND_ARG_TYPE_INFO(0, modifiers, IS_LONG, 0)
@@ -319,6 +319,10 @@ ZEND_END_ARG_INFO()
 #define arginfo_class_ReflectionClass_getExtension arginfo_class_ReflectionFunctionAbstract_getExtension
 
 #define arginfo_class_ReflectionClass_getExtensionName arginfo_class_ReflectionFunctionAbstract_getDocComment
+
+#define arginfo_class_ReflectionClass_inModule arginfo_class_ReflectionFunctionAbstract_inNamespace
+
+#define arginfo_class_ReflectionClass_getModuleName arginfo_class_ReflectionFunctionAbstract_getName
 
 #define arginfo_class_ReflectionClass_inNamespace arginfo_class_ReflectionFunctionAbstract_inNamespace
 
@@ -748,6 +752,8 @@ ZEND_METHOD(ReflectionClass, isIterable);
 ZEND_METHOD(ReflectionClass, implementsInterface);
 ZEND_METHOD(ReflectionClass, getExtension);
 ZEND_METHOD(ReflectionClass, getExtensionName);
+ZEND_METHOD(ReflectionClass, inModule);
+ZEND_METHOD(ReflectionClass, getModuleName);
 ZEND_METHOD(ReflectionClass, inNamespace);
 ZEND_METHOD(ReflectionClass, getNamespaceName);
 ZEND_METHOD(ReflectionClass, getShortName);
@@ -1021,6 +1027,8 @@ static const zend_function_entry class_ReflectionClass_methods[] = {
 	ZEND_ME(ReflectionClass, implementsInterface, arginfo_class_ReflectionClass_implementsInterface, ZEND_ACC_PUBLIC)
 	ZEND_ME(ReflectionClass, getExtension, arginfo_class_ReflectionClass_getExtension, ZEND_ACC_PUBLIC)
 	ZEND_ME(ReflectionClass, getExtensionName, arginfo_class_ReflectionClass_getExtensionName, ZEND_ACC_PUBLIC)
+	ZEND_ME(ReflectionClass, inModule, arginfo_class_ReflectionClass_inModule, ZEND_ACC_PUBLIC)
+	ZEND_ME(ReflectionClass, getModuleName, arginfo_class_ReflectionClass_getModuleName, ZEND_ACC_PUBLIC)
 	ZEND_ME(ReflectionClass, inNamespace, arginfo_class_ReflectionClass_inNamespace, ZEND_ACC_PUBLIC)
 	ZEND_ME(ReflectionClass, getNamespaceName, arginfo_class_ReflectionClass_getNamespaceName, ZEND_ACC_PUBLIC)
 	ZEND_ME(ReflectionClass, getShortName, arginfo_class_ReflectionClass_getShortName, ZEND_ACC_PUBLIC)

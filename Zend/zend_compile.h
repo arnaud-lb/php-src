@@ -471,6 +471,7 @@ struct _zend_op_array {
 	ZEND_MAP_PTR_DEF(void **, run_time_cache);
 	zend_string *doc_comment;
 	uint32_t T;         /* number of temporary variables */
+	zend_string *user_module;
 	/* END of common elements */
 
 	int cache_size;     /* number of run_time_cache_slots * sizeof(void*) */
@@ -529,6 +530,7 @@ typedef struct _zend_internal_function {
 	ZEND_MAP_PTR_DEF(void **, run_time_cache);
 	zend_string *doc_comment;
 	uint32_t T;         /* number of temporary variables */
+	zend_string *user_module;
 	/* END of common elements */
 
 	zif_handler handler;
@@ -557,6 +559,7 @@ union _zend_function {
 		ZEND_MAP_PTR_DEF(void **, run_time_cache);
 		zend_string *doc_comment;
 		uint32_t T;         /* number of temporary variables */
+		zend_string *user_module;
 	} common;
 
 	zend_op_array op_array;
