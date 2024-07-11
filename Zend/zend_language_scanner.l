@@ -591,6 +591,7 @@ static zend_op_array *zend_compile(int type)
 {
 	zend_op_array *op_array = NULL;
 	bool original_in_compilation = CG(in_compilation);
+	uint32_t original_compiler_options = CG(compiler_options);
 
 	CG(in_compilation) = 1;
 	CG(ast) = NULL;
@@ -631,6 +632,14 @@ static zend_op_array *zend_compile(int type)
 	zend_arena_destroy(CG(ast_arena));
 
 	CG(in_compilation) = original_in_compilation;
+	CG(compiler_options) = original_compiler_options;
+
+	if (CG(active_module) && op_array->user_module) {
+		ZEND_ASSERT(op_array->user_module == CG(active_module));
+		// TODO: do we need an assoc ht?
+		zend_hash_update_ptr(&CG(active_module)->op_arrays,
+			op_array->filename, op_array);
+	}
 
 	return op_array;
 }

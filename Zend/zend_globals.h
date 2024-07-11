@@ -80,17 +80,10 @@ typedef enum {
 	ZEND_MEMOIZE_FETCH,
 } zend_memoize_mode;
 
-typedef struct _zend_user_module {
-	zend_string *name;
-	zend_string *lcname;
-	zend_string *path;
-	zend_string *resolved_path;
-} zend_user_module;
-
 struct _zend_compiler_globals {
 	zend_stack loop_var_stack;
 
-	zend_user_module *active_module;
+	zend_user_module *active_module; /* module being loaded */
 
 	zend_class_entry *active_class_entry;
 

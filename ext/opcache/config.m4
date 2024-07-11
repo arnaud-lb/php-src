@@ -335,6 +335,7 @@ int main(void) {
     shared_alloc_shm.c \
     shared_alloc_mmap.c \
     shared_alloc_posix.c \
+    modules.c \
     $ZEND_JIT_SRC,
     shared,,"-DZEND_ENABLE_STATIC_TSRMLS_CACHE=1 ${JIT_CFLAGS}",,yes)
 

@@ -34,6 +34,9 @@ static void zend_user_module_desc_destroy(zend_user_module_desc *module_desc)
 	if (module_desc->path) {
 		zend_string_release(module_desc->path);
 	}
+	if (module_desc->resolved_path) {
+		zend_string_release(module_desc->resolved_path);
+	}
 	if (module_desc->include_patterns) {
 		zend_string **str = module_desc->include_patterns;
 		while (*str) {
@@ -51,6 +54,15 @@ static void zend_user_module_desc_destroy(zend_user_module_desc *module_desc)
 		efree(module_desc->exclude_patterns);
 	}
 
+}
+
+static void zend_user_module_destroy(zend_user_module *module)
+{
+	zend_string_release(module->name);
+	zend_string_release(module->lcname);
+	zend_string_release(module->path);
+	zend_string_release(module->resolved_path);
+	zend_hash_destroy(&module->op_arrays);
 }
 
 static zend_string **split_patterns(zend_string *str)
@@ -84,9 +96,28 @@ static zend_string **split_patterns(zend_string *str)
 		pos++;
 	}
 
+	if (smart_str_get_len(&current)) {
+		if (buf_len+1 == buf_capacity) {
+			buf_capacity = buf_capacity+1;
+			buf = erealloc(buf, buf_capacity * sizeof(zend_string*));
+		}
+		buf[buf_len++] = smart_str_extract(&current);
+	}
+
 	ZEND_ASSERT(buf_len+1 <= buf_capacity);
 	buf[buf_len] = NULL;
 	return buf;
+}
+
+static void zend_validate_user_module_name(zend_string *name)
+{
+	// TODO: For now just check there is no leading/trailing backslash
+	ZEND_ASSERT(ZSTR_LEN(name));
+	if (ZSTR_VAL(name)[0] == '\\' || ZSTR_VAL(name)[ZSTR_LEN(name)]-1 == '\\') {
+		zend_error_noreturn(E_CORE_ERROR,
+				"Module name must not start or end with '\\': '%s'",
+				ZSTR_VAL(name));
+	}
 }
 
 static void zend_user_module_desc_parser_cb(zval *arg1, zval *arg2, zval *arg3, int callback_type, void *module_desc_ptr)
@@ -105,6 +136,7 @@ static void zend_user_module_desc_parser_cb(zval *arg1, zval *arg2, zval *arg3, 
 				}
 
 				convert_to_string(arg2);
+				zend_validate_user_module_name(Z_STR_P(arg2));
 				module_desc->name = zend_string_copy(Z_STR_P(arg2));
 			} else if (zend_string_equals_cstr(Z_STR_P(arg1), "files", strlen("files"))) {
 				if (module_desc->include_patterns) {
@@ -145,6 +177,8 @@ static zend_op_array *zend_user_module_compile_file(zend_user_module *module, ze
 	}
 	zend_destroy_file_handle(&file_handle);
 
+	ZEND_ASSERT(!(op_array->fn_flags & ZEND_ACC_IMMUTABLE));
+
 	if (op_array->user_module != module) {
 		zend_error_noreturn(E_COMPILE_ERROR,
 				"Module files must declare module '%s'",
@@ -154,19 +188,15 @@ static zend_op_array *zend_user_module_compile_file(zend_user_module *module, ze
 	return op_array;
 }
 
-static size_t zend_user_module_find_files(zend_user_module_desc *module_desc, zend_string ***files)
+static void zend_user_module_find_files(zend_user_module_desc *module_desc, HashTable *filenames)
 {
-	size_t buf_capacity = 8;
-	size_t buf_len = 0;
-	zend_string **buf = emalloc(sizeof(char*) * buf_capacity);
-
 	zend_string **pattern_p = module_desc->include_patterns;
 
 	while (*pattern_p) {
 		// TODO: check path traversal
 
 		zend_string *pattern = zend_string_concat2(
-				ZSTR_VAL(module_desc->path), ZSTR_LEN(module_desc->path),
+				ZSTR_VAL(module_desc->resolved_path), ZSTR_LEN(module_desc->resolved_path),
 				ZSTR_VAL(*pattern_p), ZSTR_LEN(*pattern_p));
 
 		glob_t globbuf = {0};
@@ -214,10 +244,9 @@ static size_t zend_user_module_find_files(zend_user_module_desc *module_desc, ze
 				exclude_pattern_p++;
 			}
 
-			if (buf_len == buf_capacity) {
-				buf = erealloc(buf, buf_capacity * 2);
-			}
-			buf[buf_len++] = zend_string_init(path, path_len, 0);
+			zend_string *filename = zend_string_init(path, path_len, 0);
+			zend_hash_add_empty_element(filenames, filename);
+			zend_string_release(filename);
 next:
 			n++;
 		}
@@ -226,9 +255,6 @@ next:
 		zend_string_release(pattern);
 		pattern_p++;
 	}
-
-	*files = buf;
-	return buf_len;
 }
 
 #if 0
@@ -239,10 +265,11 @@ typedef struct _zend_dependency_stack {
 } zend_dependency_stack;
 #endif
 
+// TODO: reset flags
 #define ZEND_ACC_HAS_STATEMENTS ZEND_ACC_PRIVATE
 #define ZEND_ACC_VISITED        ZEND_ACC_PROTECTED
 
-static HashTable *zend_user_module_update_class_map(zend_user_module *module, zend_op_array *op_array, HashTable *map, uint32_t offset)
+static void zend_user_module_update_class_map(zend_user_module *module, zend_op_array *op_array, HashTable *map, uint32_t offset)
 {
 	zend_class_entry *ce;
 	ZEND_HASH_FOREACH_PTR_FROM(CG(class_table), ce, offset) {
@@ -252,17 +279,18 @@ static HashTable *zend_user_module_update_class_map(zend_user_module *module, ze
 		if (!(ce->ce_flags & ZEND_ACC_TOP_LEVEL)) {
 			continue;
 		}
-		if (!zend_hash_add_new_ptr(map,
-					zend_string_tolower(ce->name), op_array)) {
+		zend_string *lcname = zend_string_tolower(ce->name);
+		if (!zend_hash_add_new_ptr(map, lcname, op_array)) {
 			// TODO: improve error message (include definition locations)
 			zend_error_noreturn(E_COMPILE_ERROR,
 					"Duplicate class declaration: '%s'",
 					ZSTR_VAL(ce->name));
 		}
+		zend_string_release(lcname);
 	} ZEND_HASH_FOREACH_END();
 }
 
-static HashTable *zend_user_module_update_func_map(zend_user_module *module, zend_op_array *op_array, HashTable *map, uint32_t offset)
+static void zend_user_module_update_func_map(zend_user_module *module, zend_op_array *op_array, HashTable *map, uint32_t offset)
 {
 	zend_function *fn;
 	ZEND_HASH_FOREACH_PTR_FROM(CG(function_table), fn, offset) {
@@ -292,22 +320,29 @@ typedef struct _zend_user_module_ordered_file_list {
 
 static ZEND_COLD ZEND_NORETURN void zend_user_module_dep_circular_error(zend_user_module *module, zend_op_array *op_array)
 {
-	zend_string *dep_list = NULL;
+	smart_str s = {0};
+	zend_op_array *prev = NULL;
+	zend_op_array *next = NULL;
 	do {
-		if (dep_list == NULL) {
-			dep_list = op_array->filename;
-		} else {
-			zend_string *tmp = zend_string_concat3(
-					ZSTR_VAL(op_array->filename), ZSTR_LEN(op_array->filename),
-					" -> ", strlen(" -> "),
-					ZSTR_VAL(dep_list), ZSTR_LEN(dep_list));
-			zend_string_release(dep_list);
-			dep_list = tmp;
-		}
-		op_array = (zend_op_array*)op_array->function_name;
+		next = (zend_op_array*)op_array->function_name;
+		op_array->function_name = (zend_string*)prev;
+		prev = op_array;
+		op_array = next;
 	} while (op_array != (zend_op_array*)module);
 
-	ZEND_ASSERT(dep_list);
+	op_array = prev;
+	do {
+		if (smart_str_get_len(&s)) {
+			smart_str_appends(&s, " -> ");
+		}
+		smart_str_append(&s, op_array->filename);
+	} while (op_array);
+
+	smart_str_0(&s);
+
+	zend_error_noreturn(E_COMPILE_ERROR,
+			"Circular dependency detected between the following files: %s",
+			ZSTR_VAL(s.s));
 }
 
 static void zend_user_module_dep_add_op_array(zend_user_module *module, zend_op_array *op_array, zend_op_array *prev_op_array, HashTable *classmap, HashTable *funcmap, zend_user_module_ordered_file_list *list);
@@ -361,7 +396,7 @@ static void zend_user_module_dep_add_op_array(zend_user_module *module, zend_op_
 				key = Z_STR_P(RT_CONSTANT(opline, opline->op1) + 1);
 				zend_class_entry *ce = zend_hash_find_ptr(CG(class_table), key);
 				ZEND_ASSERT(ce);
-				ZEND_ASSERT(!(ce->ce_flags & ZEND_ACC_TOP_LEVEL));
+				ZEND_ASSERT(ce->ce_flags & ZEND_ACC_TOP_LEVEL);
 				if (ce->parent_name) {
 					zend_user_module_dep_add_class(module, ce->parent_name, op_array, prev_op_array, classmap, funcmap, list);
 				}
@@ -396,26 +431,31 @@ end:
 static zend_user_module_ordered_file_list *zend_user_module_sort_initial_op_arrays(zend_user_module *module, HashTable *classmap, HashTable *funcmap)
 {
 	zend_user_module_ordered_file_list *list = safe_emalloc(
-			module->op_arrays->nNumOfElements, sizeof(zend_op_array*),
+			module->op_arrays.nNumOfElements, sizeof(zend_op_array*),
 			sizeof(*list));
 
-	list->size = module->op_arrays->nNumOfElements;
+	list->size = module->op_arrays.nNumOfElements;
 	list->files = (zend_op_array**)((char*)list + sizeof(*list));
 	list->next_file = list->files;
 	list->next_file_with_stmts = list->files + list->size - 1;
 
 	zend_op_array *op_array;
-	ZEND_HASH_FOREACH_PTR(module->op_arrays, op_array) {
+	ZEND_HASH_FOREACH_PTR(&module->op_arrays, op_array) {
 		zend_user_module_dep_add_op_array(module, op_array, (zend_op_array*)module, classmap, funcmap, list);
 	} ZEND_HASH_FOREACH_END();
 
-	ZEND_ASSERT(list->next_file == list->next_file_with_stmts);
+	ZEND_ASSERT(list->next_file == list->next_file_with_stmts + 1);
 
 	return list;
 }
 
 ZEND_API void zend_require_user_module(zend_string *module_path)
 {
+	zend_user_module *orig_module = CG(active_module);
+	// TODO: check circular loading
+
+	/* Load module metadata */
+
 	zend_file_handle file_handle;
 	zend_user_module_desc module_desc = {0};
 
@@ -425,6 +465,14 @@ ZEND_API void zend_require_user_module(zend_string *module_path)
 		zend_destroy_file_handle(&file_handle);
 		zend_user_module_desc_destroy(&module_desc);
 		return;
+	}
+
+	if (!module_desc.include_patterns) {
+		module_desc.include_patterns = ecalloc(1, sizeof(zend_string*));
+	}
+
+	if (!module_desc.exclude_patterns) {
+		module_desc.exclude_patterns = ecalloc(1, sizeof(zend_string*));
 	}
 
 	size_t module_resolved_path_len = zend_dirname(ZSTR_VAL(file_handle.opened_path), ZSTR_LEN(file_handle.opened_path));
@@ -445,9 +493,15 @@ ZEND_API void zend_require_user_module(zend_string *module_path)
 		.path = zend_string_copy(module_desc.path),
 		.resolved_path = zend_string_copy(module_desc.resolved_path),
 	};
+	zend_hash_init(&module.op_arrays, 0, NULL, NULL, 0);
 
-	zend_string **files;
-	size_t files_count = zend_user_module_find_files(&module_desc, &files);
+	CG(active_module) = &module;
+
+	/* List initial files and compile */
+
+	HashTable filenames;
+	zend_hash_init(&filenames, 0, NULL, NULL, 0);
+	zend_user_module_find_files(&module_desc, &filenames);
 
 	uint32_t orig_compiler_options = CG(compiler_options_for_modules);
 	// CG(compiler_options) |= ZEND_COMPILE_PRELOAD;
@@ -457,50 +511,81 @@ ZEND_API void zend_require_user_module(zend_string *module_path)
 	CG(compiler_options_for_modules) |= ZEND_COMPILE_IGNORE_OTHER_FILES;
 	CG(compiler_options_for_modules) |= ZEND_COMPILE_WITHOUT_EXECUTION;
 
-	HashTable *classmap = emalloc(sizeof(HashTable*));
-	zend_hash_init(classmap, files_count, NULL, NULL, 0);
+	HashTable classmap;
+	zend_hash_init(&classmap, filenames.nNumOfElements, NULL, NULL, 0);
 
-	HashTable *funcmap = emalloc(sizeof(HashTable*));
-	zend_hash_init(funcmap, files_count, NULL, NULL, 0);
+	HashTable funcmap;
+	zend_hash_init(&funcmap, filenames.nNumOfElements, NULL, NULL, 0);
 
-	for (zend_string **file_p = files; *file_p; files++) {
+	zend_long h;
+	zend_string *file;
+	ZEND_HASH_FOREACH_KEY(&filenames, h, file) {
+		ZEND_ASSERT(h);
+
 		uint32_t class_table_offset = CG(class_table)->nNumUsed;
 		uint32_t function_table_offset = CG(function_table)->nNumUsed;
 
-		zend_op_array *op_array = zend_user_module_compile_file(&module, *file_p);
+		zend_op_array *op_array = zend_user_module_compile_file(&module, file);
 
-		zend_user_module_update_class_map(&module, op_array, classmap, class_table_offset);
-		zend_user_module_update_func_map(&module, op_array, classmap, function_table_offset);
-	}
+		zend_user_module_update_class_map(&module, op_array, &classmap, class_table_offset);
+		zend_user_module_update_func_map(&module, op_array, &funcmap, function_table_offset);
+	} ZEND_HASH_FOREACH_END();
 
-	zend_user_module_ordered_file_list *ordered_list = zend_user_module_sort_initial_op_arrays(&module, classmap, funcmap);
+	/* Execute initial files */
+
+	zend_user_module_ordered_file_list *ordered_list = zend_user_module_sort_initial_op_arrays(&module, &classmap, &funcmap);
 
 	for (zend_op_array **op_array_p = ordered_list->files + ordered_list->size - 1;
 			op_array_p != ordered_list->next_file_with_stmts;
 			op_array_p--) {
+		if (zend_hash_exists(&EG(included_files), (*op_array_p)->filename)) {
+			continue;
+		}
 		zend_execute(*op_array_p, NULL);
 		if (EG(exception)) {
 			goto cleanup;
 		}
 	}
+
 	for (zend_op_array **op_array_p = ordered_list->files;
 			op_array_p != ordered_list->next_file;
 			op_array_p++) {
+		if (zend_hash_exists(&EG(included_files), (*op_array_p)->filename)) {
+			continue;
+		}
 		zend_execute(*op_array_p, NULL);
 		if (EG(exception)) {
 			goto cleanup;
 		}
 	}
 
+	/* Enforce that referenced symbols exist */
 
+	// TODO
+
+	/* Cache module */
+
+	// TODO
 
 cleanup:
-	for (zend_string **file_p = files; *file_p; files++) {
-		efree(*file_p);
+
+	zend_hash_destroy(&classmap);
+	zend_hash_destroy(&funcmap);
+
+	for (size_t i = 0; i < ordered_list->size; i++) {
+		zend_op_array *op_array = ordered_list->files[i];
+		destroy_op_array(op_array);
+		efree_size(op_array, sizeof(zend_op_array));
 	}
-	efree(files);
+	efree(ordered_list);
+
+	zend_hash_destroy(&filenames);
+
+	zend_user_module_destroy(&module);
+	zend_user_module_desc_destroy(&module_desc);
 
 	CG(compiler_options_for_modules) = orig_compiler_options;
+	CG(active_module) = orig_module;
 
 	// - If module is being compiled, throw cyclic ref
 	//   if CG(modules).find(module).state == COMPILING:
@@ -715,6 +800,5 @@ cleanup:
 	//
 	//
 
-	zend_user_module_desc_destroy(&module_desc);
 }
 

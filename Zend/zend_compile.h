@@ -110,7 +110,7 @@ typedef struct _zend_declarables {
 typedef struct _zend_file_context {
 	zend_declarables declarables;
 
-	zend_string *current_module;
+	zend_user_module *current_module;
 	bool in_module;
 
 	zend_string *current_namespace;
@@ -509,10 +509,9 @@ struct _zend_op_array {
 struct _zend_user_module {
 	zend_string *name;
 	zend_string *lcname;
-	zend_string *nsprefix;
 	zend_string *path;
 	zend_string *resolved_path;
-	zend_array *op_arrays;
+	HashTable    op_arrays;
 };
 
 #define ZEND_RETURN_VALUE				0

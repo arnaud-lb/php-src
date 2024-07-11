@@ -379,10 +379,7 @@ static void zend_reset_import_tables(void) /* {{{ */
 static void zend_end_module(void) {
 	ZEND_ASSERT(!FC(in_namespace));
 	FC(in_module) = 0;
-	if (FC(current_module)) {
-		zend_string_release_ex(FC(current_module), 0);
-		FC(current_module) = NULL;
-	}
+	FC(current_module) = NULL;
 }
 
 static void zend_end_namespace(void) /* {{{ */ {
@@ -9011,8 +9008,10 @@ static void zend_compile_module(zend_ast *ast)
 				ZSTR_VAL(name), ZSTR_VAL(CG(active_module)->name));
 	}
 
-	FC(current_module) = zend_new_interned_string(name);
-	FC(current_namespace) = zend_string_copy(FC(current_module));
+	CG(active_op_array)->user_module = CG(active_module);
+
+	FC(current_module) = CG(active_module);
+	FC(current_namespace) = zend_string_copy(CG(active_module)->name);
 
 	zend_reset_import_tables();
 
@@ -9048,7 +9047,7 @@ static void zend_compile_namespace(zend_ast *ast) /* {{{ */
 		}
 	}
 
-	bool is_first_namespace = (!with_bracket && (!FC(current_namespace) || FC(current_namespace) == FC(current_module)))
+	bool is_first_namespace = (!with_bracket && (!FC(current_namespace) || FC(current_namespace) == FC(current_module)->name))
 		|| (with_bracket && !FC(has_bracketed_namespaces));
 	if (is_first_namespace && FAILURE == zend_is_first_statement(ast, /* allow_nop */ 1)) {
 		zend_error_noreturn(E_COMPILE_ERROR, "Namespace declaration statement has to be "
@@ -9068,7 +9067,7 @@ static void zend_compile_namespace(zend_ast *ast) /* {{{ */
 
 		if (FC(current_module)) {
 			FC(current_namespace) = zend_string_concat3(
-				ZSTR_VAL(FC(current_module)), ZSTR_LEN(FC(current_module)),
+				ZSTR_VAL(FC(current_module)->name), ZSTR_LEN(FC(current_module)->name),
 				"\\", 1, ZSTR_VAL(name), ZSTR_LEN(name));
 		} else {
 			FC(current_namespace) = zend_string_copy(name);
@@ -9199,7 +9198,7 @@ static bool zend_try_ct_eval_magic_const(zval *zv, zend_ast *ast) /* {{{ */
 			break;
 		case T_MODULE_C:
 			if (FC(current_module)) {
-				ZVAL_STR_COPY(zv, FC(current_module));
+				ZVAL_STR_COPY(zv, FC(current_module)->name);
 			} else {
 				ZVAL_EMPTY_STRING(zv);
 			}

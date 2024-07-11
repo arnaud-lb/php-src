@@ -18,6 +18,7 @@
    +----------------------------------------------------------------------+
 */
 
+#include "zend_compile.h"
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -5492,7 +5493,7 @@ ZEND_METHOD(ReflectionClass, inModule)
 
 	GET_REFLECTION_OBJECT_PTR(ce);
 
-	RETURN_BOOL(ce->module);
+	RETURN_BOOL(ce->type == ZEND_USER_CLASS && ce->info.user.module);
 }
 /* }}} */
 
@@ -5508,8 +5509,8 @@ ZEND_METHOD(ReflectionClass, getModuleName)
 
 	GET_REFLECTION_OBJECT_PTR(ce);
 
-	if (ce->module) {
-		RETURN_STR(ce->module);
+	if (ce->type == ZEND_USER_CLASS && ce->info.user.module) {
+		RETURN_STR(ce->info.user.module->name);
 	}
 	RETURN_EMPTY_STRING();
 }
