@@ -220,10 +220,10 @@ struct _zend_class_entry {
 	HashTable *backed_enum_table;
 
 	zend_string *doc_comment;
-	zend_string *module;
 
 	union {
 		struct {
+			struct _zend_user_module *module;
 			zend_string *filename;
 			uint32_t line_start;
 			uint32_t line_end;

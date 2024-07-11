@@ -1,6 +1,8 @@
 
 #include "Zend/zend.h"
+#include "zend_compile.h"
 #include "zend_errors.h"
+#include "zend_execute.h"
 #include "zend_hash.h"
 #include "zend_API.h"
 #include "zend_ini.h"
@@ -10,15 +12,18 @@
 #include "zend_string.h"
 #include "zend_types.h"
 #include "ZendAccelerator.h"
+#include "zend_virtual_cwd.h"
+#include "zend_vm_opcodes.h"
 
 #include <glob.h>
 #include <fnmatch.h>
 
 typedef struct _zend_user_module_desc {
 	zend_string *name;
-	zend_string *dir;
-	zend_string **include_patterns; /** NULL terminated */;
-	zend_string **exclude_patterns; /** NULL terminated */;
+	zend_string *path; /* ends with DEFAULT_SLASH_STR */
+	zend_string *resolved_path; /* ends with DEFAULT_SLASH_STR */
+	zend_string **include_patterns; /* NULL terminated */;
+	zend_string **exclude_patterns; /* NULL terminated */;
 } zend_user_module_desc;
 
 static void zend_user_module_desc_destroy(zend_user_module_desc *module_desc)
@@ -26,8 +31,8 @@ static void zend_user_module_desc_destroy(zend_user_module_desc *module_desc)
 	if (module_desc->name) {
 		zend_string_release(module_desc->name);
 	}
-	if (module_desc->dir) {
-		zend_string_release(module_desc->dir);
+	if (module_desc->path) {
+		zend_string_release(module_desc->path);
 	}
 	if (module_desc->include_patterns) {
 		zend_string **str = module_desc->include_patterns;
@@ -129,7 +134,7 @@ static void zend_user_module_desc_parser_cb(zval *arg1, zval *arg2, zval *arg3, 
 	}
 }
 
-static void zend_user_module_compile_file(zend_string *file)
+static zend_op_array *zend_user_module_compile_file(zend_user_module *module, zend_string *file)
 {
 	zend_file_handle file_handle;
 	zend_stream_init_filename(&file_handle, ZSTR_VAL(file));
@@ -140,26 +145,16 @@ static void zend_user_module_compile_file(zend_string *file)
 	}
 	zend_destroy_file_handle(&file_handle);
 
-	if (op_array) {
-		zend_execute(op_array, NULL);
-		zend_exception_restore();
-		if (UNEXPECTED(EG(exception))) {
-			return;
-		}
-		destroy_op_array(op_array);
-		efree_size(op_array, sizeof(zend_op_array));
-	} else {
-		if (EG(exception)) {
-			zend_exception_error(EG(exception), E_ERROR);
-		}
-
-		CG(unclean_shutdown) = true;
-		ret = FAILURE;
+	if (op_array->user_module != module) {
+		zend_error_noreturn(E_COMPILE_ERROR,
+				"Module files must declare module '%s'",
+				ZSTR_VAL(module->name));
 	}
 
+	return op_array;
 }
 
-static zend_string **zend_user_module_find_files(zend_user_module_desc *module_desc)
+static size_t zend_user_module_find_files(zend_user_module_desc *module_desc, zend_string ***files)
 {
 	size_t buf_capacity = 8;
 	size_t buf_len = 0;
@@ -169,7 +164,10 @@ static zend_string **zend_user_module_find_files(zend_user_module_desc *module_d
 
 	while (*pattern_p) {
 		// TODO: check path traversal
-		zend_string *pattern = *pattern_p;
+
+		zend_string *pattern = zend_string_concat2(
+				ZSTR_VAL(module_desc->path), ZSTR_LEN(module_desc->path),
+				ZSTR_VAL(*pattern_p), ZSTR_LEN(*pattern_p));
 
 		glob_t globbuf = {0};
 		int ret = glob(ZSTR_VAL(pattern), GLOB_MARK, NULL, &globbuf);
@@ -192,7 +190,7 @@ static zend_string **zend_user_module_find_files(zend_user_module_desc *module_d
 			const char *path = globbuf.gl_pathv[n];
 			size_t path_len = strlen(path);
 			ZEND_ASSERT(path_len);
-			ZEND_ASSERT(path_len >= ZSTR_LEN(module_desc->dir));
+			ZEND_ASSERT(path_len >= ZSTR_LEN(module_desc->path));
 
 			// Skip directories (GLOB_MARK appends a slash at the end of
 			// directories)
@@ -206,7 +204,7 @@ static zend_string **zend_user_module_find_files(zend_user_module_desc *module_d
 			}
 
 			// Skip excluded files
-			const char *rel_path = path + ZSTR_LEN(module_desc->dir) + 1;
+			const char *rel_path = path + ZSTR_LEN(module_desc->path) + 1;
 			zend_string **exclude_pattern_p = module_desc->exclude_patterns;
 			while (*exclude_pattern_p) {
 				zend_string *pattern = *exclude_pattern_p;
@@ -216,7 +214,7 @@ static zend_string **zend_user_module_find_files(zend_user_module_desc *module_d
 				exclude_pattern_p++;
 			}
 
-			if (buf_len + 1 == buf_capacity) {
+			if (buf_len == buf_capacity) {
 				buf = erealloc(buf, buf_capacity * 2);
 			}
 			buf[buf_len++] = zend_string_init(path, path_len, 0);
@@ -225,11 +223,195 @@ next:
 		}
 
 		globfree(&globbuf);
+		zend_string_release(pattern);
 		pattern_p++;
 	}
 
-	buf[buf_len] = NULL;
-	return buf;
+	*files = buf;
+	return buf_len;
+}
+
+#if 0
+typedef struct _zend_dependency_stack {
+	size_t len;
+	size_t capacity;
+	zend_op_array **stack;
+} zend_dependency_stack;
+#endif
+
+#define ZEND_ACC_HAS_STATEMENTS ZEND_ACC_PRIVATE
+#define ZEND_ACC_VISITED        ZEND_ACC_PROTECTED
+
+static HashTable *zend_user_module_update_class_map(zend_user_module *module, zend_op_array *op_array, HashTable *map, uint32_t offset)
+{
+	zend_class_entry *ce;
+	ZEND_HASH_FOREACH_PTR_FROM(CG(class_table), ce, offset) {
+		ZEND_ASSERT(ce->info.user.module == module);
+		ZEND_ASSERT(ce->info.user.filename == op_array->filename);
+		ZEND_ASSERT(ce->type == ZEND_USER_CLASS);
+		if (!(ce->ce_flags & ZEND_ACC_TOP_LEVEL)) {
+			continue;
+		}
+		if (!zend_hash_add_new_ptr(map,
+					zend_string_tolower(ce->name), op_array)) {
+			// TODO: improve error message (include definition locations)
+			zend_error_noreturn(E_COMPILE_ERROR,
+					"Duplicate class declaration: '%s'",
+					ZSTR_VAL(ce->name));
+		}
+	} ZEND_HASH_FOREACH_END();
+}
+
+static HashTable *zend_user_module_update_func_map(zend_user_module *module, zend_op_array *op_array, HashTable *map, uint32_t offset)
+{
+	zend_function *fn;
+	ZEND_HASH_FOREACH_PTR_FROM(CG(function_table), fn, offset) {
+		ZEND_ASSERT(fn->type == ZEND_USER_CLASS);
+		zend_op_array *op_array = &fn->op_array;
+		ZEND_ASSERT(op_array->user_module == module);
+		ZEND_ASSERT(op_array->filename == op_array->filename);
+		if (!(op_array->fn_flags & ZEND_ACC_TOP_LEVEL)) {
+			continue;
+		}
+		if (!zend_hash_add_new_ptr(map,
+					zend_string_tolower(op_array->function_name), op_array)) {
+			// TODO: improve error message (include definition locations)
+			zend_error_noreturn(E_COMPILE_ERROR,
+					"Duplicate function declaration: '%s'",
+					ZSTR_VAL(op_array->function_name));
+		}
+	} ZEND_HASH_FOREACH_END();
+}
+
+typedef struct _zend_user_module_ordered_file_list {
+	zend_op_array **files; /* All files */
+	zend_op_array **next_file; /* Next file is inserted here */
+	zend_op_array **next_file_with_stmts; /* Next file with statements is inserted here */
+	size_t size;
+} zend_user_module_ordered_file_list;
+
+static ZEND_COLD ZEND_NORETURN void zend_user_module_dep_circular_error(zend_user_module *module, zend_op_array *op_array)
+{
+	zend_string *dep_list = NULL;
+	do {
+		if (dep_list == NULL) {
+			dep_list = op_array->filename;
+		} else {
+			zend_string *tmp = zend_string_concat3(
+					ZSTR_VAL(op_array->filename), ZSTR_LEN(op_array->filename),
+					" -> ", strlen(" -> "),
+					ZSTR_VAL(dep_list), ZSTR_LEN(dep_list));
+			zend_string_release(dep_list);
+			dep_list = tmp;
+		}
+		op_array = (zend_op_array*)op_array->function_name;
+	} while (op_array != (zend_op_array*)module);
+
+	ZEND_ASSERT(dep_list);
+}
+
+static void zend_user_module_dep_add_op_array(zend_user_module *module, zend_op_array *op_array, zend_op_array *prev_op_array, HashTable *classmap, HashTable *funcmap, zend_user_module_ordered_file_list *list);
+
+static void zend_user_module_dep_add_class_lc(zend_user_module *module, zend_string *lcname, zend_op_array *op_array, zend_op_array *prev_op_array, HashTable *classmap, HashTable *funcmap, zend_user_module_ordered_file_list *list)
+{
+	if (!zend_string_starts_with(lcname, module->lcname)
+			|| ZSTR_VAL(lcname)[ZSTR_LEN(module->lcname)] != '\\') {
+		return;
+	}
+
+	zend_op_array *dep_op_array = zend_hash_find_ptr(classmap, lcname);
+	if (dep_op_array && dep_op_array != op_array) {
+		zend_user_module_dep_add_op_array(module, dep_op_array, op_array, classmap, funcmap, list);
+	}
+}
+
+static void zend_user_module_dep_add_class(zend_user_module *module, zend_string *name, zend_op_array *op_array, zend_op_array *prev_op_array, HashTable *classmap, HashTable *funcmap, zend_user_module_ordered_file_list *list)
+{
+	if (!zend_string_starts_with_ci(name, module->lcname)
+			|| ZSTR_VAL(name)[ZSTR_LEN(module->lcname)] != '\\') {
+		return;
+	}
+
+	zend_string *lcname = zend_string_tolower(name);
+	zend_op_array *dep_op_array = zend_hash_find_ptr(classmap, lcname);
+	if (dep_op_array && dep_op_array != op_array) {
+		zend_user_module_dep_add_op_array(module, dep_op_array, op_array, classmap, funcmap, list);
+	}
+	zend_string_release(lcname);
+}
+
+static void zend_user_module_dep_add_op_array(zend_user_module *module, zend_op_array *op_array, zend_op_array *prev_op_array, HashTable *classmap, HashTable *funcmap, zend_user_module_ordered_file_list *list)
+{
+	zend_op *opline = op_array->opcodes;
+	zend_op *end = opline + op_array->last;
+	zend_string *key;
+
+	if (op_array->fn_flags & ZEND_ACC_VISITED) {
+		return;
+	}
+	if (op_array->function_name != NULL) {
+		zend_user_module_dep_circular_error(module, op_array);
+	}
+	op_array->function_name = (zend_string*)prev_op_array;
+
+	while (opline != end) {
+		switch (opline->opcode) {
+			case ZEND_DECLARE_CLASS:
+			case ZEND_DECLARE_CLASS_DELAYED:
+				key = Z_STR_P(RT_CONSTANT(opline, opline->op1) + 1);
+				zend_class_entry *ce = zend_hash_find_ptr(CG(class_table), key);
+				ZEND_ASSERT(ce);
+				ZEND_ASSERT(!(ce->ce_flags & ZEND_ACC_TOP_LEVEL));
+				if (ce->parent_name) {
+					zend_user_module_dep_add_class(module, ce->parent_name, op_array, prev_op_array, classmap, funcmap, list);
+				}
+				for (uint32_t i = 0; i < ce->num_interfaces; i++) {
+					zend_user_module_dep_add_class_lc(module, ce->interface_names[i].lc_name, op_array, prev_op_array, classmap, funcmap, list);
+				}
+				for (uint32_t i = 0; i < ce->num_traits; i++) {
+					zend_user_module_dep_add_class_lc(module, ce->trait_names[i].lc_name, op_array, prev_op_array, classmap, funcmap, list);
+				}
+				break;
+			case ZEND_DECLARE_FUNCTION:
+				break;
+			default:
+				op_array->fn_flags |= ZEND_ACC_HAS_STATEMENTS;
+				goto end;
+		}
+		opline++;
+	}
+
+end:
+	if (op_array->fn_flags & ZEND_ACC_HAS_STATEMENTS) {
+		*list->next_file_with_stmts = op_array;
+		list->next_file_with_stmts--;
+	} else {
+		*list->next_file = op_array;
+		list->next_file++;
+	}
+	op_array->fn_flags |= ZEND_ACC_VISITED;
+	op_array->function_name = NULL;
+}
+
+static zend_user_module_ordered_file_list *zend_user_module_sort_initial_op_arrays(zend_user_module *module, HashTable *classmap, HashTable *funcmap)
+{
+	zend_user_module_ordered_file_list *list = safe_emalloc(
+			module->op_arrays->nNumOfElements, sizeof(zend_op_array*),
+			sizeof(*list));
+
+	list->size = module->op_arrays->nNumOfElements;
+	list->files = (zend_op_array**)((char*)list + sizeof(*list));
+	list->next_file = list->files;
+	list->next_file_with_stmts = list->files + list->size - 1;
+
+	zend_op_array *op_array;
+	ZEND_HASH_FOREACH_PTR(module->op_arrays, op_array) {
+		zend_user_module_dep_add_op_array(module, op_array, (zend_op_array*)module, classmap, funcmap, list);
+	} ZEND_HASH_FOREACH_END();
+
+	ZEND_ASSERT(list->next_file == list->next_file_with_stmts);
+
+	return list;
 }
 
 ZEND_API void zend_require_user_module(zend_string *module_path)
@@ -244,58 +426,81 @@ ZEND_API void zend_require_user_module(zend_string *module_path)
 		zend_user_module_desc_destroy(&module_desc);
 		return;
 	}
+
+	size_t module_resolved_path_len = zend_dirname(ZSTR_VAL(file_handle.opened_path), ZSTR_LEN(file_handle.opened_path));
+	module_desc.resolved_path = zend_string_concat2(
+			ZSTR_VAL(file_handle.opened_path), module_resolved_path_len,
+			DEFAULT_SLASH_STR, strlen(DEFAULT_SLASH_STR));
+
 	zend_destroy_file_handle(&file_handle);
 
-	size_t module_dir_len = zend_dirname(ZSTR_VAL(module_path), ZSTR_LEN(module_path));
-	module_desc.dir = zend_string_init(ZSTR_VAL(module_path), module_dir_len, 0);
+	size_t module_path_len = zend_dirname(ZSTR_VAL(module_path), ZSTR_LEN(module_path));
+	module_desc.path = zend_string_concat2(
+			ZSTR_VAL(module_path), module_path_len,
+			DEFAULT_SLASH_STR, strlen(DEFAULT_SLASH_STR));
 
-	// Prefix patterns with the module dir
-	if (module_desc.include_patterns) {
-		zend_string **pattern_p = module_desc.include_patterns;
-		while (*pattern_p) {
-			*pattern_p = zend_string_concat3(
-				ZSTR_VAL(module_desc.dir), ZSTR_LEN(module_desc.dir),
-				"/", 1,
-				ZSTR_VAL(*pattern_p), ZSTR_LEN(*pattern_p));
-			pattern_p++;
-		}
-	}
-#if 0
-	if (module_desc.exclude_patterns) {
-		zend_string **pattern_p = module_desc.exclude_patterns;
-		while (*pattern_p) {
-			*pattern_p = zend_string_concat3(
-				ZSTR_VAL(module_desc.dir), ZSTR_LEN(module_desc.dir),
-				"/", 1,
-				ZSTR_VAL(*pattern_p), ZSTR_LEN(*pattern_p));
-			pattern_p++;
-		}
-	}
-#endif
+	zend_user_module module = {
+		.name = zend_string_copy(module_desc.name),
+		.lcname = zend_string_tolower(module_desc.name),
+		.path = zend_string_copy(module_desc.path),
+		.resolved_path = zend_string_copy(module_desc.resolved_path),
+	};
 
-	zend_string **files = zend_user_module_find_files(&module_desc);
+	zend_string **files;
+	size_t files_count = zend_user_module_find_files(&module_desc, &files);
 
-	ZCG(enabled) = false;
-	ZCG(accelerator_enabled) = false;
-
-	uint32_t orig_compiler_options = CG(compiler_options);
+	uint32_t orig_compiler_options = CG(compiler_options_for_modules);
 	// CG(compiler_options) |= ZEND_COMPILE_PRELOAD;
-	CG(compiler_options) |= ZEND_COMPILE_HANDLE_OP_ARRAY;
-	CG(compiler_options) |= ZEND_COMPILE_DELAYED_BINDING;
-	CG(compiler_options) |= ZEND_COMPILE_NO_CONSTANT_SUBSTITUTION;
-	CG(compiler_options) |= ZEND_COMPILE_IGNORE_OTHER_FILES;
-	CG(skip_shebang) = true;
+	CG(compiler_options_for_modules) |= ZEND_COMPILE_HANDLE_OP_ARRAY;
+	CG(compiler_options_for_modules) |= ZEND_COMPILE_DELAYED_BINDING;
+	CG(compiler_options_for_modules) |= ZEND_COMPILE_NO_CONSTANT_SUBSTITUTION;
+	CG(compiler_options_for_modules) |= ZEND_COMPILE_IGNORE_OTHER_FILES;
+	CG(compiler_options_for_modules) |= ZEND_COMPILE_WITHOUT_EXECUTION;
+
+	HashTable *classmap = emalloc(sizeof(HashTable*));
+	zend_hash_init(classmap, files_count, NULL, NULL, 0);
+
+	HashTable *funcmap = emalloc(sizeof(HashTable*));
+	zend_hash_init(funcmap, files_count, NULL, NULL, 0);
 
 	for (zend_string **file_p = files; *file_p; files++) {
-		zend_user_module_compile_file(*file_p);
+		uint32_t class_table_offset = CG(class_table)->nNumUsed;
+		uint32_t function_table_offset = CG(function_table)->nNumUsed;
+
+		zend_op_array *op_array = zend_user_module_compile_file(&module, *file_p);
+
+		zend_user_module_update_class_map(&module, op_array, classmap, class_table_offset);
+		zend_user_module_update_func_map(&module, op_array, classmap, function_table_offset);
 	}
 
+	zend_user_module_ordered_file_list *ordered_list = zend_user_module_sort_initial_op_arrays(&module, classmap, funcmap);
+
+	for (zend_op_array **op_array_p = ordered_list->files + ordered_list->size - 1;
+			op_array_p != ordered_list->next_file_with_stmts;
+			op_array_p--) {
+		zend_execute(*op_array_p, NULL);
+		if (EG(exception)) {
+			goto cleanup;
+		}
+	}
+	for (zend_op_array **op_array_p = ordered_list->files;
+			op_array_p != ordered_list->next_file;
+			op_array_p++) {
+		zend_execute(*op_array_p, NULL);
+		if (EG(exception)) {
+			goto cleanup;
+		}
+	}
+
+
+
+cleanup:
 	for (zend_string **file_p = files; *file_p; files++) {
 		efree(*file_p);
 	}
 	efree(files);
 
-	CG(compiler_options) = orig_compiler_options;
+	CG(compiler_options_for_modules) = orig_compiler_options;
 
 	// - If module is being compiled, throw cyclic ref
 	//   if CG(modules).find(module).state == COMPILING:

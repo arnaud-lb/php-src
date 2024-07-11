@@ -82,6 +82,7 @@ typedef enum {
 
 typedef struct _zend_user_module {
 	zend_string *name;
+	zend_string *lcname;
 	zend_string *path;
 	zend_string *resolved_path;
 } zend_user_module;
@@ -128,6 +129,7 @@ struct _zend_compiler_globals {
 	uint32_t extra_fn_flags;
 
 	uint32_t compiler_options; /* set of ZEND_COMPILE_* constants */
+	uint32_t compiler_options_for_modules; /* set of ZEND_COMPILE_* constants */
 
 	zend_oparray_context context;
 	zend_file_context file_context;

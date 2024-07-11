@@ -24,6 +24,7 @@
 #include "zend_attributes.h"
 #include "zend_compile.h"
 #include "zend_constants.h"
+#include "zend_errors.h"
 #include "zend_llist.h"
 #include "zend_API.h"
 #include "zend_exceptions.h"
@@ -8027,6 +8028,7 @@ static void zend_compile_func_decl(znode *result, zend_ast *ast, bool toplevel) 
 
 	op_array->fn_flags |= (orig_op_array->fn_flags & ZEND_ACC_STRICT_TYPES);
 	op_array->fn_flags |= decl->flags;
+	op_array->user_module = CG(active_module);
 	op_array->line_start = decl->start_lineno;
 	op_array->line_end = decl->end_lineno;
 	if (decl->doc_comment) {
@@ -8571,11 +8573,6 @@ static void zend_compile_class_decl(znode *result, zend_ast *ast, bool toplevel)
 
 	ce->type = ZEND_USER_CLASS;
 	ce->name = name;
-	if (FC(current_module)) {
-		ce->module = zend_string_copy(FC(current_module));
-	} else {
-		ce->module = NULL;
-	}
 	zend_initialize_class_data(ce, 1);
 	if (!(decl->flags & ZEND_ACC_ANON_CLASS)) {
 		zend_alloc_ce_cache(ce->name);
@@ -8588,6 +8585,7 @@ static void zend_compile_class_decl(znode *result, zend_ast *ast, bool toplevel)
 	}
 
 	ce->ce_flags |= decl->flags;
+	ce->info.user.module = CG(active_module);
 	ce->info.user.filename = zend_string_copy(zend_get_compiled_filename());
 	ce->info.user.line_start = decl->start_lineno;
 	ce->info.user.line_end = decl->end_lineno;
@@ -9003,6 +9001,16 @@ static void zend_compile_module(zend_ast *ast)
 
 	name = zend_ast_get_str(name_ast);
 
+	// TODO: may not be the right place for this
+	if (!CG(active_module)) {
+		zend_error_noreturn(E_COMPILE_ERROR,
+				"Can not declare module outside of require_module()");
+	} else if (!zend_string_equals_ci(CG(active_module)->name, name)) {
+		zend_error_noreturn(E_COMPILE_ERROR,
+				"Can not declare module '%s' while loading module '%s'",
+				ZSTR_VAL(name), ZSTR_VAL(CG(active_module)->name));
+	}
+
 	FC(current_module) = zend_new_interned_string(name);
 	FC(current_namespace) = zend_string_copy(FC(current_module));
 
@@ -9010,6 +9018,8 @@ static void zend_compile_module(zend_ast *ast)
 
 	FC(in_module) = 1;
 	FC(in_namespace) = 1;
+
+	CG(compiler_options) = CG(compiler_options_for_modules);
 }
 
 static void zend_compile_namespace(zend_ast *ast) /* {{{ */

@@ -50,6 +50,7 @@
 	} \
 } while (0)
 
+typedef struct _zend_user_module zend_user_module;
 typedef struct _zend_op_array zend_op_array;
 typedef struct _zend_op zend_op;
 
@@ -471,7 +472,6 @@ struct _zend_op_array {
 	ZEND_MAP_PTR_DEF(void **, run_time_cache);
 	zend_string *doc_comment;
 	uint32_t T;         /* number of temporary variables */
-	zend_string *user_module;
 	/* END of common elements */
 
 	int cache_size;     /* number of run_time_cache_slots * sizeof(void*) */
@@ -490,6 +490,7 @@ struct _zend_op_array {
 	zend_live_range *live_range;
 	zend_try_catch_element *try_catch_array;
 
+	zend_user_module *user_module;
 	zend_string *filename;
 	uint32_t line_start;
 	uint32_t line_end;
@@ -505,6 +506,14 @@ struct _zend_op_array {
 	void *reserved[ZEND_MAX_RESERVED_RESOURCES];
 };
 
+struct _zend_user_module {
+	zend_string *name;
+	zend_string *lcname;
+	zend_string *nsprefix;
+	zend_string *path;
+	zend_string *resolved_path;
+	zend_array *op_arrays;
+};
 
 #define ZEND_RETURN_VALUE				0
 #define ZEND_RETURN_REFERENCE			1
@@ -530,7 +539,6 @@ typedef struct _zend_internal_function {
 	ZEND_MAP_PTR_DEF(void **, run_time_cache);
 	zend_string *doc_comment;
 	uint32_t T;         /* number of temporary variables */
-	zend_string *user_module;
 	/* END of common elements */
 
 	zif_handler handler;
@@ -559,7 +567,6 @@ union _zend_function {
 		ZEND_MAP_PTR_DEF(void **, run_time_cache);
 		zend_string *doc_comment;
 		uint32_t T;         /* number of temporary variables */
-		zend_string *user_module;
 	} common;
 
 	zend_op_array op_array;
