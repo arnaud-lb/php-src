@@ -507,11 +507,16 @@ struct _zend_op_array {
 };
 
 struct _zend_user_module {
-	zend_string *name;
-	zend_string *lcname;
-	zend_string *path;
-	zend_string *resolved_path;
-	HashTable    op_arrays;
+	bool                    loading;
+	zend_string            *name;
+	zend_string            *lcname;
+	zend_string            *path;
+	zend_string            *resolved_path;
+	HashTable               op_arrays;
+	HashTable               class_table;
+	HashTable               function_table;
+	uint32_t                num_dependencies;
+	zend_user_module      **dependencies;
 };
 
 #define ZEND_RETURN_VALUE				0
