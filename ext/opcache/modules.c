@@ -1,5 +1,6 @@
 
 #include "Zend/zend.h"
+#include "zend_accelerator_hash.h"
 #include "zend_compile.h"
 #include "zend_errors.h"
 #include "zend_exceptions.h"
@@ -17,6 +18,11 @@
 #include "zend_virtual_cwd.h"
 #include "zend_vm_opcodes.h"
 #include "zend_inheritance.h"
+#include "zend_observer.h"
+#include "zend_shared_alloc.h"
+#include "zend_accelerator_util_funcs.h"
+#include "zend_persist.h"
+#include "zend_vm.h"
 
 #include <glob.h>
 #include <fnmatch.h>
@@ -59,6 +65,7 @@ static void zend_user_module_desc_destroy(zend_user_module_desc *module_desc)
 
 }
 
+#if 0
 static void zend_user_module_destroy(zend_user_module *module)
 {
 	zend_string_release(module->name);
@@ -66,12 +73,8 @@ static void zend_user_module_destroy(zend_user_module *module)
 	zend_string_release(module->path);
 	zend_string_release(module->resolved_path);
 	zend_hash_destroy(&module->op_arrays);
-	zend_hash_destroy(&module->class_table);
-	zend_hash_destroy(&module->function_table);
-	if (module->dependencies) {
-		efree(module->dependencies);
-	}
 }
+#endif
 
 static zend_string **split_patterns(zend_string *str)
 {
@@ -465,7 +468,7 @@ static zend_result zend_user_module_check_deps_type(zend_type type)
 	return SUCCESS;
 }
 
-static zend_result zend_user_module_check_deps_op_array(zend_user_module *module, zend_op_array *op_array);
+static zend_result zend_user_module_check_deps_op_array(HashTable *class_table, HashTable *function_table, zend_op_array *op_array);
 
 #define CHECK_CLASS(node) do {          \
 	if (UNEXPECTED(!zend_fetch_class_by_name(Z_STR_P(RT_CONSTANT(opline, node)), Z_STR_P(RT_CONSTANT(opline, node)+1), 0))) { \
@@ -473,7 +476,7 @@ static zend_result zend_user_module_check_deps_op_array(zend_user_module *module
 	}                                   \
 } while (0)
 
-static zend_result zend_user_module_check_deps_class(zend_user_module *module, zend_class_entry *ce)
+static zend_result zend_user_module_check_deps_class(HashTable *class_table, HashTable *function_table, zend_class_entry *ce)
 {
 	ZEND_ASSERT(ce->ce_flags & ZEND_ACC_LINKED);
 
@@ -491,7 +494,7 @@ static zend_result zend_user_module_check_deps_class(zend_user_module *module, z
 	zend_function *fn;
 	ZEND_HASH_MAP_FOREACH_PTR(&ce->function_table, fn) {
 		if (fn->type == ZEND_USER_FUNCTION) {
-			if (UNEXPECTED(zend_user_module_check_deps_op_array(module, &fn->op_array) == FAILURE)) {
+			if (UNEXPECTED(zend_user_module_check_deps_op_array(class_table, function_table, &fn->op_array) == FAILURE)) {
 				return FAILURE;
 			}
 		}
@@ -500,7 +503,7 @@ static zend_result zend_user_module_check_deps_class(zend_user_module *module, z
 	return SUCCESS;
 }
 
-static zend_result zend_user_module_check_deps_op_array(zend_user_module *module, zend_op_array *op_array)
+static zend_result zend_user_module_check_deps_op_array(HashTable *class_table, HashTable *function_table, zend_op_array *op_array)
 {
 	if (op_array->arg_info) {
 		zend_arg_info *start = op_array->arg_info
@@ -571,10 +574,13 @@ static zend_result zend_user_module_check_deps_op_array(zend_user_module *module
 				zend_class_entry *ce = zend_hash_find_ptr(CG(class_table), lcname);
 				if (ce) {
 					ZEND_ASSERT(ce->ce_flags & ZEND_ACC_LINKED);
-					if (UNEXPECTED(zend_user_module_check_deps_class(module, ce) == FAILURE)) {
+					if (UNEXPECTED(zend_user_module_check_deps_class(class_table, function_table, ce) == FAILURE)) {
 						return FAILURE;
 					}
-					zend_hash_add_new_ptr(&module->class_table, lcname, ce);
+					if (class_table) {
+						zend_hash_add_new_ptr(class_table, lcname, ce);
+						ce->refcount++;
+					}
 				}
 				break;
 			}
@@ -587,25 +593,33 @@ static zend_result zend_user_module_check_deps_op_array(zend_user_module *module
 					return FAILURE;
 				}
 				ZEND_ASSERT(ce->ce_flags & ZEND_ACC_LINKED);
-				if (UNEXPECTED(zend_user_module_check_deps_class(module, ce) == FAILURE)) {
+				if (UNEXPECTED(zend_user_module_check_deps_class(class_table, function_table, ce) == FAILURE)) {
 					return FAILURE;
 				}
-				zend_hash_add_new_ptr(&module->class_table, rtd_key, ce);
+				if (class_table) {
+					zend_hash_add_new_ptr(class_table, rtd_key, ce);
+					ce->refcount++;
+				}
 				break;
 			}
-			case ZEND_DECLARE_FUNCTION: {
-				zend_string *lcname = Z_STR_P(RT_CONSTANT(opline, opline->op1));
-				zend_function *fn = (zend_function*) op_array->dynamic_func_defs[opline->op2.num];
-				zend_hash_add_new_ptr(&module->function_table, lcname, fn);
+			case ZEND_DECLARE_FUNCTION:
+				if (function_table) {
+					zend_string *lcname = Z_STR_P(RT_CONSTANT(opline, opline->op1));
+					zend_function *fn = (zend_function*) op_array->dynamic_func_defs[opline->op2.num];
+					zend_hash_add_new_ptr(function_table, lcname, fn);
+					ZEND_ASSERT(fn->type == ZEND_USER_FUNCTION);
+					if (fn->op_array.refcount) {
+						(*fn->op_array.refcount)++;
+					}
+				}
 				break;
-			}
 		}
 		opline++;
 	}
 
 	if (op_array->num_dynamic_func_defs) {
 		for (uint32_t i = 0; i < op_array->num_dynamic_func_defs; i++) {
-			if (UNEXPECTED(zend_user_module_check_deps_op_array(module, op_array->dynamic_func_defs[i]) == FAILURE)) {
+			if (UNEXPECTED(zend_user_module_check_deps_op_array(class_table, function_table, op_array->dynamic_func_defs[i]) == FAILURE)) {
 				return FAILURE;
 			}
 		}
@@ -626,11 +640,11 @@ static zend_result zend_user_module_check_deps_op_array(zend_user_module *module
 			} \
 			if (UNEXPECTED(Z_TYPE_P(_z) == IS_UNDEF)) continue; \
 
-static zend_result zend_user_module_check_deps(zend_user_module *module)
+static zend_result zend_user_module_check_deps(zend_user_module *module, HashTable *class_table, HashTable *function_table)
 {
 	ZEND_HASH_MAP_FOREACH_FROM_APPEND(&module->op_arrays, 0, 0) {
 		zend_op_array *op_array = Z_PTR_P(_z);
-		if (UNEXPECTED(zend_user_module_check_deps_op_array(module, op_array) == FAILURE)) {
+		if (UNEXPECTED(zend_user_module_check_deps_op_array(class_table, function_table, op_array) == FAILURE)) {
 			return FAILURE;
 		}
 	} ZEND_HASH_FOREACH_END();
@@ -824,10 +838,208 @@ try_again:
 	}
 }
 
+static void zend_user_module_register_trait_methods(zend_class_entry *ce) {
+	zend_op_array *op_array;
+	ZEND_HASH_MAP_FOREACH_PTR(&ce->function_table, op_array) {
+		if (!(op_array->fn_flags & ZEND_ACC_TRAIT_CLONE)) {
+			ZEND_ASSERT(op_array->refcount && "Must have refcount pointer");
+			zend_shared_alloc_register_xlat_entry(op_array->refcount, op_array);
+		}
+	} ZEND_HASH_FOREACH_END();
+}
+
+static void zend_user_module_fix_trait_methods(zend_class_entry *ce)
+{
+	zend_op_array *op_array;
+
+	ZEND_HASH_MAP_FOREACH_PTR(&ce->function_table, op_array) {
+		if (op_array->fn_flags & ZEND_ACC_TRAIT_CLONE) {
+			zend_op_array *orig_op_array = zend_shared_alloc_get_xlat_entry(op_array->refcount);
+			ZEND_ASSERT(orig_op_array && "Must be in xlat table");
+
+			zend_string *function_name = op_array->function_name;
+			zend_class_entry *scope = op_array->scope;
+			uint32_t fn_flags = op_array->fn_flags;
+			zend_function *prototype = op_array->prototype;
+			HashTable *ht = op_array->static_variables;
+			*op_array = *orig_op_array;
+			op_array->function_name = function_name;
+			op_array->scope = scope;
+			op_array->fn_flags = fn_flags;
+			op_array->prototype = prototype;
+			op_array->static_variables = ht;
+		}
+	} ZEND_HASH_FOREACH_END();
+}
+
+static void zend_user_module_optimize(zend_user_module *module, zend_script *script)
+{
+	zend_class_entry *ce;
+
+	zend_shared_alloc_init_xlat_table();
+
+	ZEND_HASH_MAP_FOREACH_PTR(&script->class_table, ce) {
+		if (ce->ce_flags & ZEND_ACC_TRAIT) {
+			zend_user_module_register_trait_methods(ce);
+		}
+	} ZEND_HASH_FOREACH_END();
+
+	zend_optimize_script(script, ZCG(accel_directives).optimization_level, ZCG(accel_directives).opt_debug_level);
+	// TODO
+	// zend_accel_finalize_delayed_early_binding_list(script);
+
+	ZEND_HASH_MAP_FOREACH_PTR(&script->class_table, ce) {
+		zend_user_module_fix_trait_methods(ce);
+	} ZEND_HASH_FOREACH_END();
+
+	zend_shared_alloc_destroy_xlat_table();
+}
+
+/**
+ * Clear AVX/SSE2-aligned memory.
+ */
+static void bzero_aligned(void *mem, size_t size)
+{
+#if defined(__x86_64__)
+	memset(mem, 0, size);
+#elif defined(__AVX__)
+	char *p = (char*)mem;
+	char *end = p + size;
+	__m256i ymm0 = _mm256_setzero_si256();
+
+	while (p < end) {
+		_mm256_store_si256((__m256i*)p, ymm0);
+		_mm256_store_si256((__m256i*)(p+32), ymm0);
+		p += 64;
+	}
+#elif defined(__SSE2__)
+	char *p = (char*)mem;
+	char *end = p + size;
+	__m128i xmm0 = _mm_setzero_si128();
+
+	while (p < end) {
+		_mm_store_si128((__m128i*)p, xmm0);
+		_mm_store_si128((__m128i*)(p+16), xmm0);
+		_mm_store_si128((__m128i*)(p+32), xmm0);
+		_mm_store_si128((__m128i*)(p+48), xmm0);
+		p += 64;
+	}
+#else
+	memset(mem, 0, size);
+#endif
+}
+
+static zend_persistent_user_module* zend_user_module_save_script_in_shared_memory(zend_persistent_user_module *pmodule)
+{
+	zend_accel_hash_entry *bucket;
+	uint32_t memory_used;
+	uint32_t checkpoint;
+
+	if (zend_accel_hash_is_full(&ZCSG(hash))) {
+		zend_accel_error_noreturn(ACCEL_LOG_FATAL, "Not enough entries in hash table for caching module. Consider increasing the value for the opcache.max_accelerated_files directive in php.ini.");
+	}
+
+	checkpoint = zend_shared_alloc_checkpoint_xlat_table();
+
+	/* Calculate the required memory size */
+	memory_used = zend_accel_user_module_persist_calc(pmodule, 1);
+
+	/* Allocate shared memory */
+	ZCG(mem) = zend_shared_alloc_aligned(memory_used);
+	if (!ZCG(mem)) {
+		zend_accel_error_noreturn(ACCEL_LOG_FATAL, "Not enough shared memory for caching module. Consider increasing the value for the opcache.memory_consumption directive in php.ini.");
+	}
+
+	bzero_aligned(ZCG(mem), memory_used);
+
+	zend_shared_alloc_restore_xlat_table(checkpoint);
+
+	/* Copy into shared memory */
+	pmodule->script = zend_accel_script_persist(pmodule->script, 1);
+
+	// TODO
+	// new_persistent_script->is_phar = is_phar_file(new_persistent_script->script.filename);
+
+	/* Consistency check */
+	if ((char*)pmodule->script->mem + pmodule->script->size != (char*)ZCG(mem)) {
+		zend_accel_error(
+			((char*)pmodule->script->mem + pmodule->script->size < (char*)ZCG(mem)) ? ACCEL_LOG_ERROR : ACCEL_LOG_WARNING,
+			"Internal error: wrong size calculation: module %s start=" ZEND_ADDR_FMT ", end=" ZEND_ADDR_FMT ", real=" ZEND_ADDR_FMT "\n",
+			ZSTR_VAL(pmodule->module.name),
+			(size_t)pmodule->script->mem,
+			(size_t)((char *)pmodule->script->mem + pmodule->script->size),
+			(size_t)ZCG(mem));
+	}
+
+	/* store script structure in the hash table */
+	// TODO: hack
+	zend_string *key = zend_string_concat2(
+			"module://", strlen("module://"),
+			ZSTR_VAL(pmodule->module.name), ZSTR_LEN(pmodule->module.name));
+	bucket = zend_accel_hash_update(&ZCSG(hash), key, 0, pmodule);
+	zend_string_release(key);
+	if (bucket) {
+		zend_accel_error(ACCEL_LOG_INFO, "Cached module '%s'", ZSTR_VAL(pmodule->module.name));
+	}
+
+	pmodule->script->dynamic_members.memory_consumption = ZEND_ALIGNED_SIZE(pmodule->script->size);
+
+	return pmodule;
+}
+
+static void zend_user_module_load(zend_persistent_user_module *pmodule)
+{
+	/* Load into process tables */
+	if (zend_hash_num_elements(&pmodule->script->script.function_table)) {
+		Bucket *p = pmodule->script->script.function_table.arData;
+		Bucket *end = p + pmodule->script->script.function_table.nNumUsed;
+
+		zend_hash_extend(CG(function_table),
+			CG(function_table)->nNumUsed + pmodule->script->script.function_table.nNumUsed, 0);
+		for (; p != end; p++) {
+			_zend_hash_append_ptr_ex(CG(function_table), p->key, Z_PTR(p->val), 1);
+		}
+	}
+
+	if (zend_hash_num_elements(&pmodule->script->script.class_table)) {
+		Bucket *p = pmodule->script->script.class_table.arData;
+		Bucket *end = p + pmodule->script->script.class_table.nNumUsed;
+
+		zend_hash_extend(CG(class_table),
+			CG(class_table)->nNumUsed + pmodule->script->script.class_table.nNumUsed, 0);
+		for (; p != end; p++) {
+			_zend_hash_append_ex(CG(class_table), p->key, &p->val, 1);
+		}
+	}
+
+	if (CG(map_ptr_last) != ZCSG(map_ptr_last)) {
+		size_t old_map_ptr_last = CG(map_ptr_last);
+		CG(map_ptr_last) = ZCSG(map_ptr_last);
+		CG(map_ptr_size) = ZEND_MM_ALIGNED_SIZE_EX(CG(map_ptr_last) + 1, 4096);
+		CG(map_ptr_real_base) = perealloc(CG(map_ptr_real_base), CG(map_ptr_size) * sizeof(void*), 1);
+		CG(map_ptr_base) = ZEND_MAP_PTR_BIASED_BASE(CG(map_ptr_real_base));
+		memset((void **) CG(map_ptr_real_base) + old_map_ptr_last, 0,
+			(CG(map_ptr_last) - old_map_ptr_last) * sizeof(void *));
+	}
+
+	for (uint32_t i = 0; i < pmodule->num_dependencies; i++) {
+		zend_persistent_user_module *dep = pmodule->dependencies[i];
+		zend_user_module *module = zend_hash_find_ptr(CG(module_table), dep->module.lcname);
+
+		if (module) {
+			if (UNEXPECTED(module != &dep->module)) {
+				zend_error_noreturn(E_CORE_ERROR, "Internal error");
+			}
+			continue;
+		}
+
+		zend_user_module_load(dep);
+	}
+}
+
 ZEND_API void zend_require_user_module(zend_string *module_path)
 {
 	zend_user_module *orig_module = CG(active_module);
-	// TODO: check circular loading
 
 	/* Load module metadata */
 
@@ -839,6 +1051,26 @@ ZEND_API void zend_require_user_module(zend_string *module_path)
 	if (zend_parse_ini_file(&file_handle, 0, ZEND_INI_SCANNER_NORMAL, zend_user_module_desc_parser_cb, &module_desc) == FAILURE) {
 		zend_destroy_file_handle(&file_handle);
 		zend_user_module_desc_destroy(&module_desc);
+		return;
+	}
+
+	zend_string *lcname = zend_string_tolower(module_desc.name);
+	zend_user_module *loaded_module = zend_hash_find_ptr(EG(module_table), lcname);
+	if (loaded_module) {
+		zend_string_release(lcname);
+		zend_user_module_desc_destroy(&module_desc);
+		if (loaded_module->loading) {
+			zend_throw_exception(NULL, "Circular module dependency", 0);
+		}
+		return;
+	}
+
+	zend_string *module_key = zend_string_concat2(
+			"module://", strlen("module://"),
+			ZSTR_VAL(lcname), ZSTR_LEN(lcname));
+	zend_persistent_user_module *cached_module = zend_accel_hash_find(&ZCSG(hash), module_key);
+	if (cached_module) {
+		zend_user_module_load(cached_module);
 		return;
 	}
 
@@ -862,30 +1094,17 @@ ZEND_API void zend_require_user_module(zend_string *module_path)
 			ZSTR_VAL(module_path), module_path_len,
 			DEFAULT_SLASH_STR, strlen(DEFAULT_SLASH_STR));
 
-	zend_string *lcname = zend_string_tolower(module_desc.name);
-	zend_user_module *loaded = zend_hash_find_ptr(EG(module_table), lcname);
-	if (loaded) {
-		zend_string_release(lcname);
-		zend_user_module_desc_destroy(&module_desc);
-		if (loaded->loading) {
-			zend_throw_exception(NULL, "Circular module dependency", 0);
-		}
-	}
+	zend_user_module *module = emalloc(sizeof(zend_user_module));
+	module->loading = true;
+	module->name = zend_string_copy(module_desc.name);
+	module->lcname = lcname;
+	module->path = zend_string_copy(module_desc.path);
+	module->resolved_path = zend_string_copy(module_desc.resolved_path);
+	zend_hash_init(&module->op_arrays, 0, NULL, NULL, 0);
 
-	zend_user_module module = {
-		.loading =          true,
-		.name =             zend_string_copy(module_desc.name),
-		.lcname =           lcname,
-		.path =             zend_string_copy(module_desc.path),
-		.resolved_path =    zend_string_copy(module_desc.resolved_path),
-	};
-	zend_hash_init(&module.op_arrays, 0, NULL, NULL, 0);
-	zend_hash_init(&module.class_table, 0, NULL, NULL, 0);
-	zend_hash_init(&module.function_table, 0, NULL, NULL, 0);
+	CG(active_module) = module;
 
-	CG(active_module) = &module;
-
-	zend_hash_update_ptr(EG(module_table), lcname, &module);
+	zend_hash_update_ptr(EG(module_table), lcname, module);
 
 	/* List initial files and compile */
 
@@ -917,15 +1136,15 @@ ZEND_API void zend_require_user_module(zend_string *module_path)
 		uint32_t class_table_offset = CG(class_table)->nNumUsed;
 		uint32_t function_table_offset = CG(function_table)->nNumUsed;
 
-		zend_op_array *op_array = zend_user_module_compile_file(&module, file);
+		zend_op_array *op_array = zend_user_module_compile_file(module, file);
 
-		zend_user_module_update_class_map(&module, op_array, &classmap, class_table_offset);
-		zend_user_module_update_func_map(&module, op_array, &funcmap, function_table_offset);
+		zend_user_module_update_class_map(module, op_array, &classmap, class_table_offset);
+		zend_user_module_update_func_map(module, op_array, &funcmap, function_table_offset);
 	} ZEND_HASH_FOREACH_END();
 
 	/* Execute initial files */
 
-	zend_user_module_ordered_file_list *ordered_list = zend_user_module_sort_initial_op_arrays(&module, &classmap, &funcmap);
+	zend_user_module_ordered_file_list *ordered_list = zend_user_module_sort_initial_op_arrays(module, &classmap, &funcmap);
 
 	for (zend_op_array **op_array_p = ordered_list->files + ordered_list->num_files - 1;
 			op_array_p != ordered_list->next_file_with_stmts;
@@ -953,31 +1172,95 @@ ZEND_API void zend_require_user_module(zend_string *module_path)
 
 	/* Enforce that referenced symbols exist and build class/function tables */
 
-	if (zend_user_module_check_deps(&module) == FAILURE) {
+	HashTable class_table;
+	zend_hash_init(&class_table, module->op_arrays.nNumOfElements, NULL, ZEND_CLASS_DTOR, 0);
+
+	HashTable function_table;
+	zend_hash_init(&function_table, module->op_arrays.nNumOfElements, NULL, ZEND_FUNCTION_DTOR, 0);
+
+	if (zend_user_module_check_deps(module, &class_table, &function_table) == FAILURE) {
 		ZEND_ASSERT(EG(exception));
 		return;
 	}
 
 	/* Optimize */
 
-	zend_hash_sort_ex(&module.class_table, zend_user_module_sort_classes, NULL, 0);
+	zend_string *orig_compiled_filename = CG(compiled_filename);
+	CG(compiled_filename) = ZSTR_INIT_LITERAL("$PRELOAD$", 0);
+
+	zend_script script = {
+		.class_table = class_table,
+		.function_table = function_table,
+		.filename = CG(compiled_filename),
+	};
+
+#if ZEND_USE_ABS_CONST_ADDR
+	init_op_array(&script.main_op_array, ZEND_USER_FUNCTION, 1);
+#else
+	init_op_array(&script.main_op_array, ZEND_USER_FUNCTION, 2);
+#endif
+	script.main_op_array.fn_flags |= ZEND_ACC_DONE_PASS_TWO;
+	script.main_op_array.last = 1;
+	script.main_op_array.last_literal = 1;
+	script.main_op_array.T = ZEND_OBSERVER_ENABLED;
+#if ZEND_USE_ABS_CONST_ADDR
+	script.main_op_array.literals = (zval*)emalloc(sizeof(zval));
+#else
+	script.main_op_array.literals = (zval*)(script.main_op_array.opcodes + 1);
+#endif
+	ZVAL_NULL(script.main_op_array.literals);
+	memset(script.main_op_array.opcodes, 0, sizeof(zend_op));
+	script.main_op_array.opcodes[0].opcode = ZEND_RETURN;
+	script.main_op_array.opcodes[0].op1_type = IS_CONST;
+	script.main_op_array.opcodes[0].op1.constant = 0;
+	ZEND_PASS_TWO_UPDATE_CONSTANT(&script.main_op_array, script.main_op_array.opcodes, script.main_op_array.opcodes[0].op1);
+	zend_vm_set_opcode_handler(script.main_op_array.opcodes);
+
+	script.filename = CG(compiled_filename);
+	CG(compiled_filename) = orig_compiled_filename;
+
+	zend_hash_sort_ex(&script.class_table, zend_user_module_sort_classes, NULL, 0);
+
+	zend_user_module_optimize(module, &script);
 
 	/* Cache module */
 
-	// TODO
+	zend_persistent_script *pscript = emalloc(sizeof(zend_persistent_script));
+	memset(pscript, 0, sizeof(zend_persistent_script));
+	pscript->script = script;
 
-	/* */
+	zend_persistent_user_module *pmodule = emalloc(sizeof(zend_persistent_user_module));
+	memset(pmodule, 0, sizeof(zend_persistent_user_module));
 
-	module.dependencies = emalloc(sizeof(zend_user_module*) * CG(module_table)->nNumOfElements - orig_module_table_offset);
+	pmodule->script = pscript;
+	pmodule->module = *module;
+	pmodule->dependencies = emalloc(sizeof(zend_persistent_user_module*) * CG(module_table)->nNumOfElements - orig_module_table_offset);
 	zend_user_module *dep;
 	ZEND_HASH_MAP_FOREACH_PTR_FROM(CG(module_table), dep, orig_module_table_offset) {
-		module.dependencies[module.num_dependencies++] = dep;
+		ZEND_ASSERT(zend_accel_in_shm(dep));
+		zend_persistent_user_module *pdep = (zend_persistent_user_module*)((char*)dep - XtOffsetOf(zend_persistent_user_module, module));
+		pmodule->dependencies[pmodule->num_dependencies++] = pdep;
 	} ZEND_HASH_FOREACH_END();
 
-cleanup:
+	zend_shared_alloc_init_xlat_table();
 
-	zend_hash_destroy(&classmap);
-	zend_hash_destroy(&funcmap);
+	HANDLE_BLOCK_INTERRUPTIONS();
+	SHM_UNPROTECT();
+	zend_shared_alloc_lock();
+
+	pmodule = zend_user_module_save_script_in_shared_memory(pmodule);
+
+	zend_shared_alloc_destroy_xlat_table();
+	zend_shared_alloc_save_state();
+	ZCSG(interned_strings).saved_top = ZCSG(interned_strings).top;
+	zend_shared_alloc_unlock();
+	SHM_PROTECT();
+	HANDLE_UNBLOCK_INTERRUPTIONS();
+
+	zend_hash_update_ptr(CG(module_table), pmodule->module.lcname,
+			&pmodule->module);
+
+cleanup:
 
 	for (size_t i = 0; i < ordered_list->num_files; i++) {
 		zend_op_array *op_array = ordered_list->files[i];
@@ -988,224 +1271,10 @@ cleanup:
 
 	zend_hash_destroy(&filenames);
 
-	zend_user_module_destroy(&module);
+	//zend_user_module_destroy(&module);
 	zend_user_module_desc_destroy(&module_desc);
 
 	CG(compiler_options_for_modules) = orig_compiler_options;
 	CG(active_module) = orig_module;
-
-	// - If module is being compiled, throw cyclic ref
-	//   if CG(modules).find(module).state == COMPILING:
-	//       throw
-	// - Take note of current module being compiled
-	//   CG(current_module) = module
-	//   CG(modules).set(module, module)
-	//   module.state = COMPILING
-	//
-	// - Disable opcache (We are going to cache the file privately, so this would duplicate the cache)
-	//   ZCG(enabled) = false;
-	//   ZCG(accelerator_enabled) = false;
-	//
-	// - Intercept compilations. Compiling a file with a module decl != current module is an error
-	//   accelerator_orig_compile_file = module_compile_file
-	//   module_compile_file:
-	//       compile(file)
-	//       if file.module != CG(current_module):
-	//           throw
-	//       CG(current_module).files.set(file, op_array)
-	//
-	// - For each file:
-	//   - Compile
-	//   - Execute
-	//     compile(file)
-	//     - What about error handlers triggering compilations / executions?
-	//     - Take note of compiled scripts, add them to current module (handled by module_compile_file)
-	//
-	// - Enable opcache again. Eager load will call non-module files.
-	//   ZCG(enabled) = ZCG(accelerator_enabled) = true;
-	//
-	// - Restore any state (e.g. compile_file function, compiler flags)
-	//   CG(compiler_options) = orig;
-	//
-	// - Set current module to none
-	//   CG(current_module) = NULL;
-	//
-	// - For each file:
-	//   - Eager load
-	//     - Ignore symbols from module namespace
-	//     - If eager load triggers an include of a module file, this should error (because model decl != current module)
-	//     - If eager load triggers a require_module, cyclic checks will apply
-	//     - Take note of required modules as dependencies
-	//     foreach referenced symbols:
-	//         if namespace in module:
-	//             continue
-	//         if !lookup_class():
-	//             throw
-	//
-	//
-	// - For each file:
-	//   - Link, declare classes and functions
-	//   - Add declared classes to
-	//   - No-op declare ops
-	//
-	// - Set current module again
-	//
-	// - For each file:
-	//   - Add to EG(included_files) (for require_once)
-	//     - Code depending on cond symbols from same module should require_once
-	//   - Execute (for conditional decls and requires)
-	//     - Execution of files via require/autoload should:
-	//       - Take note of new module files
-	//         - If current module, it's ok
-	//           - Eager load, link, etc
-	//         - If no module, it's ok (but don't take note of the file)
-	//         - If != current module, error
-	//       - TODO
-	//     - Intercept DECLARE ops:
-	//       - Eager load, link, etc
-	//
-	// - Create a big zend_script for the module
-	//
-	// - For each file:
-	//   - Copy symbols to module script, hack filenames
-	//
-	// - Optimize the script
-	// - Cache it
-	//   - Cache an entry for the module
-	//   - List dependencies in the zend_script
-	//   - List files in the zend_script
-	//   - Add script to each of its dependencies (for invalidation)
-	//   - Add files to a map of file->module (for invalidation)
-	//
-	// Loading a cached module:
-	// - Find the zend_script
-	// - For each dependency: also load it
-	//
-	// Invalidation:
-	// - Watch all module files
-	// - When a module file changes, invalidate the module and its dependents
-	//
-	//
-
-
-	// EXECUTE-FIRST variant:
-	//
-	// - If module is being compiled, throw cyclic ref
-	//   if CG(modules).find(module).state == COMPILING:
-	//       throw
-	//
-	// - Take note of new module as dependency of current module:
-	//   CG(current_module).deps.push(module)
-	//
-	// - Take note of current module being compiled
-	//   CG(current_module) = module
-	//   CG(modules).set(module, module)
-	//   module.state = COMPILING
-	//
-	// - Disable opcache (We are going to cache the file privately, so this would duplicate the cache)
-	//   ZCG(enabled) = false;
-	//   ZCG(accelerator_enabled) = false;
-	//
-	// - Intercept compilations. Compiling a file with a module decl != current module is an error
-	//   accelerator_orig_compile_file = module_compile_file
-	//   module_compile_file(file):
-	//       if file in CG(current_module).dir:
-	//           ZCG(enabled) = ZCG(accelerator_enabled) = false
-	//           CG(compiler_options) = ...
-	//           op_array = compile(file)
-	//           if op_array.module == CG(current_module):
-	//              CG(current_module).files.set(file, op_array)
-	//       else:
-	//          ZCG(enabled) = ZCG(accelerator_enabled) = orig
-	//          CG(compiler_options) = orig
-	//          op_array = compile(file)
-	//          if op_array.module:
-	//              throw
-	//
-	// - CG(current_module).files = files
-	// - For each CG(current_module).files (including ones added during this loop)
-	//   - Compile (note the logic in module_compile_file)
-	//   - Take note of class_table len
-	//   - Execute
-	//   - For each class in class_table[len:]:
-	//     - If class in module:
-	//       - CG(current_module).class.push(class)
-    //     - TODO: check if we actually need this. Can h
-    //   - Similar stuff for functions
-	//   - Eager load
-	//     - Ignore symbols from module namespace
-	//     - If eager load triggers an include of a module file, this should error (because model decl != current module)
-	//     - If eager load triggers a require_module, cyclic checks will apply
-	//     - Take note of required modules as dependencies (handled by nested require_module() call)
-	//     foreach referenced symbols:
-	//         if namespace in module:
-	//             continue
-	//         if !lookup_class():
-	//             throw
-	//   - Link (or ensure linked)
-	//
-	// - For each file:
-	//   - Link, declare classes and functions
-	//   - Add declared classes to
-	//   - No-op declare ops
-	//
-	// - Set current module again
-	//
-	// - For each file:
-	//   - Add to EG(included_files) (for require_once)
-	//     - Code depending on cond symbols from same module should require_once
-	//   - Execute (for conditional decls and requires)
-	//     - Execution of files via require/autoload should:
-	//       - Take note of new module files
-	//         - If current module, it's ok
-	//           - Eager load, link, etc
-	//         - If no module, it's ok (but don't take note of the file)
-	//         - If != current module, error
-	//       - TODO
-	//     - Intercept DECLARE ops:
-	//       - Eager load, link, etc
-	//
-	// - Create a big zend_script for the module
-	//
-	// - For each file:
-	//   - Copy symbols to module script, hack filenames
-	//
-	// - Optimize the script
-	// - Cache it
-	//   - Cache an entry for the module
-	//   - List dependencies in the zend_script (flatten deps recursively)
-	//   - List files in the zend_script
-	//   - Add script to each of its dependencies (for invalidation)
-	//   - Add files to a map of file->module (for invalidation)
-	//
-
-
-	// In-module loading order:
-	//
-	// Preload-like: Compile files, build a class map, decorate autoloader to load from class map
-	// Pros:
-	// - Simple, probably
-	// - Usual behavior
-	// Cons:
-	// - Not the fastest, probably
-	//
-	// Execute in topo order: Compile files, execute in topo order. Files with statements are executed last. Files that depend on symbols declared conditionally may need a require.
-	// Pros:
-	// - We can provide nicer messages about cyclic deps
-	// Cons:
-	// - Execute order is kinda unpredictable. Especially, adding a statement (e.g. a debug statement) in a file changes its order
-	//
-	// Mix: Execute in topo order, but also have a class map autoloader to load from class map, as a fallback
-	// - Best of both, probably.
-
-	// Questions:
-	//
-	// Can we execute `class A extends B {}` if B does not exist yet?
-	// - No
-	//
-	// Would it be easy to delay linking until A is used?
-	//
-	//
-
 }
 

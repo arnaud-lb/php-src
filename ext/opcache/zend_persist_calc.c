@@ -19,6 +19,7 @@
    +----------------------------------------------------------------------+
 */
 
+#include "modules.h"
 #include "zend.h"
 #include "ZendAccelerator.h"
 #include "zend_persist.h"
@@ -640,4 +641,28 @@ uint32_t zend_accel_script_persist_calc(zend_persistent_script *new_persistent_s
 	ZCG(current_persistent_script) = NULL;
 
 	return new_persistent_script->size;
+}
+
+uint32_t zend_accel_user_module_persist_calc(zend_persistent_user_module *module, int for_shm)
+{
+	zend_accel_script_persist_calc(module->script, for_shm);
+
+	ZCG(current_persistent_script) = module->script;
+
+	ADD_SIZE(sizeof(zend_persistent_user_module));
+	ADD_SIZE(sizeof(zend_persistent_user_module*) * module->num_dependencies);
+
+	ADD_INTERNED_STRING(module->module.name);
+	ADD_INTERNED_STRING(module->module.lcname);
+	ADD_INTERNED_STRING(module->module.path);
+	ADD_INTERNED_STRING(module->module.resolved_path);
+
+#if defined(__AVX__) || defined(__SSE2__)
+	/* Align size to 64-byte boundary */
+	module->script->size = (module->script->size + 63) & ~63;
+#endif
+
+	ZCG(current_persistent_script) = NULL;
+
+	return module->script->size;
 }

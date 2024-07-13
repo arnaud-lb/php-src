@@ -24,11 +24,13 @@
 #include "zend_persist.h"
 #include "zend_extensions.h"
 #include "zend_shared_alloc.h"
+#include "zend_types.h"
 #include "zend_vm.h"
 #include "zend_constants.h"
 #include "zend_operators.h"
 #include "zend_interfaces.h"
 #include "zend_attributes.h"
+#include "modules.h"
 
 #ifdef HAVE_JIT
 # include "Optimizer/zend_func_info.h"
@@ -1394,4 +1396,31 @@ zend_persistent_script *zend_accel_script_persist(zend_persistent_script *script
 	ZCG(current_persistent_script) = NULL;
 
 	return script;
+}
+
+zend_persistent_user_module *zend_accel_user_module_persist(zend_persistent_user_module *module, int for_shm)
+{
+	module->script = zend_accel_script_persist(module->script, for_shm);
+
+	ZEND_ASSERT(((uintptr_t)ZCG(mem) & 0x7) == 0); /* should be 8 byte aligned */
+
+	module = zend_shared_memdup_free(module, sizeof(*module));
+	module->dependencies = zend_shared_memdup_free(module->dependencies, sizeof(zend_user_module*) * module->num_dependencies);
+
+	zend_accel_store_interned_string(module->module.name);
+	zend_accel_store_interned_string(module->module.lcname);
+	zend_accel_store_interned_string(module->module.path);
+	zend_accel_store_interned_string(module->module.resolved_path);
+
+	// TODO
+	memset(&module->module.op_arrays, 0, sizeof(module->module.op_arrays));
+
+#if defined(__AVX__) || defined(__SSE2__)
+	/* Align to 64-byte boundary */
+	ZCG(mem) = (void*)(((uintptr_t)ZCG(mem) + 63L) & ~63L);
+#else
+	ZEND_ASSERT(((uintptr_t)ZCG(mem) & 0x7) == 0); /* should be 8 byte aligned */
+#endif
+
+	return module;
 }
