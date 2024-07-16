@@ -636,7 +636,7 @@ static zend_op_array *zend_compile(int type)
 
 	if (CG(active_module) && op_array->user_module) {
 		ZEND_ASSERT(op_array->user_module == CG(active_module));
-		// TODO: do we need an assoc ht?
+		// TODO: do we actually need an assoc ht?
 		zend_hash_update_ptr(&CG(active_module)->op_arrays,
 			op_array->filename, op_array);
 	}

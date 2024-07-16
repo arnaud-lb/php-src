@@ -157,7 +157,7 @@ static void zend_user_module_desc_parser_cb(zval *arg1, zval *arg2, zval *arg3, 
 				convert_to_string(arg2);
 				module_desc->include_patterns = split_patterns(Z_STR_P(arg2));
 			} else if (zend_string_equals_cstr(Z_STR_P(arg1), "exclude", strlen("exclude"))) {
-				if (module_desc->include_patterns) {
+				if (module_desc->exclude_patterns) {
 					zend_error_noreturn(E_CORE_ERROR, "Duplicated 'exclude' entry");
 				}
 
@@ -217,11 +217,6 @@ static void zend_user_module_find_files(zend_user_module_desc *module_desc, Hash
 				globfree(&globbuf);
 				zend_error_noreturn(E_CORE_ERROR, "Invalid pattern '%s'", ZSTR_VAL(*pattern_p));
 			}
-		}
-
-		if (globbuf.gl_pathc == 0) {
-			globfree(&globbuf);
-			zend_error_noreturn(E_CORE_ERROR, "No files matched");
 		}
 
 		for (size_t n = 0; n < (size_t)globbuf.gl_pathc;) {
@@ -450,12 +445,27 @@ static zend_user_module_ordered_file_list *zend_user_module_sort_initial_op_arra
 	return list;
 }
 
+static zend_result zend_user_module_check_class_exists(zend_string *name, zend_string *lcname)
+{
+	if (zend_string_equals_literal_ci(name, "self")) {
+		return SUCCESS;
+	} else if (zend_string_equals_literal_ci(name, "parent")) {
+		return SUCCESS;
+	} else if (zend_string_equals_ci(name, ZSTR_KNOWN(ZEND_STR_STATIC))) {
+		return SUCCESS;
+	}
+	if (UNEXPECTED(!zend_fetch_class_by_name(name, lcname, 0))) {
+		return FAILURE;
+	}
+	return SUCCESS;
+}
+
 static zend_result zend_user_module_check_deps_type(zend_type type)
 {
 	zend_type *single_type;
 	ZEND_TYPE_FOREACH(type, single_type) {
 		if (ZEND_TYPE_HAS_NAME(*single_type)) {
-			if (UNEXPECTED(!zend_fetch_class_by_name(ZEND_TYPE_NAME(*single_type), NULL, 0))) {
+			if (UNEXPECTED(zend_user_module_check_class_exists(ZEND_TYPE_NAME(*single_type), NULL) == FAILURE)) {
 				return FAILURE;
 			}
 		} else if (ZEND_TYPE_HAS_LIST(*single_type)) {
@@ -471,7 +481,7 @@ static zend_result zend_user_module_check_deps_type(zend_type type)
 static zend_result zend_user_module_check_deps_op_array(HashTable *class_table, HashTable *function_table, zend_op_array *op_array);
 
 #define CHECK_CLASS(node) do {          \
-	if (UNEXPECTED(!zend_fetch_class_by_name(Z_STR_P(RT_CONSTANT(opline, node)), Z_STR_P(RT_CONSTANT(opline, node)+1), 0))) { \
+	if (UNEXPECTED(zend_user_module_check_class_exists(Z_STR_P(RT_CONSTANT(opline, node)), Z_STR_P(RT_CONSTANT(opline, node)+1))) == FAILURE) { \
 		return FAILURE;                 \
 	}                                   \
 } while (0)
@@ -955,7 +965,7 @@ static zend_persistent_user_module* zend_user_module_save_script_in_shared_memor
 	zend_shared_alloc_restore_xlat_table(checkpoint);
 
 	/* Copy into shared memory */
-	pmodule->script = zend_accel_script_persist(pmodule->script, 1);
+	pmodule = zend_accel_user_module_persist(pmodule, 1);
 
 	// TODO
 	// new_persistent_script->is_phar = is_phar_file(new_persistent_script->script.filename);
@@ -1037,6 +1047,55 @@ static void zend_user_module_load(zend_persistent_user_module *pmodule)
 	}
 }
 
+static zend_never_inline ZEND_COLD zend_string *zend_autoload_stack_str(void)
+{
+	smart_str s = {0};
+
+	if (EG(in_autoload)) {
+		zend_string *key;
+		ZEND_HASH_FOREACH_STR_KEY(EG(in_autoload), key) {
+			if (smart_str_get_len(&s) != 0) {
+				smart_str_appends(&s, " -> ");
+			}
+			smart_str_append(&s, key);
+		} ZEND_HASH_FOREACH_END();
+	}
+
+	return smart_str_extract(&s);
+}
+
+static zend_never_inline ZEND_COLD void zend_circular_module_dependency_error(zend_user_module *module)
+{
+	smart_str s = {0};
+	zend_user_module *other;
+	bool add = false;
+	ZEND_HASH_FOREACH_PTR(CG(module_table), other) {
+		if (!add) {
+			if (other == module) {
+				add = true;
+			} else {
+				continue;
+			}
+		}
+		if (smart_str_get_len(&s) != 0) {
+			smart_str_appends(&s, " -> ");
+		}
+		smart_str_append(&s, other->name);
+	} ZEND_HASH_FOREACH_END();
+
+	smart_str_0(&s);
+
+	zend_string *autoload_str = zend_autoload_stack_str();
+
+	zend_throw_exception_ex(NULL, 0,
+			"Circular dependency found between the following modules: %s (while autoloading classes: %s)",
+			ZSTR_VAL(s.s),
+			ZSTR_VAL(autoload_str));
+
+	zend_string_release(autoload_str);
+	smart_str_free(&s);
+}
+
 ZEND_API void zend_require_user_module(zend_string *module_path)
 {
 	zend_user_module *orig_module = CG(active_module);
@@ -1060,7 +1119,17 @@ ZEND_API void zend_require_user_module(zend_string *module_path)
 		zend_string_release(lcname);
 		zend_user_module_desc_destroy(&module_desc);
 		if (loaded_module->loading) {
-			zend_throw_exception(NULL, "Circular module dependency", 0);
+			if (CG(active_module)
+					&& zend_string_equals_ci(CG(active_module)->lcname, lcname)) {
+				zend_string *autoload_str = zend_autoload_stack_str();
+				zend_throw_error(NULL,
+						"Can not require module '%s' while it is being loaded (while autoloading classes: %s)",
+						ZSTR_VAL(module_desc.name),
+						ZSTR_VAL(autoload_str));
+				zend_string_release(autoload_str);
+			} else {
+				zend_circular_module_dependency_error(loaded_module);
+			}
 		}
 		return;
 	}
@@ -1069,6 +1138,7 @@ ZEND_API void zend_require_user_module(zend_string *module_path)
 			"module://", strlen("module://"),
 			ZSTR_VAL(lcname), ZSTR_LEN(lcname));
 	zend_persistent_user_module *cached_module = zend_accel_hash_find(&ZCSG(hash), module_key);
+	zend_string_release(module_key);
 	if (cached_module) {
 		zend_user_module_load(cached_module);
 		return;
@@ -1111,6 +1181,9 @@ ZEND_API void zend_require_user_module(zend_string *module_path)
 	HashTable filenames;
 	zend_hash_init(&filenames, 0, NULL, NULL, 0);
 	zend_user_module_find_files(&module_desc, &filenames);
+	if (filenames.nNumOfElements == 0) {
+		zend_error_noreturn(E_CORE_ERROR, "No files matched");
+	}
 
 	uint32_t orig_compiler_options = CG(compiler_options_for_modules);
 	// CG(compiler_options) |= ZEND_COMPILE_PRELOAD;
@@ -1145,6 +1218,9 @@ ZEND_API void zend_require_user_module(zend_string *module_path)
 	/* Execute initial files */
 
 	zend_user_module_ordered_file_list *ordered_list = zend_user_module_sort_initial_op_arrays(module, &classmap, &funcmap);
+
+	zend_hash_destroy(&classmap);
+	zend_hash_destroy(&funcmap);
 
 	for (zend_op_array **op_array_p = ordered_list->files + ordered_list->num_files - 1;
 			op_array_p != ordered_list->next_file_with_stmts;
@@ -1261,20 +1337,23 @@ ZEND_API void zend_require_user_module(zend_string *module_path)
 			&pmodule->module);
 
 cleanup:
+	{
+		zend_op_array *op_array;
+		ZEND_HASH_FOREACH_PTR(&module->op_arrays, op_array) {
+			destroy_op_array(op_array);
+			efree_size(op_array, sizeof(zend_op_array));
+		} ZEND_HASH_FOREACH_END();
+		efree(ordered_list);
+		zend_hash_destroy(&module->op_arrays);
+		efree(module);
 
-	for (size_t i = 0; i < ordered_list->num_files; i++) {
-		zend_op_array *op_array = ordered_list->files[i];
-		destroy_op_array(op_array);
-		efree_size(op_array, sizeof(zend_op_array));
+		zend_hash_destroy(&filenames);
+
+		//zend_user_module_destroy(&module);
+		zend_user_module_desc_destroy(&module_desc);
+
+		CG(compiler_options_for_modules) = orig_compiler_options;
+		CG(active_module) = orig_module;
 	}
-	efree(ordered_list);
-
-	zend_hash_destroy(&filenames);
-
-	//zend_user_module_destroy(&module);
-	zend_user_module_desc_destroy(&module_desc);
-
-	CG(compiler_options_for_modules) = orig_compiler_options;
-	CG(active_module) = orig_module;
 }
 
