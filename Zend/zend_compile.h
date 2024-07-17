@@ -513,6 +513,8 @@ struct _zend_user_module {
 	zend_string            *path;
 	zend_string            *resolved_path;
 	HashTable               op_arrays;
+	HashTable               class_table;
+	HashTable               function_table;
 };
 
 #define ZEND_RETURN_VALUE				0

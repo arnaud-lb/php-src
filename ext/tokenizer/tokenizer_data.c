@@ -104,6 +104,7 @@ char *get_token_type_name(int token_type)
 		case T_ENUM: return "T_ENUM";
 		case T_EXTENDS: return "T_EXTENDS";
 		case T_IMPLEMENTS: return "T_IMPLEMENTS";
+		case T_MODULE: return "T_MODULE";
 		case T_NAMESPACE: return "T_NAMESPACE";
 		case T_LIST: return "T_LIST";
 		case T_ARRAY: return "T_ARRAY";
@@ -116,6 +117,7 @@ char *get_token_type_name(int token_type)
 		case T_METHOD_C: return "T_METHOD_C";
 		case T_FUNC_C: return "T_FUNC_C";
 		case T_NS_C: return "T_NS_C";
+		case T_MODULE_C: return "T_MODULE_C";
 		case T_ATTRIBUTE: return "T_ATTRIBUTE";
 		case T_PLUS_EQUAL: return "T_PLUS_EQUAL";
 		case T_MINUS_EQUAL: return "T_MINUS_EQUAL";

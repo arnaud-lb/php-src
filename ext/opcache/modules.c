@@ -80,7 +80,7 @@ static zend_string **split_patterns(zend_string *str)
 {
 	size_t buf_capacity = 1;
 	size_t buf_len = 0;
-	zend_string **buf = emalloc(sizeof(zend_string*));
+	zend_string **buf = emalloc(sizeof(zend_string*) * buf_capacity);
 
 	char *start = ZSTR_VAL(str);
 	char *end = start + ZSTR_LEN(str);
@@ -95,7 +95,7 @@ static zend_string **split_patterns(zend_string *str)
 				if (smart_str_get_len(&current)) {
 					if (buf_len+1 == buf_capacity) {
 						buf_capacity = buf_capacity * 2;
-						buf = erealloc(buf, buf_capacity);
+						buf = erealloc(buf, sizeof(zend_string*) * buf_capacity);
 					}
 					buf[buf_len++] = smart_str_extract(&current);
 				}
@@ -237,7 +237,7 @@ static void zend_user_module_find_files(zend_user_module_desc *module_desc, Hash
 			}
 
 			// Skip excluded files
-			const char *rel_path = path + ZSTR_LEN(module_desc->path) + 1;
+			const char *rel_path = path + ZSTR_LEN(module_desc->path);
 			zend_string **exclude_pattern_p = module_desc->exclude_patterns;
 			while (*exclude_pattern_p) {
 				zend_string *pattern = *exclude_pattern_p;
@@ -249,6 +249,7 @@ static void zend_user_module_find_files(zend_user_module_desc *module_desc, Hash
 
 			zend_string *filename = zend_string_init(path, path_len, 0);
 			zend_hash_add_empty_element(filenames, filename);
+			fprintf(stderr, "module file: %s\n", ZSTR_VAL(filename));
 			zend_string_release(filename);
 next:
 			n++;
@@ -1171,6 +1172,8 @@ ZEND_API void zend_require_user_module(zend_string *module_path)
 	module->path = zend_string_copy(module_desc.path);
 	module->resolved_path = zend_string_copy(module_desc.resolved_path);
 	zend_hash_init(&module->op_arrays, 0, NULL, NULL, 0);
+	zend_hash_init(&module->class_table, 0, NULL, NULL, 0);
+	zend_hash_init(&module->function_table, 0, NULL, NULL, 0);
 
 	CG(active_module) = module;
 
@@ -1228,6 +1231,7 @@ ZEND_API void zend_require_user_module(zend_string *module_path)
 		if (zend_hash_exists(&EG(included_files), (*op_array_p)->filename)) {
 			continue;
 		}
+		fprintf(stderr, "execute: %s\n", ZSTR_VAL((*op_array_p)->filename));
 		zend_execute(*op_array_p, NULL);
 		if (EG(exception)) {
 			goto cleanup;
@@ -1240,6 +1244,7 @@ ZEND_API void zend_require_user_module(zend_string *module_path)
 		if (zend_hash_exists(&EG(included_files), (*op_array_p)->filename)) {
 			continue;
 		}
+		fprintf(stderr, "execute: %s\n", ZSTR_VAL((*op_array_p)->filename));
 		zend_execute(*op_array_p, NULL);
 		if (EG(exception)) {
 			goto cleanup;
@@ -1248,13 +1253,10 @@ ZEND_API void zend_require_user_module(zend_string *module_path)
 
 	/* Enforce that referenced symbols exist and build class/function tables */
 
-	HashTable class_table;
-	zend_hash_init(&class_table, module->op_arrays.nNumOfElements, NULL, ZEND_CLASS_DTOR, 0);
+	zend_hash_init(&module->class_table, module->op_arrays.nNumOfElements, NULL, ZEND_CLASS_DTOR, 0);
+	zend_hash_init(&module->function_table, module->op_arrays.nNumOfElements, NULL, ZEND_FUNCTION_DTOR, 0);
 
-	HashTable function_table;
-	zend_hash_init(&function_table, module->op_arrays.nNumOfElements, NULL, ZEND_FUNCTION_DTOR, 0);
-
-	if (zend_user_module_check_deps(module, &class_table, &function_table) == FAILURE) {
+	if (zend_user_module_check_deps(module, &module->class_table, &module->function_table) == FAILURE) {
 		ZEND_ASSERT(EG(exception));
 		return;
 	}
@@ -1265,8 +1267,8 @@ ZEND_API void zend_require_user_module(zend_string *module_path)
 	CG(compiled_filename) = ZSTR_INIT_LITERAL("$PRELOAD$", 0);
 
 	zend_script script = {
-		.class_table = class_table,
-		.function_table = function_table,
+		.class_table = module->class_table,
+		.function_table = module->function_table,
 		.filename = CG(compiled_filename),
 	};
 
@@ -1301,6 +1303,7 @@ ZEND_API void zend_require_user_module(zend_string *module_path)
 
 	/* Cache module */
 
+	/*
 	zend_persistent_script *pscript = emalloc(sizeof(zend_persistent_script));
 	memset(pscript, 0, sizeof(zend_persistent_script));
 	pscript->script = script;
@@ -1335,17 +1338,20 @@ ZEND_API void zend_require_user_module(zend_string *module_path)
 
 	zend_hash_update_ptr(CG(module_table), pmodule->module.lcname,
 			&pmodule->module);
+	*/
 
 cleanup:
 	{
+#if 0
 		zend_op_array *op_array;
 		ZEND_HASH_FOREACH_PTR(&module->op_arrays, op_array) {
 			destroy_op_array(op_array);
 			efree_size(op_array, sizeof(zend_op_array));
 		} ZEND_HASH_FOREACH_END();
+#endif
 		efree(ordered_list);
 		zend_hash_destroy(&module->op_arrays);
-		efree(module);
+		// efree(module);
 
 		zend_hash_destroy(&filenames);
 
@@ -1357,3 +1363,53 @@ cleanup:
 	}
 }
 
+ZEND_API void zend_persist_user_modules(void)
+{
+	zend_user_module *module;
+	ZEND_HASH_FOREACH_PTR(CG(module_table), module) {
+		if (module->loading) {
+			continue;
+		}
+
+		CG(compiled_filename) = ZSTR_INIT_LITERAL("$PRELOAD$", 0);
+
+		zend_persistent_script *pscript = emalloc(sizeof(zend_persistent_script));
+		memset(pscript, 0, sizeof(zend_persistent_script));
+		pscript->script = (zend_script){
+			.class_table = module->class_table,
+			.function_table = module->function_table,
+			.filename = CG(compiled_filename),
+		};
+
+		zend_persistent_user_module *pmodule = emalloc(sizeof(zend_persistent_user_module));
+		memset(pmodule, 0, sizeof(zend_persistent_user_module));
+
+		pmodule->script = pscript;
+		pmodule->module = *module;
+		pmodule->dependencies = emalloc(sizeof(zend_persistent_user_module*) * CG(module_table)->nNumOfElements - orig_module_table_offset);
+		zend_user_module *dep;
+		ZEND_HASH_MAP_FOREACH_PTR_FROM(CG(module_table), dep, orig_module_table_offset) {
+			ZEND_ASSERT(zend_accel_in_shm(dep));
+			zend_persistent_user_module *pdep = (zend_persistent_user_module*)((char*)dep - XtOffsetOf(zend_persistent_user_module, module));
+			pmodule->dependencies[pmodule->num_dependencies++] = pdep;
+		} ZEND_HASH_FOREACH_END();
+
+		zend_shared_alloc_init_xlat_table();
+
+		HANDLE_BLOCK_INTERRUPTIONS();
+		SHM_UNPROTECT();
+		zend_shared_alloc_lock();
+
+		pmodule = zend_user_module_save_script_in_shared_memory(pmodule);
+
+		zend_shared_alloc_destroy_xlat_table();
+		zend_shared_alloc_save_state();
+		ZCSG(interned_strings).saved_top = ZCSG(interned_strings).top;
+		zend_shared_alloc_unlock();
+		SHM_PROTECT();
+		HANDLE_UNBLOCK_INTERRUPTIONS();
+
+		zend_hash_update_ptr(CG(module_table), pmodule->module.lcname,
+				&pmodule->module);
+	} ZEND_HASH_FOREACH_END();
+}

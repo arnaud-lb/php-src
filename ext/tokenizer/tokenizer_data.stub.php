@@ -399,6 +399,11 @@ const T_EXTENDS = UNKNOWN;
 const T_IMPLEMENTS = UNKNOWN;
 /**
  * @var int
+ * @cvalue T_MODULE
+ */
+const T_MODULE = UNKNOWN;
+/**
+ * @var int
  * @cvalue T_NAMESPACE
  */
 const T_NAMESPACE = UNKNOWN;
@@ -457,6 +462,11 @@ const T_FUNC_C = UNKNOWN;
  * @cvalue T_NS_C
  */
 const T_NS_C = UNKNOWN;
+/**
+ * @var int
+ * @cvalue T_MODULE_C
+ */
+const T_MODULE_C = UNKNOWN;
 /**
  * @var int
  * @cvalue T_ATTRIBUTE
