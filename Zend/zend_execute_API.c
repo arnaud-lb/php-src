@@ -39,6 +39,7 @@
 #include "zend_observer.h"
 #include "zend_call_stack.h"
 #include "zend_frameless_function.h"
+#include "zend_smart_str.h"
 #ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
 #endif
@@ -1647,10 +1648,55 @@ void zend_unset_timeout(void) /* {{{ */
 }
 /* }}} */
 
+// TODO: move this elsewhere
+static zend_never_inline ZEND_COLD void zend_circular_module_dependency_error(zend_user_module *module)
+{
+	smart_str s = {0};
+	zend_user_module *other;
+	bool add = false;
+	ZEND_HASH_FOREACH_PTR(CG(module_table), other) {
+		if (!add) {
+			if (other == module) {
+				add = true;
+			} else {
+				continue;
+			}
+		}
+		if (!other->loading) {
+			//continue;
+		}
+		if (smart_str_get_len(&s) != 0) {
+			smart_str_appends(&s, " -> ");
+		}
+		smart_str_append(&s, other->name);
+	} ZEND_HASH_FOREACH_END();
+
+	smart_str_0(&s);
+
+	zend_throw_exception_ex(NULL, 0,
+			"Circular dependency found between the following modules: %s",
+			ZSTR_VAL(s.s));
+
+	smart_str_free(&s);
+}
+
 static ZEND_COLD void report_class_fetch_error(zend_string *class_name, uint32_t fetch_type)
 {
 	if (fetch_type & ZEND_FETCH_CLASS_SILENT) {
 		return;
+	}
+
+	if (CG(active_module)) {
+		/* We are loading a module. Check if the class is part of a module being
+		 * loaded. */
+		zend_user_module *module;
+		ZEND_HASH_FOREACH_PTR(EG(module_table), module) {
+			if (zend_string_starts_with_ci(class_name, module->name)
+					&& ZSTR_VAL(class_name)[ZSTR_LEN(module->name)] == '\\') {
+				zend_circular_module_dependency_error(module);
+				return;
+			}
+		} ZEND_HASH_FOREACH_END();
 	}
 
 	if (EG(exception)) {

@@ -185,12 +185,24 @@ static zend_op_array *zend_user_module_compile_file(zend_user_module *module, ze
 	zend_op_array *op_array = zend_compile_file(&file_handle, ZEND_REQUIRE);
 	zend_destroy_file_handle(&file_handle);
 
+	if (!op_array) {
+		ZEND_ASSERT(EG(exception));
+		return NULL;
+	}
+
 	ZEND_ASSERT(!(op_array->fn_flags & ZEND_ACC_IMMUTABLE));
 
 	if (op_array->user_module != module) {
-		zend_error_noreturn(E_COMPILE_ERROR,
-				"Module files must declare module '%s'",
-				ZSTR_VAL(module->name));
+		if (op_array->user_module) {
+			zend_error_noreturn(E_COMPILE_ERROR,
+					"Module file %s was expected to declare module %s, but declared module %s",
+					ZSTR_VAL(file), ZSTR_VAL(module->name),
+					ZSTR_VAL(op_array->user_module->name));
+		} else {
+			zend_error_noreturn(E_COMPILE_ERROR,
+					"Module file %s was expected to declare module %s, but did not declared a module",
+					ZSTR_VAL(file), ZSTR_VAL(module->name));
+		}
 	}
 
 	return op_array;
@@ -446,31 +458,18 @@ static zend_user_module_ordered_file_list *zend_user_module_sort_initial_op_arra
 	return list;
 }
 
-static zend_result zend_user_module_check_class_exists(zend_string *name, zend_string *lcname)
-{
-	if (zend_string_equals_literal_ci(name, "self")) {
-		return SUCCESS;
-	} else if (zend_string_equals_literal_ci(name, "parent")) {
-		return SUCCESS;
-	} else if (zend_string_equals_ci(name, ZSTR_KNOWN(ZEND_STR_STATIC))) {
-		return SUCCESS;
-	}
-	if (UNEXPECTED(!zend_fetch_class_by_name(name, lcname, 0))) {
-		return FAILURE;
-	}
-	return SUCCESS;
-}
+static zend_result zend_user_module_check_deps_class_name(zend_user_module *module, zend_string *name, zend_string *lcname);
 
-static zend_result zend_user_module_check_deps_type(zend_type type)
+static zend_result zend_user_module_check_deps_type(zend_user_module *module, zend_type type)
 {
 	zend_type *single_type;
 	ZEND_TYPE_FOREACH(type, single_type) {
 		if (ZEND_TYPE_HAS_NAME(*single_type)) {
-			if (UNEXPECTED(zend_user_module_check_class_exists(ZEND_TYPE_NAME(*single_type), NULL) == FAILURE)) {
+			if (UNEXPECTED(zend_user_module_check_deps_class_name(module, ZEND_TYPE_NAME(*single_type), NULL) == FAILURE)) {
 				return FAILURE;
 			}
 		} else if (ZEND_TYPE_HAS_LIST(*single_type)) {
-			if (UNEXPECTED(!zend_user_module_check_deps_type(*single_type))) {
+			if (UNEXPECTED(zend_user_module_check_deps_type(module, *single_type) == FAILURE)) {
 				return FAILURE;
 			}
 		}
@@ -479,24 +478,68 @@ static zend_result zend_user_module_check_deps_type(zend_type type)
 	return SUCCESS;
 }
 
-static zend_result zend_user_module_check_deps_op_array(HashTable *class_table, HashTable *function_table, zend_op_array *op_array);
+static zend_result zend_user_module_check_deps_op_array(zend_user_module *module, zend_op_array *op_array);
 
-#define CHECK_CLASS(node) do {          \
-	if (UNEXPECTED(zend_user_module_check_class_exists(Z_STR_P(RT_CONSTANT(opline, node)), Z_STR_P(RT_CONSTANT(opline, node)+1))) == FAILURE) { \
-		return FAILURE;                 \
-	}                                   \
-} while (0)
+static zend_result zend_user_module_check_deps_class(zend_user_module *module, zend_class_entry *ce)
+{
+	if (ce->type != ZEND_USER_CLASS) {
+		return SUCCESS;
+	}
 
-static zend_result zend_user_module_check_deps_class(HashTable *class_table, HashTable *function_table, zend_class_entry *ce)
+	if (UNEXPECTED(!ce->info.user.module)) {
+		zend_throw_error(NULL,
+				"Module %s can not depend on non-module class %s",
+				ZSTR_VAL(module->name), ZSTR_VAL(ce->name));
+		return FAILURE;
+	}
+
+	if (ce->info.user.module != module) {
+		zend_hash_add_ptr(&module->deps, ce->info.user.module->lcname, ce->info.user.module);
+	}
+
+	return SUCCESS;
+}
+
+
+static zend_result zend_user_module_check_deps_class_decl_dep(zend_user_module *module, zend_class_entry *ce)
+{
+	if (ce->type != ZEND_USER_CLASS) {
+		return SUCCESS;
+	}
+
+	return zend_user_module_check_deps_class(module, ce);
+}
+
+static zend_result zend_user_module_check_deps_class_name(zend_user_module *module, zend_string *name, zend_string *lcname);
+
+static zend_result zend_user_module_check_deps_class_decl(zend_user_module *module, zend_class_entry *ce)
 {
 	ZEND_ASSERT(ce->ce_flags & ZEND_ACC_LINKED);
 
-	// TODO: parent class or interface or trait not in a module?
-	// also classes depending on evaluated code
+	// TODO: may need to zend_user_module_check_deps_class_decl() for classes
+	// we don't visit through op_array walk, e.g. eval'ed classes.
+	if (ce->parent) {
+		if (zend_user_module_check_deps_class_decl_dep(module, ce->parent) == FAILURE) {
+			return FAILURE;
+		}
+	}
+
+	for (uint32_t i = 0; i < ce->num_interfaces; i++) {
+		if (zend_user_module_check_deps_class_decl_dep(module, ce->interfaces[i]) == FAILURE) {
+			return FAILURE;
+		}
+	}
+
+	for (uint32_t i = 0; i < ce->num_traits; i++) {
+		zend_class_name *trait_name = &ce->trait_names[i];
+		if (zend_user_module_check_deps_class_name(module, trait_name->name, trait_name->lc_name) == FAILURE) {
+			return FAILURE;
+		}
+	}
 
 	zend_property_info *prop_info;
 	ZEND_HASH_MAP_FOREACH_PTR(&ce->properties_info, prop_info) {
-		if (UNEXPECTED(zend_user_module_check_deps_type(prop_info->type) == FAILURE)) {
+		if (UNEXPECTED(zend_user_module_check_deps_type(module, prop_info->type) == FAILURE)) {
 			return FAILURE;
 		}
 		// TODO: hooks
@@ -505,7 +548,7 @@ static zend_result zend_user_module_check_deps_class(HashTable *class_table, Has
 	zend_function *fn;
 	ZEND_HASH_MAP_FOREACH_PTR(&ce->function_table, fn) {
 		if (fn->type == ZEND_USER_FUNCTION) {
-			if (UNEXPECTED(zend_user_module_check_deps_op_array(class_table, function_table, &fn->op_array) == FAILURE)) {
+			if (UNEXPECTED(zend_user_module_check_deps_op_array(module, &fn->op_array) == FAILURE)) {
 				return FAILURE;
 			}
 		}
@@ -514,7 +557,28 @@ static zend_result zend_user_module_check_deps_class(HashTable *class_table, Has
 	return SUCCESS;
 }
 
-static zend_result zend_user_module_check_deps_op_array(HashTable *class_table, HashTable *function_table, zend_op_array *op_array)
+static zend_result zend_user_module_check_deps_class_name(zend_user_module *module, zend_string *name, zend_string *lcname)
+{
+	if (zend_string_equals_literal_ci(name, "self")) {
+		return SUCCESS;
+	} else if (zend_string_equals_literal_ci(name, "parent")) {
+		return SUCCESS;
+	} else if (zend_string_equals_ci(name, ZSTR_KNOWN(ZEND_STR_STATIC))) {
+		return SUCCESS;
+	}
+
+	zend_class_entry *ce = zend_fetch_class_by_name(name, lcname, 0);
+	if (UNEXPECTED(!ce)) {
+		return FAILURE;
+	}
+
+	return zend_user_module_check_deps_class(module, ce);
+}
+
+#define CHECK_CLASS(node) \
+	zend_user_module_check_deps_class_name(module, Z_STR_P(RT_CONSTANT(opline, node)), Z_STR_P(RT_CONSTANT(opline, node)+1))
+
+static zend_result zend_user_module_check_deps_op_array(zend_user_module *module, zend_op_array *op_array)
 {
 	if (op_array->arg_info) {
 		zend_arg_info *start = op_array->arg_info
@@ -523,7 +587,7 @@ static zend_result zend_user_module_check_deps_op_array(HashTable *class_table, 
 			+ op_array->num_args
 			+ (bool)(op_array->fn_flags & ZEND_ACC_VARIADIC);
 		while (start < end) {
-			zend_user_module_check_deps_type(start->type);
+			zend_user_module_check_deps_type(module, start->type);
 			start++;
 		}
 	}
@@ -585,13 +649,11 @@ static zend_result zend_user_module_check_deps_op_array(HashTable *class_table, 
 				zend_class_entry *ce = zend_hash_find_ptr(CG(class_table), lcname);
 				if (ce) {
 					ZEND_ASSERT(ce->ce_flags & ZEND_ACC_LINKED);
-					if (UNEXPECTED(zend_user_module_check_deps_class(class_table, function_table, ce) == FAILURE)) {
+					if (UNEXPECTED(zend_user_module_check_deps_class_decl(module, ce) == FAILURE)) {
 						return FAILURE;
 					}
-					if (class_table) {
-						zend_hash_add_new_ptr(class_table, lcname, ce);
-						ce->refcount++;
-					}
+					zend_hash_add_new_ptr(&module->class_table, lcname, ce);
+					ce->refcount++;
 				}
 				break;
 			}
@@ -604,33 +666,33 @@ static zend_result zend_user_module_check_deps_op_array(HashTable *class_table, 
 					return FAILURE;
 				}
 				ZEND_ASSERT(ce->ce_flags & ZEND_ACC_LINKED);
-				if (UNEXPECTED(zend_user_module_check_deps_class(class_table, function_table, ce) == FAILURE)) {
+				if (UNEXPECTED(zend_user_module_check_deps_class_decl(module, ce) == FAILURE)) {
 					return FAILURE;
 				}
-				if (class_table) {
-					zend_hash_add_new_ptr(class_table, rtd_key, ce);
-					ce->refcount++;
+				zend_hash_add_new_ptr(&module->class_table, rtd_key, ce);
+				ce->refcount++;
+				break;
+			}
+			case ZEND_DECLARE_FUNCTION: {
+				zend_string *lcname = Z_STR_P(RT_CONSTANT(opline, opline->op1));
+				zend_function *fn = (zend_function*) op_array->dynamic_func_defs[opline->op2.num];
+				ZEND_ASSERT(fn->type == ZEND_USER_FUNCTION);
+				if (UNEXPECTED(zend_user_module_check_deps_op_array(module, &fn->op_array) == FAILURE)) {
+					return FAILURE;
+				}
+				zend_hash_add_new_ptr(&module->function_table, lcname, fn);
+				if (fn->op_array.refcount) {
+					(*fn->op_array.refcount)++;
 				}
 				break;
 			}
-			case ZEND_DECLARE_FUNCTION:
-				if (function_table) {
-					zend_string *lcname = Z_STR_P(RT_CONSTANT(opline, opline->op1));
-					zend_function *fn = (zend_function*) op_array->dynamic_func_defs[opline->op2.num];
-					zend_hash_add_new_ptr(function_table, lcname, fn);
-					ZEND_ASSERT(fn->type == ZEND_USER_FUNCTION);
-					if (fn->op_array.refcount) {
-						(*fn->op_array.refcount)++;
-					}
-				}
-				break;
 		}
 		opline++;
 	}
 
 	if (op_array->num_dynamic_func_defs) {
 		for (uint32_t i = 0; i < op_array->num_dynamic_func_defs; i++) {
-			if (UNEXPECTED(zend_user_module_check_deps_op_array(class_table, function_table, op_array->dynamic_func_defs[i]) == FAILURE)) {
+			if (UNEXPECTED(zend_user_module_check_deps_op_array(module, op_array->dynamic_func_defs[i]) == FAILURE)) {
 				return FAILURE;
 			}
 		}
@@ -651,15 +713,24 @@ static zend_result zend_user_module_check_deps_op_array(HashTable *class_table, 
 			} \
 			if (UNEXPECTED(Z_TYPE_P(_z) == IS_UNDEF)) continue; \
 
-static zend_result zend_user_module_check_deps(zend_user_module *module, HashTable *class_table, HashTable *function_table)
+static zend_result zend_user_module_check_deps(zend_user_module *module)
 {
+	zend_string *filename_override = EG(filename_override);
+	zend_long lineno_override = EG(lineno_override);
+
 	ZEND_HASH_MAP_FOREACH_FROM_APPEND(&module->op_arrays, 0, 0) {
 		zend_op_array *op_array = Z_PTR_P(_z);
-		if (UNEXPECTED(zend_user_module_check_deps_op_array(class_table, function_table, op_array) == FAILURE)) {
+		EG(filename_override) = op_array->filename;
+		EG(lineno_override) = 0;
+		if (UNEXPECTED(zend_user_module_check_deps_op_array(module, op_array) == FAILURE)) {
+			EG(filename_override) = filename_override;
+			EG(lineno_override) = lineno_override;
 			return FAILURE;
 		}
 	} ZEND_HASH_FOREACH_END();
 
+	EG(filename_override) = filename_override;
+	EG(lineno_override) = lineno_override;
 	return SUCCESS;
 }
 
@@ -940,7 +1011,7 @@ static void bzero_aligned(void *mem, size_t size)
 #endif
 }
 
-static zend_persistent_user_module* zend_user_module_save_script_in_shared_memory(zend_persistent_user_module *pmodule)
+static zend_persistent_user_module* zend_user_module_save_in_shared_memory(zend_persistent_user_module *pmodule)
 {
 	zend_accel_hash_entry *bucket;
 	uint32_t memory_used;
@@ -1033,19 +1104,21 @@ static void zend_user_module_load(zend_persistent_user_module *pmodule)
 			(CG(map_ptr_last) - old_map_ptr_last) * sizeof(void *));
 	}
 
-	for (uint32_t i = 0; i < pmodule->num_dependencies; i++) {
-		zend_persistent_user_module *dep = pmodule->dependencies[i];
-		zend_user_module *module = zend_hash_find_ptr(CG(module_table), dep->module.lcname);
+	zend_user_module *dep;
+	ZEND_HASH_MAP_FOREACH_PTR(&pmodule->module.deps, dep) {
+		ZEND_ASSERT(zend_accel_in_shm(dep));
+		zend_user_module *module = zend_hash_find_ptr(CG(module_table), dep->lcname);
 
 		if (module) {
-			if (UNEXPECTED(module != &dep->module)) {
+			if (UNEXPECTED(module != dep)) {
 				zend_error_noreturn(E_CORE_ERROR, "Internal error");
 			}
 			continue;
 		}
 
-		zend_user_module_load(dep);
-	}
+		zend_persistent_user_module *pdep = (zend_persistent_user_module*)((char*)dep - XtOffsetOf(zend_persistent_user_module, module));
+		zend_user_module_load(pdep);
+	} ZEND_HASH_FOREACH_END();
 }
 
 static zend_never_inline ZEND_COLD zend_string *zend_autoload_stack_str(void)
@@ -1078,6 +1151,9 @@ static zend_never_inline ZEND_COLD void zend_circular_module_dependency_error(ze
 				continue;
 			}
 		}
+		if (!other->loading) {
+			continue;
+		}
 		if (smart_str_get_len(&s) != 0) {
 			smart_str_appends(&s, " -> ");
 		}
@@ -1100,6 +1176,8 @@ static zend_never_inline ZEND_COLD void zend_circular_module_dependency_error(ze
 ZEND_API void zend_require_user_module(zend_string *module_path)
 {
 	zend_user_module *orig_module = CG(active_module);
+
+	fprintf(stderr, "require module: %s\n", ZSTR_VAL(module_path));
 
 	/* Load module metadata */
 
@@ -1174,6 +1252,7 @@ ZEND_API void zend_require_user_module(zend_string *module_path)
 	zend_hash_init(&module->op_arrays, 0, NULL, NULL, 0);
 	zend_hash_init(&module->class_table, 0, NULL, NULL, 0);
 	zend_hash_init(&module->function_table, 0, NULL, NULL, 0);
+	zend_hash_init(&module->deps, 0, NULL, NULL, 0);
 
 	CG(active_module) = module;
 
@@ -1202,8 +1281,6 @@ ZEND_API void zend_require_user_module(zend_string *module_path)
 	HashTable funcmap;
 	zend_hash_init(&funcmap, filenames.nNumOfElements, NULL, NULL, 0);
 
-	uint32_t orig_module_table_offset = CG(module_table)->nNumUsed;
-
 	zend_long h;
 	zend_string *file;
 	ZEND_HASH_FOREACH_KEY(&filenames, h, file) {
@@ -1213,6 +1290,9 @@ ZEND_API void zend_require_user_module(zend_string *module_path)
 		uint32_t function_table_offset = CG(function_table)->nNumUsed;
 
 		zend_op_array *op_array = zend_user_module_compile_file(module, file);
+		if (!op_array) {
+			return;
+		}
 
 		zend_user_module_update_class_map(module, op_array, &classmap, class_table_offset);
 		zend_user_module_update_func_map(module, op_array, &funcmap, function_table_offset);
@@ -1256,7 +1336,7 @@ ZEND_API void zend_require_user_module(zend_string *module_path)
 	zend_hash_init(&module->class_table, module->op_arrays.nNumOfElements, NULL, ZEND_CLASS_DTOR, 0);
 	zend_hash_init(&module->function_table, module->op_arrays.nNumOfElements, NULL, ZEND_FUNCTION_DTOR, 0);
 
-	if (zend_user_module_check_deps(module, &module->class_table, &module->function_table) == FAILURE) {
+	if (zend_user_module_check_deps(module) == FAILURE) {
 		ZEND_ASSERT(EG(exception));
 		return;
 	}
@@ -1370,6 +1450,9 @@ ZEND_API void zend_persist_user_modules(void)
 		if (module->loading) {
 			continue;
 		}
+		if (zend_accel_in_shm(module)) {
+			continue;
+		}
 
 		CG(compiled_filename) = ZSTR_INIT_LITERAL("$PRELOAD$", 0);
 
@@ -1386,13 +1469,6 @@ ZEND_API void zend_persist_user_modules(void)
 
 		pmodule->script = pscript;
 		pmodule->module = *module;
-		pmodule->dependencies = emalloc(sizeof(zend_persistent_user_module*) * CG(module_table)->nNumOfElements - orig_module_table_offset);
-		zend_user_module *dep;
-		ZEND_HASH_MAP_FOREACH_PTR_FROM(CG(module_table), dep, orig_module_table_offset) {
-			ZEND_ASSERT(zend_accel_in_shm(dep));
-			zend_persistent_user_module *pdep = (zend_persistent_user_module*)((char*)dep - XtOffsetOf(zend_persistent_user_module, module));
-			pmodule->dependencies[pmodule->num_dependencies++] = pdep;
-		} ZEND_HASH_FOREACH_END();
 
 		zend_shared_alloc_init_xlat_table();
 
@@ -1400,7 +1476,7 @@ ZEND_API void zend_persist_user_modules(void)
 		SHM_UNPROTECT();
 		zend_shared_alloc_lock();
 
-		pmodule = zend_user_module_save_script_in_shared_memory(pmodule);
+		pmodule = zend_user_module_save_in_shared_memory(pmodule);
 
 		zend_shared_alloc_destroy_xlat_table();
 		zend_shared_alloc_save_state();

@@ -14,6 +14,7 @@
    +----------------------------------------------------------------------+
  */
 
+#include "zend_string.h"
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -35,6 +36,7 @@
 #include "zend_exceptions.h"
 #include "zend_interfaces.h"
 #include "main/snprintf.h"
+#include "zend_smart_str.h"
 
 ZEND_TLS zend_string *spl_autoload_extensions;
 ZEND_TLS HashTable *spl_autoload_functions;

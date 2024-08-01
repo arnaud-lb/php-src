@@ -650,12 +650,12 @@ uint32_t zend_accel_user_module_persist_calc(zend_persistent_user_module *module
 	ZCG(current_persistent_script) = module->script;
 
 	ADD_SIZE(sizeof(zend_persistent_user_module));
-	ADD_SIZE(sizeof(zend_persistent_user_module*) * module->num_dependencies);
 
 	ADD_INTERNED_STRING(module->module.name);
 	ADD_INTERNED_STRING(module->module.lcname);
 	ADD_INTERNED_STRING(module->module.path);
 	ADD_INTERNED_STRING(module->module.resolved_path);
+	zend_hash_persist_calc(&module->module.deps);
 
 #if defined(__AVX__) || defined(__SSE2__)
 	/* Align size to 64-byte boundary */

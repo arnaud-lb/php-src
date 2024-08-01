@@ -626,6 +626,13 @@ static zend_op_array *zend_compile(int type)
 		zend_file_context_end(&original_file_context);
 
 		CG(active_op_array) = original_active_op_array;
+
+		if (CG(active_module) && op_array->user_module) {
+			ZEND_ASSERT(op_array->user_module == CG(active_module));
+			// TODO: do we actually need an assoc ht?
+			zend_hash_update_ptr(&CG(active_module)->op_arrays,
+				op_array->filename, op_array);
+		}
 	}
 
 	zend_ast_destroy(CG(ast));
@@ -633,13 +640,6 @@ static zend_op_array *zend_compile(int type)
 
 	CG(in_compilation) = original_in_compilation;
 	CG(compiler_options) = original_compiler_options;
-
-	if (CG(active_module) && op_array->user_module) {
-		ZEND_ASSERT(op_array->user_module == CG(active_module));
-		// TODO: do we actually need an assoc ht?
-		zend_hash_update_ptr(&CG(active_module)->op_arrays,
-			op_array->filename, op_array);
-	}
 
 	return op_array;
 }

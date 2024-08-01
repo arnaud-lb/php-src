@@ -1405,15 +1405,18 @@ zend_persistent_user_module *zend_accel_user_module_persist(zend_persistent_user
 	ZEND_ASSERT(((uintptr_t)ZCG(mem) & 0x7) == 0); /* should be 8 byte aligned */
 
 	module = zend_shared_memdup_free(module, sizeof(*module));
-	module->dependencies = zend_shared_memdup_free(module->dependencies, sizeof(zend_user_module*) * module->num_dependencies);
 
 	zend_accel_store_interned_string(module->module.name);
 	zend_accel_store_interned_string(module->module.lcname);
 	zend_accel_store_interned_string(module->module.path);
 	zend_accel_store_interned_string(module->module.resolved_path);
+	zend_hash_persist(&module->module.deps);
 
-	// TODO
-	memset(&module->module.op_arrays, 0, sizeof(module->module.op_arrays));
+	// TODO: We need these during compilation, but not after. Maybe store these
+	// elsewhere.
+	memset(&module->module.op_arrays, 0, sizeof(HashTable));
+	memset(&module->module.function_table, 0, sizeof(HashTable));
+	memset(&module->module.class_table, 0, sizeof(HashTable));
 
 #if defined(__AVX__) || defined(__SSE2__)
 	/* Align to 64-byte boundary */

@@ -515,6 +515,7 @@ struct _zend_user_module {
 	HashTable               op_arrays;
 	HashTable               class_table;
 	HashTable               function_table;
+	HashTable               deps;
 };
 
 #define ZEND_RETURN_VALUE				0
