@@ -6431,7 +6431,8 @@ ZEND_VM_COLD_CONST_HANDLER(51, ZEND_CAST, CONST|TMP|VAR|CV, ANY, TYPE)
 					}
 				} else if (Z_OBJ_P(expr)->properties == NULL
 				 && Z_OBJ_HT_P(expr)->get_properties_for == NULL
-				 && Z_OBJ_HT_P(expr)->get_properties == zend_std_get_properties) {
+				 && Z_OBJ_HT_P(expr)->get_properties == zend_std_get_properties
+				 && (!zend_object_is_lazy_proxy(Z_OBJ_P(expr)) || !zend_lazy_object_initialized(Z_OBJ_P(expr)))) {
 					/* Optimized version without rebuilding properties HashTable */
 					ZVAL_ARR(result, zend_std_build_object_properties_array(Z_OBJ_P(expr)));
 				} else {
@@ -9110,7 +9111,7 @@ ZEND_VM_HANDLER(203, ZEND_BIND_INIT_STATIC_OR_JMP, CV, JMP_ADDR)
 	ZEND_ASSERT(GC_REFCOUNT(ht) == 1);
 
 	value = (zval*)((char*)ht->arData + opline->extended_value);
-	if (Z_TYPE_EXTRA_P(value) & IS_STATIC_VAR_UNINITIALIZED) {
+	if (Z_TYPE_P(value) == IS_NULL) {
 		ZEND_VM_NEXT_OPCODE();
 	} else {
 		SAVE_OPLINE();

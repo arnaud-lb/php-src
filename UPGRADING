@@ -48,6 +48,13 @@ PHP 8.4 UPGRADE NOTES
     object. This is no longer possible, and cloning a DOMXPath object now throws
     an error.
 
+- GMP:
+  . The GMP class is now final and cannot be extended anymore.
+    RFC: https://wiki.php.net/rfc/gmp-final
+  . Casting a GMP object to bool changed so that 0 becomes false and everything else
+    becomes true.
+    RFC: https://wiki.php.net/rfc/fix_up_bcmath_number_class
+
 - Intl:
   . resourcebundle_get(), ResourceBundle::get(), and accessing offsets on a
     ResourceBundle object now throw:
@@ -397,6 +404,18 @@ PHP 8.4 UPGRADE NOTES
 - Date:
   . Calling DatePeriod::__construct(string $isostr, int $options = 0) is
     deprecated. Use DatePeriod::createFromISO8601String() instead.
+  . Constants SUNFUNCS_RET_TIMESTAMP, SUNFUNCS_RET_STRING, and
+    SUNFUNCS_RET_DOUBLE are now deprecated, following the deprecation of
+    the associated date_sunset() and date_sunrise() functions in PHP 8.1.
+    RFC: https://wiki.php.net/rfc/deprecations_php_8_4
+
+- DOM:
+  . Deprecated DOM_PHP_ERR constant.
+    RFC: https://wiki.php.net/rfc/deprecations_php_8_4#deprecate_dom_php_err_constant
+
+- Hash:
+  . Deprecated passing incorrect data types for options to ext/hash functions.
+    RFC: https://wiki.php.net/rfc/deprecations_php_8_4
 
 - Intl:
   . Calling intlcal_set() as well as calling IntlCalendar::set() with
@@ -427,6 +446,11 @@ PHP 8.4 UPGRADE NOTES
     3-parameter signature with a null $row parameter instead.
   . Added pg_result_memory_size to get the visibility the memory used by a query result.
 
+- Random:
+  . lcg_value() is deprecated, as the function is broken in multiple ways.
+    Use \Random\Randomizer::getFloat() instead.
+    RFC: https://wiki.php.net/rfc/deprecations_php_8_4
+
 - Reflection:
   . Calling ReflectionMethod::__construct() with 1 argument is deprecated.
     Use ReflectionMethod::createFromMethodName() instead.
@@ -434,11 +458,17 @@ PHP 8.4 UPGRADE NOTES
 - Session:
   . Calling session_set_save_handler() with more than 2 arguments is
     deprecated. Use the 2-parameter signature instead.
+  . Changing the INI settings session.sid_length and session.sid_bits_per_character
+    is deprecated. Update the session storage backend to accept 32 character
+    hexadecimal session IDs and stop changing these two INI settings.
+    RFC: https://wiki.php.net/rfc/deprecations_php_8_4
 
 - Standard:
   . Calling stream_context_set_option() with 2 arguments is deprecated.
     Use stream_context_set_options() instead.
   . Raising zero to the power of negative number is deprecated.
+  . Unserializing strings using the uppercase 'S' tag is deprecated.
+    RFC: https://wiki.php.net/rfc/deprecations_php_8_4
 
 ========================================
 5. Changed Functions
@@ -524,6 +554,8 @@ PHP 8.4 UPGRADE NOTES
   . The content that is built changes depending on the value of FB_API_VER in
     ibase.h, so added static method Pdo\Firebird::getApiVersion() to obtain that
     value. This value can also be referenced from phpinfo.
+  . Five new data types are now available: INT128, DEC16, DEC34, TIMESTAMP_TZ, TIME_TZ.
+    These are available starting with Firebird 4.0.
 
 - PDO_MYSQL:
   . getAttribute, enabled to get the value of ATTR_FETCH_TABLE_NAMES.
@@ -574,8 +606,9 @@ PHP 8.4 UPGRADE NOTES
     decimal number and round it to 0.29. However, "pre-rounding" incorrectly rounds
     certain numbers, so this fix removes "pre-rounding" and changes the way numbers
     are compared, so that the values are correctly rounded as decimal numbers.
-  . The maximum precision that can be handled by round() has been extended by
-    one digit.
+  . The maximum precision that can be handled by round() has been extended by one
+    digit. For example, `round(4503599627370495.5)` returned in `4503599627370495.5`,
+    but now returns `4503599627370496`.
   . The default value of the 'cost' option for PASSWORD_BCRYPT for password_hash()
     has been increased from '10' to '12'.
 
@@ -665,6 +698,9 @@ PHP 8.4 UPGRADE NOTES
     array_any().
     RFC: https://wiki.php.net/rfc/array_find
 
+- Tidy:
+  . Added tidyNode::getNextSibling() and tidyNode::getPreviousSibling().
+
 - XMLReader:
   . Added XMLReader::fromStream(), XMLReader::fromUri(), XMLReader::fromString().
     RFC: https://wiki.php.net/rfc/xmlreader_writer_streams
@@ -728,6 +764,10 @@ PHP 8.4 UPGRADE NOTES
 
 - Date:
   . The class constants are typed now.
+
+- DOM:
+  . Removed DOMImplementation::getFeature().
+    RFC: https://wiki.php.net/rfc/deprecations_php_8_4#remove_domimplementationgetfeature_feature_version
 
 - Intl:
   . The class constants are typed now.

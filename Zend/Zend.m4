@@ -118,14 +118,11 @@ dnl Ugly hack to check if dlsym() requires a leading underscore in symbol name.
 dnl
 AC_DEFUN([ZEND_DLSYM_CHECK], [dnl
 AC_MSG_CHECKING([whether dlsym() requires a leading underscore in symbol names])
-_LT_AC_TRY_DLOPEN_SELF([
-  AC_MSG_RESULT([no])
-], [
+_LT_AC_TRY_DLOPEN_SELF([AC_MSG_RESULT([no])], [
   AC_MSG_RESULT([yes])
-  AC_DEFINE(DLSYM_NEEDS_UNDERSCORE, 1, [Define if dlsym() requires a leading underscore in symbol names. ])
-], [
-  AC_MSG_RESULT([no])
-], [])
+  AC_DEFINE([DLSYM_NEEDS_UNDERSCORE], [1],
+    [Define to 1 if 'dlsym()' requires a leading underscore in symbol names.])
+], [AC_MSG_RESULT([no])], [])
 ])
 
 dnl
@@ -157,7 +154,7 @@ dnl as a fallback since AC_CHECK_FUNC cannot detect macros.
 dnl
 AC_CHECK_FUNC([sigsetjmp],,
   [AC_CHECK_DECL([sigsetjmp],,
-    [AC_MSG_ERROR([Required sigsetjmp not found. Please, check config.log])],
+    [AC_MSG_FAILURE([Required sigsetjmp not found.])],
     [#include <setjmp.h>])])
 
 ZEND_CHECK_STACK_DIRECTION
@@ -166,21 +163,24 @@ ZEND_DLSYM_CHECK
 ZEND_CHECK_GLOBAL_REGISTER_VARIABLES
 ZEND_CHECK_CPUID_COUNT
 
-AC_MSG_CHECKING([whether to enable thread-safety])
+AC_MSG_CHECKING([whether to enable thread safety])
 AC_MSG_RESULT([$ZEND_ZTS])
+AS_VAR_IF([ZEND_ZTS], [yes], [
+  AC_DEFINE([ZTS], [1], [Define to 1 if thread safety (ZTS) is enabled.])
+  AS_VAR_APPEND([CFLAGS], [" -DZTS"])
+])
 
 AC_MSG_CHECKING([whether to enable Zend debugging])
 AC_MSG_RESULT([$ZEND_DEBUG])
-
-if test "$ZEND_DEBUG" = "yes"; then
-  AC_DEFINE(ZEND_DEBUG,1,[ ])
+AH_TEMPLATE([ZEND_DEBUG],
+  [Define to 1 if debugging is enabled, and to 0 if not.])
+AS_VAR_IF([ZEND_DEBUG], [yes], [
+  AC_DEFINE([ZEND_DEBUG], [1])
   echo " $CFLAGS" | grep ' -g' >/dev/null || DEBUG_CFLAGS="-g"
   if test "$CFLAGS" = "-g -O2"; then
     CFLAGS=-g
   fi
-else
-  AC_DEFINE(ZEND_DEBUG,0,[ ])
-fi
+], [AC_DEFINE([ZEND_DEBUG], [0])])
 
 test -n "$GCC" && CFLAGS="-Wall -Wextra -Wno-unused-parameter -Wno-sign-compare $CFLAGS"
 dnl Check if compiler supports -Wno-clobbered (only GCC)
@@ -194,11 +194,6 @@ AX_CHECK_COMPILE_FLAG([-Wstrict-prototypes], CFLAGS="-Wstrict-prototypes $CFLAGS
 AX_CHECK_COMPILE_FLAG([-fno-common], CFLAGS="-fno-common $CFLAGS", , [-Werror])
 
 AS_VAR_IF([DEBUG_CFLAGS],,, [AS_VAR_APPEND([CFLAGS], [" $DEBUG_CFLAGS"])])
-
-if test "$ZEND_ZTS" = "yes"; then
-  AC_DEFINE(ZTS,1,[ ])
-  CFLAGS="$CFLAGS -DZTS"
-fi
 
 ZEND_CHECK_ALIGNMENT
 ZEND_CHECK_SIGNALS
@@ -381,7 +376,7 @@ int main(void)
   [php_cv_align_mm=failed],
   [php_cv_align_mm="(size_t)8 (size_t)3 0"])])
 AS_VAR_IF([php_cv_align_mm], [failed],
-  [AC_MSG_ERROR([ZEND_MM alignment defines failed. Please, check config.log])],
+  [AC_MSG_FAILURE([ZEND_MM alignment defines failed.])],
   [zend_mm_alignment=$(echo $php_cv_align_mm | cut -d ' ' -f 1)
   zend_mm_alignment_log2=$(echo $php_cv_align_mm | cut -d ' ' -f 2)
   zend_mm_8byte_realign=$(echo $php_cv_align_mm | cut -d ' ' -f 3)

@@ -556,6 +556,7 @@ typedef struct _HashTableIterator {
 struct _zend_object {
 	zend_refcounted_h gc;
 	uint32_t          handle; // TODO: may be removed ???
+	uint32_t          flags;
 	zend_class_entry *ce;
 	const zend_object_handlers *handlers;
 	HashTable        *properties;
@@ -791,11 +792,6 @@ static zend_always_inline uint32_t zval_gc_info(uint32_t gc_type_info) {
 /* zval.u1.v.type_flags */
 #define IS_TYPE_REFCOUNTED			(1<<0)
 #define IS_TYPE_COLLECTABLE			(1<<1)
-/* Used for static variables to check if they have been initialized. We can't use IS_UNDEF because
- * we can't store IS_UNDEF zvals in the static_variables HashTable. This needs to live in type_info
- * so that the ZEND_ASSIGN overrides it but is moved to extra to avoid breaking the Z_REFCOUNTED()
- * optimization that only checks for Z_TYPE_FLAGS() without `& (IS_TYPE_COLLECTABLE|IS_TYPE_REFCOUNTED)`. */
-#define IS_STATIC_VAR_UNINITIALIZED		(1<<0)
 
 #if 1
 /* This optimized version assumes that we have a single "type_flag" */
@@ -833,6 +829,13 @@ static zend_always_inline uint32_t zval_gc_info(uint32_t gc_type_info) {
 #define IS_OBJ_FREE_CALLED			(1<<9)
 
 #define OBJ_FLAGS(obj)              GC_FLAGS(obj)
+
+/* object extra flags (zend_object.flags) */
+
+#define IS_OBJ_LAZY                 (1U<<31) /* Virtual proxy or uninitialized Ghost */
+#define IS_OBJ_LAZY_PROXY           (1U<<30) /* Virtual proxy (may be initialized) */
+
+#define OBJ_EXTRA_FLAGS(obj)		((obj)->flags)
 
 /* Fast class cache */
 #define ZSTR_HAS_CE_CACHE(s)		(GC_FLAGS(s) & IS_STR_CLASS_NAME_MAP_PTR)
@@ -1561,6 +1564,7 @@ static zend_always_inline uint32_t zval_delref_p(zval* pz) {
  * macros for this purpose, so this workaround is easier to remove in the future. */
 #define IS_PROP_UNINIT (1<<0)
 #define IS_PROP_REINITABLE (1<<1)  /* It has impact only on readonly properties */
+#define IS_PROP_LAZY (1<<2)
 #define Z_PROP_FLAG_P(z) Z_EXTRA_P(z)
 #define ZVAL_COPY_VALUE_PROP(z, v) \
 	do { *(z) = *(v); } while (0)
