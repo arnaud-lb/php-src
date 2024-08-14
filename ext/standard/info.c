@@ -656,10 +656,16 @@ static void php_get_windows_cpu(char *buf, size_t bufsize)
 /* }}}  */
 #endif
 
+static inline bool php_is_valid_uname_mode(char mode) {
+	return mode == 'a' || mode == 'm' || mode == 'n' || mode == 'r' || mode == 's' || mode == 'v';
+}
+
 /* {{{ php_get_uname */
 PHPAPI zend_string *php_get_uname(char mode)
 {
 	char *php_uname;
+
+	ZEND_ASSERT(php_is_valid_uname_mode(mode));
 #ifdef PHP_WIN32
 	char tmp_uname[256];
 	DWORD dwBuild=0;
@@ -680,13 +686,12 @@ PHPAPI zend_string *php_get_uname(char mode)
 	} else if (mode == 'v') {
 		char *winver = php_get_windows_name();
 		dwBuild = (DWORD)(HIWORD(dwVersion));
-		if (winver == NULL) {
-			return strpprintf(0, "build %d", dwBuild);
-		} else {
-			zend_string *build_with_version = strpprintf(0, "build %d (%s)", dwBuild, winver);
-			efree(winver);
-			return build_with_version;
-		}
+
+		ZEND_ASSERT(winver != NULL);
+
+		zend_string *build_with_version = strpprintf(0, "build %d (%s)", dwBuild, winver);
+		efree(winver);
+		return build_with_version;
 	} else if (mode == 'm') {
 		php_get_windows_cpu(tmp_uname, sizeof(tmp_uname));
 		php_uname = tmp_uname;
@@ -1314,15 +1319,26 @@ PHP_FUNCTION(php_sapi_name)
 /* {{{ Return information about the system PHP was built on */
 PHP_FUNCTION(php_uname)
 {
-	char *mode = "a";
+	char *mode_str = "a";
 	size_t modelen = sizeof("a")-1;
 
 	ZEND_PARSE_PARAMETERS_START(0, 1)
 		Z_PARAM_OPTIONAL
-		Z_PARAM_STRING(mode, modelen)
+		Z_PARAM_STRING(mode_str, modelen)
 	ZEND_PARSE_PARAMETERS_END();
 
-	RETURN_STR(php_get_uname(*mode));
+	if (modelen != 1) {
+		zend_argument_value_error(1, "must be a single character");
+		RETURN_THROWS();
+	}
+
+	char mode = *mode_str;
+	if (!php_is_valid_uname_mode(mode)) {
+		zend_argument_value_error(1, "must be one of \"a\", \"m\", \"n\", \"r\", \"s\", or \"v\"");
+		RETURN_THROWS();
+	}
+
+	RETURN_STR(php_get_uname(mode));
 }
 
 /* }}} */
