@@ -407,6 +407,13 @@ const CURLOPT_SSL_VERIFYPEER = UNKNOWN;
  * @cvalue CURLOPT_STDERR
  */
 const CURLOPT_STDERR = UNKNOWN;
+#if LIBCURL_VERSION_NUM >= 0x080900 /* Available since 8.9.0 */
+/**
+ * @var int
+ * @cvalue CURLOPT_TCP_KEEPCNT
+ */
+const CURLOPT_TCP_KEEPCNT = UNKNOWN;
+#endif
 /**
  * @var int
  * @cvalue CURLOPT_TELNETOPTIONS
@@ -3490,6 +3497,21 @@ const CURLOPT_MAXLIFETIME_CONN = UNKNOWN;
  * @cvalue CURLOPT_SSH_HOST_PUBLIC_KEY_SHA256
  */
 const CURLOPT_SSH_HOST_PUBLIC_KEY_SHA256 = UNKNOWN;
+/**
+ * @var int
+ * @cvalue CURLOPT_PREREQFUNCTION
+ */
+const CURLOPT_PREREQFUNCTION = UNKNOWN;
+/**
+ * @var int
+ * @cvalue CURL_PREREQFUNC_OK
+ */
+const CURL_PREREQFUNC_OK = UNKNOWN;
+/**
+ * @var int
+ * @cvalue CURL_PREREQFUNC_ABORT
+ */
+const CURL_PREREQFUNC_ABORT = UNKNOWN;
 #endif
 
 #if LIBCURL_VERSION_NUM >= 0x075100 /* Available since 7.81.0 */

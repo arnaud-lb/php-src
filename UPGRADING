@@ -37,6 +37,13 @@ PHP 8.4 UPGRADE NOTES
     allowed, e.g. $ref = &$this->readonly. This was already forbidden for
     readonly initialization, and was an oversight in the "readonly
     reinitialization during cloning" implementation.
+  . The exit (and die) language constructs now behave more like a function.
+    They can be passed liked callables, are affected by the strict_types
+    declare statement, and now perform the usual type coercions instead of
+    casting any non-integer value to a string.
+    As such, passing invalid types to exit/die may now result in a TypeError
+    being thrown.
+    RFC: https://wiki.php.net/rfc/exit-as-function
 
 - DBA:
   . dba_open() and dba_popen() will now return a Dba\Connection
@@ -57,8 +64,8 @@ PHP 8.4 UPGRADE NOTES
     object. This is no longer possible, and cloning a DOMXPath object now throws
     an error.
   . DOMDocument::$actualEncoding, DOMDocument::config, DOMEntity::$actualEncoding,
-    DOMEntity::$encoding, DOMEntity::$version have been deprecated as part of the
-    https://wiki.php.net/rfc/deprecations_php_8_4 RFC.
+    DOMEntity::$encoding, DOMEntity::$version have been deprecated.
+    RFC: https://wiki.php.net/rfc/deprecations_php_8_4#formally_deprecate_soft-deprecated_domdocument_and_domentity_properties
 
 - GMP:
   . The GMP class is now final and cannot be extended anymore.
@@ -119,22 +126,9 @@ PHP 8.4 UPGRADE NOTES
     has changed. Consult https://github.com/PCRE2Project/pcre2/blob/master/NEWS
     for a full changelog.
 
-- PDO_DBLIB:
-  . setAttribute, DBLIB_ATTR_STRINGIFY_UNIQUEIDENTIFIER and DBLIB_ATTR_DATETIME_CONVERT
-    have been changed to set value as a bool.
-
-- PDO_FIREBIRD:
-  . Since some Firebird C++ APIs are used now, this extension requires a C++
-    compiler to be built.
-  . getAttribute, ATTR_AUTOCOMMIT has been changed to get the value as a bool.
-
-- PDO_MYSQL:
-  . getAttribute, ATTR_AUTOCOMMIT, ATTR_EMULATE_PREPARES, MYSQL_ATTR_DIRECT_QUERY have
-    been changed to get values as bool.
-
-- PDO_PGSQL:
-  . The DSN's credentials, when set, are given priority over their PDO
-    constructor counterparts, being closer to the documentation states.
+- MySQLnd
+  . The error code reported for MySQL server wait timeouts has been changed from 2006
+    to 4031 for MySQL server versions 8.0.24 and above.
 
 - PCNTL:
   . The functions pcntl_sigprocmask(), pcntl_sigwaitinfo() and
@@ -151,6 +145,24 @@ PHP 8.4 UPGRADE NOTES
     - A ValueError if $seconds is less than 0
     - A ValueError if $nanoseconds is less than 0 or greater than 1e9
     - A ValueError if both $seconds and $nanoseconds are 0
+
+- PDO_DBLIB:
+  . setAttribute, DBLIB_ATTR_STRINGIFY_UNIQUEIDENTIFIER and DBLIB_ATTR_DATETIME_CONVERT
+    have been changed to set value as a bool.
+
+- PDO_FIREBIRD:
+  . Since some Firebird C++ APIs are used now, this extension requires a C++
+    compiler to be built. This also implies that the extension has to be built
+    against fbclient 3.0 or higher.
+  . getAttribute, ATTR_AUTOCOMMIT has been changed to get the value as a bool.
+
+- PDO_MYSQL:
+  . getAttribute, ATTR_AUTOCOMMIT, ATTR_EMULATE_PREPARES, MYSQL_ATTR_DIRECT_QUERY have
+    been changed to get values as bool.
+
+- PDO_PGSQL:
+  . The DSN's credentials, when set, are given priority over their PDO
+    constructor counterparts, being closer to the documentation states.
 
 - SimpleXML:
   . Get methods called, or casting to a string on a SimpleXMLElement will no
@@ -193,6 +205,9 @@ PHP 8.4 UPGRADE NOTES
     $enclosure arguments are not one byte long, or if the $escape is not one
     byte long or the empty string. This aligns the behaviour to be identical
     to that of fputcsv() and fgetcsv().
+  . php_uname() now throws ValueErrors on invalid inputs.
+  . The "allowed_classes" option for unserialize() now throws TypeErrors and
+    ValueErrors if it is not an array of class names.
 
 - Tidy:
   . Failures in the constructor now throw exceptions rather than emitting
@@ -252,6 +267,8 @@ PHP 8.4 UPGRADE NOTES
     namespace block, even if a previous namespace block declared a symbol with
     the same name.
     See Zend/tests/use_function/ns_end_resets_seen_symbols_1.phpt.
+  . Implemented asymmetric property visibility.
+    RFC: https://wiki.php.net/rfc/asymmetric-visibility-v2
 
 - Curl:
   . curl_version() returns an additional feature_list value, which is an
@@ -279,6 +296,7 @@ PHP 8.4 UPGRADE NOTES
 
 - FPM:
   . Flushing headers without a body will now succeed. See GH-12785.
+  . Status page has a new field to display a memory peak.
 
 - Hash:
   . Added HashContext::__debugInfo().
@@ -292,36 +310,6 @@ PHP 8.4 UPGRADE NOTES
     ed25519, x448 and ed448 fields are supported in openssl_pkey_new and
     openssl_pkey_get_details as well as openssl_sign and openssl_verify were
     extended to support those keys.
-
-- PDO:
-  . Added support for driver specific SQL parsers. The default parser supports:
-    - single and double quoted literals, with doubling as escaping mechanism.
-    - two-dashes and non-nested C-style comments.
-
-- PDO_MYSQL:
-  . Added custom parser supporting:
-    - single and double-quoted literals, with doubling and backslash as escaping
-      mechanism
-    - backtick literal identifiers and with doubling as escaping mechanism
-    - two dashes followed by at least 1 whitespace, non-nested C-style comments,
-      and hash-comments
-
-- PDO_PGSQL:
-  . Added custom parser supporting:
-    - single and double quoted literals, with doubling as escaping mechanism
-    - C-style "escape" string literals (E'string')
-    - dollar-quoted string literals
-    - two-dashes and C-style comments (non-nested)
-    - support for "??" as escape sequence for the "?" operator
-
-- PDO_SQLITE:
-  . Added custom parser supporting:
-    - single, double quoted, and backtick literals, with doubling as escaping mechanism
-    - square brackets quoting for identifiers
-    - two-dashes and C-style comments (non-nested)
-
-- Phar:
-  . Added support for the unix timestamp extension for zip archives.
 
 - PCRE:
   . The bundled pcre2lib has been updated to version 10.44.
@@ -342,6 +330,10 @@ PHP 8.4 UPGRADE NOTES
     database-specific functionalities. The new classes are
     instantiatable either via calling the PDO::connect() method
     or by invoking their constructor directly.
+  . Added support for driver specific SQL parsers. The default parser supports:
+    - single and double quoted literals, with doubling as escaping mechanism.
+    - two-dashes and non-nested C-style comments.
+    RFC: https://wiki.php.net/rfc/pdo_driver_specific_parsers
 
 - PDO_DBLIB:
   . Added class Pdo\DbLib.
@@ -351,15 +343,40 @@ PHP 8.4 UPGRADE NOTES
 
 - PDO_MYSQL:
   . Added class Pdo\Mysql.
+  . Added custom parser supporting:
+    - single and double-quoted literals, with doubling and backslash as escaping
+      mechanism
+    - backtick literal identifiers and with doubling as escaping mechanism
+    - two dashes followed by at least 1 whitespace, non-nested C-style comments,
+      and hash-comments
+    RFC: https://wiki.php.net/rfc/pdo_driver_specific_parsers
 
 - PDO_ODBC:
   . Added class Pdo\Odbc.
 
 - PDO_PGSQL:
   . Added class Pdo\Pgsql.
+  . Added custom parser supporting:
+    - single and double quoted literals, with doubling as escaping mechanism
+    - C-style "escape" string literals (E'string')
+    - dollar-quoted string literals
+    - two-dashes and C-style comments (non-nested)
+    - support for "??" as escape sequence for the "?" operator
+    RFC: https://wiki.php.net/rfc/pdo_driver_specific_parsers
 
 - PDO_SQLITE:
   . Added class Pdo\Sqlite.
+  . Added custom parser supporting:
+    - single, double quoted, and backtick literals, with doubling as escaping mechanism
+    - square brackets quoting for identifiers
+    - two-dashes and C-style comments (non-nested)
+    RFC: https://wiki.php.net/rfc/pdo_driver_specific_parsers
+
+- Phar:
+  . Added support for the unix timestamp extension for zip archives.
+
+- PgSQL:
+  . Added pg_result_memory_size to get the visibility the memory used by a query result.
 
 - POSIX:
   . Added constant POSIX_SC_CHILD_MAX
@@ -435,7 +452,7 @@ PHP 8.4 UPGRADE NOTES
   . Constants SUNFUNCS_RET_TIMESTAMP, SUNFUNCS_RET_STRING, and
     SUNFUNCS_RET_DOUBLE are now deprecated, following the deprecation of
     the associated date_sunset() and date_sunrise() functions in PHP 8.1.
-    RFC: https://wiki.php.net/rfc/deprecations_php_8_4
+    RFC: https://wiki.php.net/rfc/deprecations_php_8_4#constants_sunfuncs_ret_string_sunfuncs_ret_double_sunfuncs_ret_timestamp
 
 - DBA:
   . Passing null or false to dba_key_split() is deprecated.
@@ -447,7 +464,7 @@ PHP 8.4 UPGRADE NOTES
 
 - Hash:
   . Deprecated passing incorrect data types for options to ext/hash functions.
-    RFC: https://wiki.php.net/rfc/deprecations_php_8_4
+    RFC: https://wiki.php.net/rfc/deprecations_php_8_4#deprecate_passing_incorrect_data_types_for_options_to_exthash_functions
 
 - Intl:
   . Calling intlcal_set() as well as calling IntlCalendar::set() with
@@ -486,18 +503,17 @@ PHP 8.4 UPGRADE NOTES
     is no longer necessary to escape question marks inside them.
 
 - PgSQL:
-  . Calling pgsql_fetch_result() with 2 arguments is deprecated. Use the
+  . Calling pg_fetch_result() with 2 arguments is deprecated. Use the
     3-parameter signature with a null $row parameter instead.
   . Calling pg_field_prtlen() with 2 arguments is deprecated. Use the
     3-parameter signature with a null $row parameter instead.
   . Calling pg_field_is_null() with 2 arguments is deprecated. Use the
     3-parameter signature with a null $row parameter instead.
-  . Added pg_result_memory_size to get the visibility the memory used by a query result.
 
 - Random:
   . lcg_value() is deprecated, as the function is broken in multiple ways.
     Use \Random\Randomizer::getFloat() instead.
-    RFC: https://wiki.php.net/rfc/deprecations_php_8_4
+    RFC: https://wiki.php.net/rfc/deprecations_php_8_4#deprecate_lcg_value
 
 - Reflection:
   . Calling ReflectionMethod::__construct() with 1 argument is deprecated.
@@ -509,7 +525,7 @@ PHP 8.4 UPGRADE NOTES
   . Changing the INI settings session.sid_length and session.sid_bits_per_character
     is deprecated. Update the session storage backend to accept 32 character
     hexadecimal session IDs and stop changing these two INI settings.
-    RFC: https://wiki.php.net/rfc/deprecations_php_8_4
+    RFC: https://wiki.php.net/rfc/deprecations_php_8_4#sessionsid_length_and_sessionsid_bits_per_character
 
 - SOAP:
   . Passing an int to SoapServer::addFunction() is now deprecated.
@@ -535,7 +551,7 @@ PHP 8.4 UPGRADE NOTES
   . Raising zero to the power of negative number is deprecated.
     RFC: https://wiki.php.net/rfc/raising_zero_to_power_of_negative_number
   . Unserializing strings using the uppercase 'S' tag is deprecated.
-    RFC: https://wiki.php.net/rfc/deprecations_php_8_4
+    RFC: https://wiki.php.net/rfc/deprecations_php_8_4#unserialize_s_s_tag
   . Passing a non-empty string for the $enclosure parameter of:
     - fputcsv()
     - fgetcsv()
@@ -557,6 +573,10 @@ PHP 8.4 UPGRADE NOTES
 - Core:
   . trigger_error() and user_error() now have a return type of true instead of
     bool.
+
+- Curl:
+  . curl_multi_select throws a ValueError if the timeout argument if it's negative
+    or greater than PHP_INT_MAX.
 
 - DOM:
   . DOMDocument::registerNodeClass() now has a tentative return type of true.
@@ -598,6 +618,12 @@ PHP 8.4 UPGRADE NOTES
   . The behavior of mb_strcut is more consistent now on invalid UTF-8 and UTF-16
     strings. (For valid UTF-8 and UTF-16 strings, there is no change.)
 
+- ODBC:
+  . Parameter $row of odbc_fetch_object(), odbc_fetch_array(), and
+    odbc_fetch_into() now has a default value of null, consistent with
+    odbc_fetch_row(). Previously, the default values were -1, -1, and 0,
+    respectively.
+
 - OpenSSL:
   . The extra_attributes parameter in openssl_csr_new sets CSR attributes
     instead of subject DN which was incorrectly done previously.
@@ -608,12 +634,6 @@ PHP 8.4 UPGRADE NOTES
   . Parsing ASN.1 UTCTime by openssl_x509_parse fails if seconds are omitted
     for OpenSSL version below 3.2 (-1 is returned for such fields). The
     OpenSSL version 3.3+ does not load such certificates already.
-
-- ODBC:
-  . Parameter $row of odbc_fetch_object(), odbc_fetch_array(), and
-    odbc_fetch_into() now has a default value of null, consistent with
-    odbc_fetch_row(). Previously, the default values were -1, -1, and 0,
-    respectively.
 
 - Output:
   . Output handler status flags passed to the flags parameter of ob_start
@@ -647,6 +667,10 @@ PHP 8.4 UPGRADE NOTES
 - PGSQL:
   . pg_select, the conditions arguments accepts an empty array and is optional.
 
+- Phar:
+  . Phar::setAlias() and Phar::setDefaultStub() methods now have a tentative
+    return type of true instead of bool.
+
 - POSIX:
   . posix_isatty now sets the error number when the file descriptor/stream argument
     is invalid.
@@ -675,11 +699,9 @@ PHP 8.4 UPGRADE NOTES
     earlier PHP versions.
   . The $mode parameter of the round() function has been widened to RoundingMode|int,
     accepting instances of a new RoundingMode enum.
-
     RFC: https://wiki.php.net/rfc/correctly_name_the_rounding_mode_and_make_it_an_enum
   . Four new modes have been added to the round() function: RoundingMode::PositiveInfinity,
     RoundingMode::NegativeInfinity, RoundingMode::TowardsZero, RoundingMode::AwayFromZero.
-
     RFC: https://wiki.php.net/rfc/new_rounding_modes_to_round_function
   . Fixed a bug caused by "pre-rounding" of the round() function. Previously, using
     "pre-rounding" to treat a value like 0.285 (actually 0.28499999999999998) as a
@@ -691,7 +713,6 @@ PHP 8.4 UPGRADE NOTES
     but now returns `4503599627370496`.
   . The default value of the 'cost' option for PASSWORD_BCRYPT for password_hash()
     has been increased from '10' to '12'.
-
     RFC: https://wiki.php.net/rfc/bcrypt_cost_2023
   . debug_zval_dump() now indicates whether an array is packed.
   . long2ip() now returns string instead of string|false.
@@ -736,8 +757,8 @@ PHP 8.4 UPGRADE NOTES
 - PCNTL:
   . Added pcntl_setns allowing a process to be reassociated with a namespace in order
     to share resources with other processes within this context.
-  . Added pcntl_getaffinity to get the cpu(s) bound to a process and
-    pcntl_setaffinity to bind 1 or more cpus to a process.
+  . Added pcntl_getcpuaffinity to get the cpu(s) bound to a process and
+    pcntl_setcpuaffinity to bind 1 or more cpus to a process.
   . Added pcntl_getcpu to get the cpu id from where the current process runs.
   . Added pcntl_getqos_class to get the QoS level (aka performance and related
     energy consumption) of the current process and pcntl_setqos_class to set it.
@@ -865,12 +886,28 @@ PHP 8.4 UPGRADE NOTES
     $domain name is empty or too long, and if $variant is not
     INTL_IDNA_VARIANT_UTS46.
 
+- LibXML:
+  . The libxml extension now requires at least libxml2 2.9.4.
+
 - MBString:
   . Unicode data tables have been updated to Unicode 15.1.
 
-- mysqli:
+- Mysqli:
   . The unused and undocumented constant MYSQLI_SET_CHARSET_DIR
     has been removed.
+  . The MYSQLI_STMT_ATTR_PREFETCH_ROWS constant has been removed.
+    The feature is unavailable with mysqlnd.
+  . The MYSQLI_CURSOR_TYPE_FOR_UPDATE and MYSQLI_CURSOR_TYPE_SCROLLABLE
+    constants have been removed. This functionality was never implemented,
+    neither with mysqlnd nor with libmysql.
+  . The unused MYSQLI_TYPE_INTERVAL constant, which is currently a stub
+    and an alias for MYSQLI_TYPE_ENUM, has been removed. There are no
+    plans to add such data type to MySQL yet, so it's unclear what its value
+    would finally be.
+  . A new constant has been added: MYSQLI_TYPE_VECTOR.
+
+- Mysqlnd
+  . Support for the new VECTOR data type from MySQL 9.
 
 - OpenSSL:
   . The OpenSSL extension now requires at least OpenSSL 1.1.1.
@@ -878,10 +915,10 @@ PHP 8.4 UPGRADE NOTES
 - PDO:
   . The class constants are typed now.
 
-- pdo_pgsql:
+- PDO_PGSQL:
   . The pdo_pgsql extension now requires at least libpq 10.0.
 
-- pgsql:
+- PgSQL:
   . The pgsql extension now requires at least libpq 10.0.
 
 - Reflection:
@@ -914,6 +951,7 @@ PHP 8.4 UPGRADE NOTES
 - Curl:
   . CURL_HTTP_VERSION_3.
   . CURL_HTTP_VERSION_3ONLY.
+  . CURL_TCP_KEEPCNT
 
 - Intl:
   . The IntlDateFormatter class exposes now the new PATTERN constant
@@ -958,6 +996,9 @@ PHP 8.4 UPGRADE NOTES
   . P_SID (NetBSD/FreeBSD only).
   . P_JAILID (FreeBSD only).
 
+- PgSQL:
+  . PGSQL_TUPLES_CHUNK
+
 - Sockets:
   . SO_EXCLUSIVEADDRUSE (Windows only).
   . SOCK_CONN_DGRAM (NetBSD only).
@@ -972,6 +1013,7 @@ PHP 8.4 UPGRADE NOTES
   . IP_PORTRANGE_LOW (FreeBSD/NetBSD/OpenBSD only).
   . SOCK_NONBLOCK.
   . SOCK_CLOEXEC.
+  . SOCK_BINDTOIFINDEX.
 
 - Sodium:
   . SODIUM_CRYPTO_AEAD_AEGIS128L_KEYBYTES
@@ -995,6 +1037,8 @@ PHP 8.4 UPGRADE NOTES
 ========================================
 12. Windows Support
 ========================================
+
+* Native AVX-512 builds are now supported (--enable-native-intrinsics=avx512).
 
 ========================================
 13. Other Changes
@@ -1039,6 +1083,7 @@ PHP 8.4 UPGRADE NOTES
     an xpath query. This can give a time improvement of easily two order of
     magnitude for documents with tens of thousands of nodes.
   . Improved performance and reduce memory consumption of XML serialization.
+  . Reduced memory usage of node classes.
 
 - FTP:
   . Improved the performance of FTP uploads up to a factor of 10x for large

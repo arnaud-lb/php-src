@@ -24,7 +24,6 @@
 #include "ext/standard/info.h"
 #include "php_xmlwriter.h"
 #include "php_xmlwriter_arginfo.h"
-#include "ext/standard/php_string.h" /* For php_dirname() */
 
 static zend_class_entry *xmlwriter_class_entry_ce;
 
@@ -158,7 +157,7 @@ static char *_xmlwriter_get_valid_file_path(char *source, char *resolved_path, i
 		}
 
 		memcpy(file_dirname, source, strlen(source));
-		dir_len = php_dirname(file_dirname, strlen(source));
+		dir_len = zend_dirname(file_dirname, strlen(source));
 
 		if (dir_len > 0) {
 			zend_stat_t buf = {0};
@@ -818,7 +817,7 @@ PHP_FUNCTION(xmlwriter_open_uri)
 	}
 
 	if (source_len == 0) {
-		zend_argument_value_error(1, "cannot be empty");
+		zend_argument_must_not_be_empty_error(1);
 		RETURN_THROWS();
 	}
 
@@ -859,7 +858,7 @@ PHP_METHOD(XMLWriter, toUri)
 	ZEND_PARSE_PARAMETERS_END();
 
 	if (source_len == 0) {
-		zend_argument_value_error(1, "cannot be empty");
+		zend_argument_must_not_be_empty_error(1);
 		RETURN_THROWS();
 	}
 

@@ -69,6 +69,33 @@ zend_result zend_startup_builtin_functions(void) /* {{{ */
 }
 /* }}} */
 
+ZEND_FUNCTION(exit)
+{
+	zend_string *str = NULL;
+	zend_long status = 0;
+
+	ZEND_PARSE_PARAMETERS_START(0, 1)
+		Z_PARAM_OPTIONAL
+		Z_PARAM_STR_OR_LONG(str, status)
+	ZEND_PARSE_PARAMETERS_END();
+
+	if (str) {
+		size_t len = ZSTR_LEN(str);
+		if (len != 0) {
+			/* An exception might be emitted by an output handler */
+			zend_write(ZSTR_VAL(str), len);
+			if (EG(exception)) {
+				RETURN_THROWS();
+			}
+		}
+	} else {
+		EG(exit_status) = status;
+	}
+
+	ZEND_ASSERT(!EG(exception));
+	zend_throw_unwind_exit();
+}
+
 /* {{{ Get the version of the Zend Engine */
 ZEND_FUNCTION(zend_version)
 {
@@ -697,7 +724,8 @@ static void add_class_vars(zend_class_entry *scope, zend_class_entry *ce, bool s
 		if (((prop_info->flags & ZEND_ACC_PROTECTED) &&
 			 !zend_check_protected(prop_info->ce, scope)) ||
 			((prop_info->flags & ZEND_ACC_PRIVATE) &&
-			  prop_info->ce != scope)) {
+			  prop_info->ce != scope) ||
+			(prop_info->flags & ZEND_ACC_VIRTUAL)) {
 			continue;
 		}
 		prop = NULL;
@@ -857,7 +885,7 @@ ZEND_FUNCTION(get_mangled_object_vars)
 		Z_PARAM_OBJ(obj)
 	ZEND_PARSE_PARAMETERS_END();
 
-	properties = obj->handlers->get_properties(obj);
+	properties = zend_get_properties_no_lazy_init(obj);
 	if (!properties) {
 		ZVAL_EMPTY_ARRAY(return_value);
 		return;

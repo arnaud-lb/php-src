@@ -2481,6 +2481,16 @@ ZEND_VM_C_LABEL(fast_assign_obj):
 				}
 			} else if (EXPECTED(IS_DYNAMIC_PROPERTY_OFFSET(prop_offset))) {
 				name = Z_STR_P(GET_OP2_ZVAL_PTR(BP_VAR_R));
+				if (UNEXPECTED(zend_lazy_object_must_init(zobj))) {
+					zobj = zend_lazy_object_init(zobj);
+					if (!zobj) {
+						value = &EG(uninitialized_zval);
+						ZEND_VM_C_GOTO(free_and_exit_assign_obj);
+					}
+				}
+				if (!zobj->ce->__set && (zobj->ce->ce_flags & ZEND_ACC_ALLOW_DYNAMIC_PROPERTIES)) {
+					rebuild_object_properties_internal(zobj);
+				}
 				if (EXPECTED(zobj->properties != NULL)) {
 					if (UNEXPECTED(GC_REFCOUNT(zobj->properties) > 1)) {
 						if (EXPECTED(!(GC_FLAGS(zobj->properties) & IS_ARRAY_IMMUTABLE))) {
@@ -2519,7 +2529,7 @@ ZEND_VM_C_LABEL(fast_assign_obj):
 							Z_TRY_ADDREF_P(value);
 						}
 					}
-					zend_hash_add_new(zend_std_get_properties_ex(zobj), name, value);
+					zend_hash_add_new(zobj->properties, name, value);
 					if (UNEXPECTED(RETURN_VALUE_USED(opline))) {
 						ZVAL_COPY(EX_VAR(opline->result.var), value);
 					}
@@ -6429,9 +6439,7 @@ ZEND_VM_COLD_CONST_HANDLER(51, ZEND_CAST, CONST|TMP|VAR|CV, ANY, TYPE)
 					} else {
 						ZVAL_EMPTY_ARRAY(result);
 					}
-				} else if (Z_OBJ_P(expr)->properties == NULL
-				 && Z_OBJ_HT_P(expr)->get_properties_for == NULL
-				 && Z_OBJ_HT_P(expr)->get_properties == zend_std_get_properties) {
+				} else if (ZEND_STD_BUILD_OBJECT_PROPERTIES_ARRAY_COMPATIBLE(expr)) {
 					/* Optimized version without rebuilding properties HashTable */
 					ZVAL_ARR(result, zend_std_build_object_properties_array(Z_OBJ_P(expr)));
 				} else {
@@ -7608,38 +7616,6 @@ ZEND_VM_C_LABEL(array_key_exists_array):
 	FREE_OP2();
 	FREE_OP1();
 	ZEND_VM_SMART_BRANCH(result, 1);
-}
-
-/* No specialization for op_types (CONST|TMPVAR|UNUSED|CV, ANY) */
-ZEND_VM_COLD_HANDLER(79, ZEND_EXIT, ANY, ANY)
-{
-	USE_OPLINE
-
-	SAVE_OPLINE();
-	if (OP1_TYPE != IS_UNUSED) {
-		zval *ptr = GET_OP1_ZVAL_PTR(BP_VAR_R);
-
-		do {
-			if (Z_TYPE_P(ptr) == IS_LONG) {
-				EG(exit_status) = Z_LVAL_P(ptr);
-			} else {
-				if ((OP1_TYPE & (IS_VAR|IS_CV)) && Z_ISREF_P(ptr)) {
-					ptr = Z_REFVAL_P(ptr);
-					if (Z_TYPE_P(ptr) == IS_LONG) {
-						EG(exit_status) = Z_LVAL_P(ptr);
-						break;
-					}
-				}
-				zend_print_zval(ptr, 0);
-			}
-		} while (0);
-		FREE_OP1();
-	}
-
-	if (!EG(exception)) {
-		zend_throw_unwind_exit();
-	}
-	HANDLE_EXCEPTION();
 }
 
 ZEND_VM_HANDLER(57, ZEND_BEGIN_SILENCE, ANY, ANY)
