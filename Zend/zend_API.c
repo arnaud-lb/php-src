@@ -439,6 +439,11 @@ ZEND_API ZEND_COLD void zend_argument_value_error(uint32_t arg_num, const char *
 }
 /* }}} */
 
+ZEND_API ZEND_COLD void zend_argument_must_not_be_empty_error(uint32_t arg_num)
+{
+	zend_argument_value_error(arg_num, "must not be empty");
+}
+
 ZEND_API ZEND_COLD void zend_class_redeclaration_error_ex(int type, zend_string *new_name, zend_class_entry *old_ce)
 {
 	if (old_ce->type == ZEND_INTERNAL_CLASS) {
@@ -3488,9 +3493,16 @@ static zend_class_entry *do_register_internal_class(zend_class_entry *orig_class
  */
 ZEND_API zend_class_entry *zend_register_internal_class_ex(zend_class_entry *class_entry, zend_class_entry *parent_ce) /* {{{ */
 {
-	zend_class_entry *register_class;
+	return zend_register_internal_class_with_flags(class_entry, parent_ce, 0);
+}
+/* }}} */
 
-	register_class = zend_register_internal_class(class_entry);
+ZEND_API zend_class_entry *zend_register_internal_class_with_flags(
+	zend_class_entry *class_entry,
+	zend_class_entry *parent_ce,
+	uint32_t ce_flags
+) {
+	zend_class_entry *register_class = do_register_internal_class(class_entry, ce_flags);
 
 	if (parent_ce) {
 		zend_do_inheritance(register_class, parent_ce);
@@ -3499,7 +3511,6 @@ ZEND_API zend_class_entry *zend_register_internal_class_ex(zend_class_entry *cla
 
 	return register_class;
 }
-/* }}} */
 
 ZEND_API void zend_class_implements(zend_class_entry *class_entry, int num_interfaces, ...) /* {{{ */
 {
@@ -3605,6 +3616,13 @@ ZEND_API zend_result zend_set_hash_symbol(zval *symbol, const char *name, size_t
 
 static void zend_disable_function(const char *function_name, size_t function_name_length)
 {
+	if (UNEXPECTED(
+		(function_name_length == strlen("exit") && !memcmp(function_name, "exit", strlen("exit")))
+		|| (function_name_length == strlen("die") && !memcmp(function_name, "die", strlen("die")))
+	)) {
+		zend_error(E_WARNING, "Cannot disable function %s()", function_name);
+		return;
+	}
 	zend_hash_str_del(CG(function_table), function_name, function_name_length);
 }
 
@@ -4504,6 +4522,33 @@ ZEND_API zend_property_info *zend_declare_typed_property(zend_class_entry *ce, z
 
 	if (!(access_type & ZEND_ACC_PPP_MASK)) {
 		access_type |= ZEND_ACC_PUBLIC;
+	}
+	/* Add the protected(set) bit for public readonly properties with no set visibility. */
+	if ((access_type & (ZEND_ACC_PUBLIC|ZEND_ACC_READONLY|ZEND_ACC_PPP_SET_MASK)) == (ZEND_ACC_PUBLIC|ZEND_ACC_READONLY)) {
+		access_type |= ZEND_ACC_PROTECTED_SET;
+	} else if (UNEXPECTED(access_type & ZEND_ACC_PPP_SET_MASK)) {
+		if (!ZEND_TYPE_IS_SET(type)) {
+			zend_error_noreturn(ce->type == ZEND_INTERNAL_CLASS ? E_CORE_ERROR : E_COMPILE_ERROR,
+				"Property with asymmetric visibility %s::$%s must have type",
+				ZSTR_VAL(ce->name), ZSTR_VAL(name));
+		}
+		uint32_t get_visibility = zend_visibility_to_set_visibility(access_type & ZEND_ACC_PPP_MASK);
+		uint32_t set_visibility = access_type & ZEND_ACC_PPP_SET_MASK;
+		if (get_visibility > set_visibility) {
+			zend_error_noreturn(ce->type == ZEND_INTERNAL_CLASS ? E_CORE_ERROR : E_COMPILE_ERROR,
+				"Visibility of property %s::$%s must not be weaker than set visibility",
+				ZSTR_VAL(ce->name), ZSTR_VAL(name));
+		}
+		/* Remove equivalent set visibility. */
+		if (((access_type & (ZEND_ACC_PUBLIC|ZEND_ACC_PUBLIC_SET)) == (ZEND_ACC_PUBLIC|ZEND_ACC_PUBLIC_SET))
+		 || ((access_type & (ZEND_ACC_PROTECTED|ZEND_ACC_PROTECTED_SET)) == (ZEND_ACC_PROTECTED|ZEND_ACC_PROTECTED_SET))
+		 || ((access_type & (ZEND_ACC_PRIVATE|ZEND_ACC_PRIVATE_SET)) == (ZEND_ACC_PRIVATE|ZEND_ACC_PRIVATE_SET))) {
+			access_type &= ~ZEND_ACC_PPP_SET_MASK;
+		}
+		/* private(set) properties are implicitly final. */
+		if (access_type & ZEND_ACC_PRIVATE_SET) {
+			access_type |= ZEND_ACC_FINAL;
+		}
 	}
 
 	/* Virtual properties have no backing storage, the offset should never be used. However, the

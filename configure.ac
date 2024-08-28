@@ -100,12 +100,6 @@ dnl ----------------------------------------------------------------------------
 
 PHP_INIT_BUILD_SYSTEM
 
-dnl We want this one before the checks, so the checks can modify CFLAGS.
-AS_VAR_IF([CFLAGS],, [auto_cflags=1])
-
-abs_srcdir=`(cd $srcdir; pwd)`
-abs_builddir=`pwd`
-
 dnl Because `make install` is often performed by the superuser, we create the
 dnl libs subdirectory as the user who configures PHP. Otherwise, the current
 dnl user will not be able to delete libs or the contents of libs.
@@ -152,10 +146,10 @@ dnl Check for -R, etc. switch.
 PHP_RUNPATH_SWITCH
 
 dnl Checks for some support/generator progs.
-PHP_PROG_AWK
 PHP_PROG_BISON([3.0.0])
 PHP_PROG_RE2C([1.0.3], [--no-generation-date])
-PHP_PROG_PHP()
+dnl Find installed PHP. Minimum supported version for gen_stub.php is PHP 7.4.
+PHP_PROG_PHP([7.4])
 
 PHP_ARG_ENABLE([re2c-cgoto],
   [whether to enable computed goto extension with re2c],
@@ -241,7 +235,7 @@ esac
 
 dnl Detect musl libc
 AC_MSG_CHECKING([whether we are using musl libc])
-if command -v ldd >/dev/null && ldd --version 2>&1 | grep -q ^musl
+if command -v ldd >/dev/null && ldd --version 2>&1 | grep ^musl >/dev/null 2>&1
 then
   AC_MSG_RESULT([yes])
   AC_DEFINE([__MUSL__], [1], [Define to 1 when using musl libc.])
@@ -702,7 +696,19 @@ AC_FUNC_ALLOCA
 PHP_TIME_R_TYPE
 
 AC_CACHE_CHECK([for aarch64 CRC32 API], [php_cv_func___crc32d],
-[AC_LINK_IFELSE([AC_LANG_PROGRAM([#include <arm_acle.h>], [__crc32d(0, 0);])],
+[AC_LINK_IFELSE([AC_LANG_PROGRAM([
+#include <arm_acle.h>
+# if defined(__GNUC__)
+#  if!defined(__clang__)
+#   pragma GCC push_options
+#   pragma GCC target ("+nothing+crc")
+#  elif defined(__APPLE__)
+#   pragma clang attribute push(__attribute__((target("crc"))), apply_to=function)
+#  else
+#   pragma clang attribute push(__attribute__((target("+nothing+crc"))), apply_to=function)
+#  endif
+# endif
+], [__crc32d(0, 0);])],
 [php_cv_func___crc32d=yes],
 [php_cv_func___crc32d=no])])
 AS_VAR_IF([php_cv_func___crc32d], [yes],
@@ -1470,8 +1476,6 @@ PHP_SUBST([PHP_FRAMEWORKS])
 PHP_SUBST([PHP_FRAMEWORKPATH])
 PHP_SUBST([INSTALL_HEADERS])
 
-old_CC=$CC
-
 if test "$PHP_THREAD_SAFETY" = "yes" && test -n "$ac_cv_pthreads_cflags"; then
   CXXFLAGS="$CXXFLAGS $ac_cv_pthreads_cflags"
   CPPFLAGS="$CPPFLAGS $ac_cv_pthreads_cflags"
@@ -1577,8 +1581,6 @@ PHP_SET_LIBTOOL_VARIABLE([--silent])
 
 dnl libtool 1.4.3 needs this.
 PHP_SET_LIBTOOL_VARIABLE([--preserve-dup-deps])
-
-CC=$old_CC
 
 PHP_CONFIGURE_PART([Generating files])
 
@@ -1800,7 +1802,25 @@ AC_CONFIG_FILES([
 
 AC_CONFIG_COMMANDS_PRE([PHP_PATCH_CONFIG_HEADERS([main/php_config.h.in])])
 
-AC_CONFIG_COMMANDS([default],[
+AC_CONFIG_COMMANDS([Zend/zend_config.h], [
+cat >Zend/zend_config.h <<FEO
+#include <../main/php_config.h>
+FEO
+])
+
+AC_CONFIG_COMMANDS([main/internal_functions.c], [], [
+  AWK="$AWK" $SHELL $srcdir/build/genif.sh \
+    $srcdir/main/internal_functions.c.in \
+    "$EXT_STATIC" > main/internal_functions.c
+])
+
+AC_CONFIG_COMMANDS([main/internal_functions_cli.c], [], [
+  AWK="$AWK" $SHELL $srcdir/build/genif.sh \
+    $srcdir/main/internal_functions.c.in \
+    "$EXT_CLI_STATIC" > main/internal_functions_cli.c
+])
+
+AC_CONFIG_COMMANDS([default], [
 cat <<X
 
 +--------------------------------------------------------------------+
@@ -1815,17 +1835,5 @@ cat <<X
 Thank you for using PHP.
 
 X
-],[
-dnl Create configuration headers.
-dnl ----------------------------------------------------------------------------
-cat >Zend/zend_config.h <<FEO
-#include <../main/php_config.h>
-FEO
-
-echo "creating main/internal_functions.c"
-AWK="$AWK" sh $srcdir/build/genif.sh $srcdir/main/internal_functions.c.in "$EXT_STATIC" > main/internal_functions.c
-
-echo "creating main/internal_functions_cli.c"
-AWK="$AWK" sh $srcdir/build/genif.sh $srcdir/main/internal_functions.c.in "$EXT_CLI_STATIC" > main/internal_functions_cli.c
 ])
 AC_OUTPUT

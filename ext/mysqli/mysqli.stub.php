@@ -96,7 +96,6 @@ const MYSQLI_CLIENT_NO_SCHEMA = UNKNOWN;
  * @cvalue CLIENT_FOUND_ROWS
  */
 const MYSQLI_CLIENT_FOUND_ROWS = UNKNOWN;
-#ifdef CLIENT_SSL_VERIFY_SERVER_CERT
 /**
  * @var int
  * @cvalue CLIENT_SSL_VERIFY_SERVER_CERT
@@ -107,7 +106,6 @@ const MYSQLI_CLIENT_SSL_VERIFY_SERVER_CERT = UNKNOWN;
  * @cvalue CLIENT_SSL_DONT_VERIFY_SERVER_CERT
  */
 const MYSQLI_CLIENT_SSL_DONT_VERIFY_SERVER_CERT = UNKNOWN;
-#endif
 /**
  * @var int
  * @cvalue CLIENT_CAN_HANDLE_EXPIRED_PASSWORDS
@@ -181,21 +179,6 @@ const MYSQLI_CURSOR_TYPE_NO_CURSOR = UNKNOWN;
  * @cvalue CURSOR_TYPE_READ_ONLY
  */
 const MYSQLI_CURSOR_TYPE_READ_ONLY = UNKNOWN;
-/**
- * @var int
- * @cvalue CURSOR_TYPE_FOR_UPDATE
- */
-const MYSQLI_CURSOR_TYPE_FOR_UPDATE = UNKNOWN;
-/**
- * @var int
- * @cvalue CURSOR_TYPE_SCROLLABLE
- */
-const MYSQLI_CURSOR_TYPE_SCROLLABLE = UNKNOWN;
-/**
- * @var int
- * @cvalue STMT_ATTR_PREFETCH_ROWS
- */
-const MYSQLI_STMT_ATTR_PREFETCH_ROWS = UNKNOWN;
 
 /* column information */
 /**
@@ -407,21 +390,19 @@ const MYSQLI_TYPE_STRING = UNKNOWN;
 const MYSQLI_TYPE_CHAR = UNKNOWN;
 /**
  * @var int
- * @cvalue FIELD_TYPE_INTERVAL
- */
-const MYSQLI_TYPE_INTERVAL = UNKNOWN;
-/**
- * @var int
  * @cvalue FIELD_TYPE_GEOMETRY
  */
 const MYSQLI_TYPE_GEOMETRY = UNKNOWN;
-#ifdef FIELD_TYPE_JSON
+/**
+ * @var int
+ * @cvalue FIELD_TYPE_VECTOR
+ */
+const MYSQLI_TYPE_VECTOR = UNKNOWN;
 /**
  * @var int
  * @cvalue FIELD_TYPE_JSON
  */
 const MYSQLI_TYPE_JSON = UNKNOWN;
-#endif
 /**
  * @var int
  * @cvalue FIELD_TYPE_NEWDECIMAL
@@ -445,14 +426,12 @@ const MYSQLI_SET_CHARSET_NAME = UNKNOWN;
  * @deprecated
  */
 const MYSQLI_NO_DATA = UNKNOWN;
-#ifdef MYSQL_DATA_TRUNCATED
 /**
  * @var int
  * @cvalue MYSQL_DATA_TRUNCATED
  * @deprecated
  */
 const MYSQLI_DATA_TRUNCATED = UNKNOWN;
-#endif
 
 /* reporting */
 /**
@@ -499,22 +478,18 @@ const MYSQLI_SERVER_QUERY_NO_GOOD_INDEX_USED = UNKNOWN;
  * @deprecated
  */
 const MYSQLI_SERVER_QUERY_NO_INDEX_USED = UNKNOWN;
-#ifdef SERVER_QUERY_WAS_SLOW
 /**
  * @var int
  * @cvalue SERVER_QUERY_WAS_SLOW
  * @deprecated
  */
 const MYSQLI_SERVER_QUERY_WAS_SLOW = UNKNOWN;
-#endif
-#ifdef SERVER_PS_OUT_PARAMS
 /**
  * @var int
  * @cvalue SERVER_PS_OUT_PARAMS
  * @deprecated
  */
 const MYSQLI_SERVER_PS_OUT_PARAMS = UNKNOWN;
-#endif
 
 /**
  * @var int
@@ -570,14 +545,12 @@ const MYSQLI_REFRESH_SLAVE = UNKNOWN;
  * @deprecated
  */
 const MYSQLI_REFRESH_MASTER = UNKNOWN;
-#ifdef REFRESH_BACKUP_LOG
 /**
  * @var int
  * @cvalue REFRESH_BACKUP_LOG
  * @deprecated
  */
 const MYSQLI_REFRESH_BACKUP_LOG = UNKNOWN;
-#endif
 
 /**
  * @var int

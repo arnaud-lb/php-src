@@ -19,7 +19,6 @@
 #define PHP_HASH_SHA_H
 
 #include "ext/standard/sha1.h"
-#include "ext/standard/basic_functions.h"
 
 /* SHA224 context. */
 typedef struct {
@@ -62,7 +61,9 @@ void SHA256_Transform_sse2(uint32_t state[PHP_STATIC_RESTRICT 8], const uint8_t 
 # elif defined(HAVE_FUNC_ATTRIBUTE_TARGET)
 #  define PHP_HASH_INTRIN_SHA_RESOLVER 1
 # endif
+#endif
 
+#if defined(PHP_HASH_INTRIN_SHA_NATIVE) || defined(PHP_HASH_INTRIN_SHA_RESOLVER)
 void SHA256_Transform_shani(uint32_t state[PHP_STATIC_RESTRICT 8], const uint8_t block[PHP_STATIC_RESTRICT 64]);
 #endif
 

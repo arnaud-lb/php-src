@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: dcdacf23e3445748178066972e101cbe0ebd6ad5 */
+ * Stub hash: 08677a3dd11366b55a1c539475adead74109595e */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_MASK_EX(arginfo_socket_select, 0, 4, MAY_BE_LONG|MAY_BE_FALSE)
 	ZEND_ARG_TYPE_INFO(1, read, IS_ARRAY, 1)
@@ -424,6 +424,9 @@ static void register_sockets_symbols(int module_number)
 	REGISTER_LONG_CONSTANT("SO_ERROR", SO_ERROR, CONST_PERSISTENT);
 #if defined(SO_BINDTODEVICE)
 	REGISTER_LONG_CONSTANT("SO_BINDTODEVICE", SO_BINDTODEVICE, CONST_PERSISTENT);
+#endif
+#if defined(SO_BINDTOIFINDEX)
+	REGISTER_LONG_CONSTANT("SO_BINDTOIFINDEX", SO_BINDTOIFINDEX, CONST_PERSISTENT);
 #endif
 #if defined(SO_USER_COOKIE)
 	REGISTER_LONG_CONSTANT("SO_LABEL", SO_LABEL, CONST_PERSISTENT);
@@ -1087,8 +1090,7 @@ static zend_class_entry *register_class_Socket(void)
 	zend_class_entry ce, *class_entry;
 
 	INIT_CLASS_ENTRY(ce, "Socket", class_Socket_methods);
-	class_entry = zend_register_internal_class_ex(&ce, NULL);
-	class_entry->ce_flags |= ZEND_ACC_FINAL|ZEND_ACC_NO_DYNAMIC_PROPERTIES|ZEND_ACC_NOT_SERIALIZABLE;
+	class_entry = zend_register_internal_class_with_flags(&ce, NULL, ZEND_ACC_FINAL|ZEND_ACC_NO_DYNAMIC_PROPERTIES|ZEND_ACC_NOT_SERIALIZABLE);
 
 	return class_entry;
 }
@@ -1098,8 +1100,7 @@ static zend_class_entry *register_class_AddressInfo(void)
 	zend_class_entry ce, *class_entry;
 
 	INIT_CLASS_ENTRY(ce, "AddressInfo", class_AddressInfo_methods);
-	class_entry = zend_register_internal_class_ex(&ce, NULL);
-	class_entry->ce_flags |= ZEND_ACC_FINAL|ZEND_ACC_NO_DYNAMIC_PROPERTIES|ZEND_ACC_NOT_SERIALIZABLE;
+	class_entry = zend_register_internal_class_with_flags(&ce, NULL, ZEND_ACC_FINAL|ZEND_ACC_NO_DYNAMIC_PROPERTIES|ZEND_ACC_NOT_SERIALIZABLE);
 
 	return class_entry;
 }

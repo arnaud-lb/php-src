@@ -1,9 +1,91 @@
 PHP                                                                        NEWS
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
-?? ??? ????, PHP 8.4.0beta2
+?? ??? ????, PHP 8.4.0beta5
+
+- DOM:
+  . Fixed bug GH-13988 (Storing DOMElement consume 4 times more memory in
+    PHP 8.1 than in PHP 8.0). (nielsdos)
+
+27 Aug 2024, PHP 8.4.0beta4
+
+- Core:
+  . Fixed bug GH-15408 (MSan false-positve on zend_max_execution_timer).
+    (zeriyoshi)
+  . Fixed bug GH-15438 (Hooks on constructor promoted properties without
+    visibility are ignored). (ilutov)
+  . Fixed bug GH-15419 (Missing readonly+hook incompatibility check for readonly
+    classes). (ilutov)
+  . Fixed bug GH-15187 (Various hooked object iterator issues). (ilutov)
+  . Fixed bug GH-15456 (Crash in get_class_vars() on virtual properties).
+    (ilutov)
+  . Fixed bug GH-15501 (Windows HAVE_<header>_H macros defined to 1 or
+    undefined). (Peter Kokot)
+  . Fixed bug GH-15565 (--disable-ipv6 during compilation produces error
+    EAI_SYSTEM not found). (nielsdos)
+  . Implemented asymmetric visibility for properties. (ilutov)
+
+- Date:
+  . Fixed bug GH-13773 (DatePeriod not taking into account microseconds for end
+    date). (Mark Bennewitz, Derick)
+
+- DOM:
+  . Fixed bug GH-15551 (Segmentation fault (access null pointer) in
+    ext/dom/xml_common.h). (nielsdos)
+  . Fixed bug GH-15570 (Segmentation fault (access null pointer) in
+    ext/dom/html5_serializer.c). (nielsdos)
+
+- FPM:
+  . Added memory peak to the scoreboard / status page. (Flávio Heleno)
+
+- MySQLnd:
+  . Fixed bug GH-15432 (Heap corruption when querying a vector). (cmb,
+    Kamil Tekiela)
+
+- Opcache:
+  . Fixed bug GH-15490 (Building of callgraph modifies preloaded symbols).
+    (ilutov)
+  . Fixed bug GH-15178 (Assertion in tracing JIT on hooks). (ilutov)
+
+- PDO_MYSQL:
+  . mysqlnd: support ER_CLIENT_INTERACTION_TIMEOUT. (Appla)
+
+- Session:
+  . Emit warnings for non-positive values of session.gc_divisor and negative values
+    of session.gc_probability. (Jorg Sowa)
+
+- Standard:
+  . The "allowed_classes" option for unserialize() now throws TypeErrors and
+    ValueErrors	if it is not an	array of class names. (Girgias)
+
+- Streams:
+  . Fixed bug GH-14930 (Custom stream wrapper dir_readdir output truncated to
+    255 characters in PHP 8.3). (Joe Cai)
+
+
+15 Aug 2024, PHP 8.4.0beta3
 
 - Core:
   . Exiting a namespace now clears seen symbols. (ilutov)
+  . The exit (and die) language constructs now behave more like a function.
+    They can be passed liked callables, are affected by the strict_types
+    declare statement, and now perform the usual type coercions instead of
+    casting any non-integer value to a string.
+    As such, passing invalid types to exit/die may now result in a TypeError
+    being thrown. (Girgias)
+
+- CURL:
+  . Added CURLOPT_TCP_KEEPCNT to set the number of probes to send before
+    dropping the connection. (David Carlier)
+
+- Hash:
+  . Fix GH-15384 (Build fails on Alpine / Musl for amd64). (timwolla)
+
+- Sockets:
+  . Added SO_BINDTOIFINDEX to bind a socket to an interface index.
+    (David Carlier)
+
+- Standard:
+  . php_uname() now throws ValueErrors on invalid inputs. (Girgias)
 
 15 Aug 2024, PHP 8.4.0beta1
 
@@ -398,7 +480,7 @@ PHP                                                                        NEWS
 
 - PCNTL:
   . Added pcntl_setns for Linux. (David Carlier)
-  . Added pcntl_getaffinity/pcntl_setaffinity. (David Carlier)
+  . Added pcntl_getcpuaffinity/pcntl_setcpuaffinity. (David Carlier)
   . Updated pcntl_get_signal_handler signal id upper limit to be
     more in line with platforms limits. (David Carlier)
   . Added pcntl_getcpu for Linux/FreeBSD/Solaris/Illumos. (David Carlier)

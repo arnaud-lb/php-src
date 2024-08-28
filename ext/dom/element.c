@@ -182,7 +182,7 @@ URL: https://dom.spec.whatwg.org/#dom-element-classlist
 */
 zend_result dom_element_class_list_read(dom_object *obj, zval *retval)
 {
-	const uint32_t PROP_INDEX = 20;
+	const uint32_t PROP_INDEX = 0;
 
 #if ZEND_DEBUG
 	zend_string *class_list_str = ZSTR_INIT_LITERAL("classList", false);
@@ -411,7 +411,7 @@ PHP_METHOD(DOMElement, setAttribute)
 	}
 
 	if (name_len == 0) {
-		zend_argument_value_error(1, "cannot be empty");
+		zend_argument_must_not_be_empty_error(1);
 		RETURN_THROWS();
 	}
 
@@ -903,7 +903,7 @@ PHP_METHOD(DOMElement, getAttributeNS)
 static void dom_set_attribute_ns_legacy(dom_object *intern, xmlNodePtr elemp, char *uri, size_t uri_len, char *name, size_t name_len, const char *value)
 {
 	if (name_len == 0) {
-		zend_argument_value_error(2, "cannot be empty");
+		zend_argument_must_not_be_empty_error(2);
 		return;
 	}
 

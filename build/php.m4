@@ -128,8 +128,23 @@ AC_DEFUN([PHP_INIT_BUILD_SYSTEM],
 php_shtool=$srcdir/build/shtool
 T_MD=$($php_shtool echo -n -e %B)
 T_ME=$($php_shtool echo -n -e %b)
+
+dnl Create empty Makefile placeholders.
 > Makefile.objects
 > Makefile.fragments
+
+dnl Mark whether the CFLAGS are set to automatic default value by Autoconf, or
+dnl they are manually modified by the environment variable from outside. E.g.
+dnl './configure CFLAGS=...'. Set this before the AC_PROG_CC, where Autoconf
+dnl adjusts the CFLAGS variable, so the checks can modify CFLAGS.
+AS_VAR_IF([CFLAGS],, [auto_cflags=1])
+
+dnl Required programs.
+PHP_PROG_AWK
+
+abs_srcdir=$(cd $srcdir && pwd)
+abs_builddir=$(pwd)
+
 dnl Run at the end of the configuration, before creating the config.status.
 AC_CONFIG_COMMANDS_PRE(
 [dnl Directory for storing shared objects of extensions.
@@ -986,7 +1001,10 @@ dnl $1 = name of extension, $2 = extension upon which it depends
 dnl $3 = optional: if true, it's ok for $2 to have not been configured default
 dnl is false and should halt the build. To be effective, this macro must be
 dnl invoked *after* PHP_NEW_EXTENSION. The extension on which it depends must
-dnl also have been configured. See ADD_EXTENSION_DEP in win32 build.
+dnl also have been configured. Due to the limited genif.sh parsing and regex
+dnl matching implementation, this macro must be called on its own line, and its
+dnl arguments must be passed unquoted (without Autoconf '[' and ']' characters.
+dnl For Windows, see 'ADD_EXTENSION_DEP' in the win32 build.
 dnl
 AC_DEFUN([PHP_ADD_EXTENSION_DEP], [
   am_i_shared=$[PHP_]translit($1,a-z_-,A-Z__)[_SHARED]
@@ -1721,82 +1739,57 @@ dnl
 AC_DEFUN([PHP_PROG_RE2C],[
   AC_CHECK_PROG([RE2C], [re2c], [re2c])
 
-  ifelse($1,,php_re2c_required_version='',php_re2c_required_version="$1")
-
-  if test -n "$RE2C"; then
+  php_re2c_check=
+  AS_VAR_IF([RE2C],,, [
     AC_MSG_CHECKING([for re2c version])
 
     php_re2c_version=$($RE2C --version | cut -d ' ' -f 2 2>/dev/null)
-    if test -z "$php_re2c_version"; then
-      php_re2c_version=0.0.0
-    fi
-    ac_IFS=$IFS; IFS="."
-    set $php_re2c_version
-    IFS=$ac_IFS
-    php_re2c_num=`expr [$]{1:-0} \* 10000 + [$]{2:-0} \* 100 + [$]{3:-0}`
+
     php_re2c_check=ok
+    AS_VERSION_COMPARE([$php_re2c_version], [$1],
+      [php_re2c_check=invalid])
 
-    if test -z "$php_re2c_required_version" && test -z "$php_re2c_num"; then
-      php_re2c_check=invalid
-    elif test -n "$php_re2c_required_version"; then
-      ac_IFS=$IFS; IFS="."
-      set $php_re2c_required_version
-      IFS=$ac_IFS
-      php_re2c_required_num=`expr [$]{1:-0} \* 10000 + [$]{2:-0} \* 100 + [$]{3:-0}`
-      php_re2c_required_version="$php_re2c_required_version or later"
+    AS_VAR_IF([php_re2c_check], [invalid],
+      [AC_MSG_RESULT([$php_re2c_version (too old)])],
+      [AC_MSG_RESULT([$php_re2c_version (ok)])])
+  ])
 
-      if test -z "$php_re2c_num" || test "$php_re2c_num" -lt "$php_re2c_required_num"; then
-        php_re2c_check=invalid
-      fi
-    fi
-
-    if test "$php_re2c_check" != "invalid"; then
-      AC_MSG_RESULT([$php_re2c_version (ok)])
-    else
-      AC_MSG_RESULT([$php_re2c_version (too old)])
-    fi
-  fi
-
-  case $php_re2c_check in
-    ""|invalid[)]
-      if test ! -f "$abs_srcdir/Zend/zend_language_scanner.c"; then
+  AS_CASE([$php_re2c_check],
+    [""|invalid], [
+      AS_IF([test ! -f "$abs_srcdir/Zend/zend_language_scanner.c"], [
         AC_MSG_ERROR(m4_text_wrap([
-          re2c $php_re2c_required_version or newer is required to generate PHP
-          lexers.
+          re2c $1 or newer is required to generate PHP lexers.
         ]))
-      fi
+      ])
 
       RE2C="exit 0;"
-      ;;
-  esac
+    ])
 
   PHP_SUBST([RE2C])
   AS_VAR_SET([RE2C_FLAGS], m4_normalize(["$2"]))
   PHP_SUBST([RE2C_FLAGS])
 ])
 
-AC_DEFUN([PHP_PROG_PHP],[
-  AC_CHECK_PROG([PHP], [php], [php])
-
-  if test -n "$PHP"; then
-    AC_MSG_CHECKING([for php version])
-    php_version=$($PHP -v | head -n1 | cut -d ' ' -f 2 | cut -d '-' -f 1)
-    if test -z "$php_version"; then
-      php_version=0.0.0
-    fi
-    ac_IFS=$IFS; IFS="."
-    set $php_version
-    IFS=$ac_IFS
-    php_version_num=`expr [$]{1:-0} \* 10000 + [$]{2:-0} \* 100 + [$]{3:-0}`
-    dnl Minimum supported version for gen_stub.php is PHP 7.4.
-    if test "$php_version_num" -lt 70400; then
-      AC_MSG_RESULT([$php_version (too old)])
-      unset PHP
-    else
-      AC_MSG_RESULT([$php_version (ok)])
-    fi
-  fi
-  PHP_SUBST([PHP])
+dnl
+dnl PHP_PROG_PHP([min-version])
+dnl
+dnl Find PHP command-line interface SAPI on the system and check if version is
+dnl greater or equal to "min-version". If suitable version is found, the PHP
+dnl variable is set and substituted to a Makefile variable. Used for generating
+dnl files and running PHP utilities during the build.
+dnl
+AC_DEFUN([PHP_PROG_PHP],
+[m4_if([$1],, [php_required_version=7.4], [php_required_version=$1])
+AC_CHECK_PROG([PHP], [php], [php])
+AS_VAR_IF([PHP],,, [
+AC_MSG_CHECKING([for php version])
+php_version=$($PHP -v | head -n1 | cut -d ' ' -f 2)
+AS_VERSION_COMPARE([$php_version], [$php_required_version], [unset PHP])
+AS_VAR_IF([PHP],,
+  [AC_MSG_RESULT([$php_version (too old, install $php_required_version or later)])],
+  [AC_MSG_RESULT([$php_version (ok)])])
+])
+PHP_SUBST([PHP])
 ])
 
 dnl ----------------------------------------------------------------------------
@@ -1919,7 +1912,7 @@ dnl
 dnl Common setup macro for libxml.
 dnl
 AC_DEFUN([PHP_SETUP_LIBXML], [
-  PKG_CHECK_MODULES([LIBXML], [libxml-2.0 >= 2.9.0])
+  PKG_CHECK_MODULES([LIBXML], [libxml-2.0 >= 2.9.4])
   PHP_EVAL_INCLINE([$LIBXML_CFLAGS])
   PHP_EVAL_LIBLINE([$LIBXML_LIBS], [$1])
   $2
