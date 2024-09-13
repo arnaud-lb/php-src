@@ -124,7 +124,7 @@ ZEND_API bool zend_verify_internal_return_type(zend_function *zf, zval *ret);
 		: (ref)->sources.ptr)
 
 
-ZEND_API void ZEND_FASTCALL zend_ref_add_type_source(zend_property_info_source_list *source_list, zend_property_info *prop);
+ZEND_API void ZEND_FASTCALL zend_ref_add_type_source(zend_property_info_source_list *source_list, const zend_property_info *prop);
 ZEND_API void ZEND_FASTCALL zend_ref_del_type_source(zend_property_info_source_list *source_list, const zend_property_info *prop);
 
 ZEND_API zval* zend_assign_to_typed_ref(zval *variable_ptr, zval *value, uint8_t value_type, bool strict);
@@ -521,7 +521,7 @@ ZEND_COLD void zend_magic_get_property_type_inconsistency_error(const zend_prope
 
 #define ZEND_REF_FOREACH_TYPE_SOURCES(ref, prop) do { \
 		zend_property_info_source_list *_source_list = &ZEND_REF_TYPE_SOURCES(ref); \
-		zend_property_info **_prop, **_end; \
+		const zend_property_info **_prop, **_end; \
 		zend_property_info_list *_list; \
 		if (_source_list->ptr) { \
 			if (ZEND_PROPERTY_INFO_SOURCE_IS_LIST(_source_list->list)) { \

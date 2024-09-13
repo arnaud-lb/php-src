@@ -700,7 +700,7 @@ static bool zend_call_get_hook(
 	return true;
 }
 
-ZEND_API zval *zend_std_read_property(zend_object *zobj, zend_string *name, int type, void **cache_slot, zval *rv) /* {{{ */
+ZEND_API zval *zend_std_read_property(zend_object *zobj, zend_string *name, int type, void **cache_slot, zval *rv, const zend_property_info **prop_info_p) /* {{{ */
 {
 	zval *retval;
 	uintptr_t property_offset;
@@ -713,6 +713,9 @@ ZEND_API zval *zend_std_read_property(zend_object *zobj, zend_string *name, int 
 
 	/* make zend_get_property_info silent if we have getter - we may want to use it */
 	property_offset = zend_get_property_offset(zobj->ce, name, (type == BP_VAR_IS) || (zobj->ce->__get != NULL), cache_slot, &prop_info);
+	if (prop_info_p) {
+		*prop_info_p = prop_info;
+	}
 
 	if (EXPECTED(IS_VALID_PROPERTY_OFFSET(property_offset))) {
 try_again:
@@ -931,7 +934,7 @@ uninit_error:
 				goto exit;
 			}
 
-			return zend_std_read_property(zobj, name, type, cache_slot, rv);
+			return zend_std_read_property(zobj, name, type, cache_slot, rv, prop_info_p);
 		}
 	}
 	if (type != BP_VAR_IS) {
@@ -1302,7 +1305,7 @@ ZEND_API int zend_std_has_dimension(zend_object *object, zval *offset, int check
 }
 /* }}} */
 
-ZEND_API zval *zend_std_get_property_ptr_ptr(zend_object *zobj, zend_string *name, int type, void **cache_slot) /* {{{ */
+ZEND_API zval *zend_std_get_property_ptr_ptr(zend_object *zobj, zend_string *name, int type, void **cache_slot, const zend_property_info **prop_info_p) /* {{{ */
 {
 	zval *retval = NULL;
 	uintptr_t property_offset;
@@ -1313,6 +1316,9 @@ ZEND_API zval *zend_std_get_property_ptr_ptr(zend_object *zobj, zend_string *nam
 #endif
 
 	property_offset = zend_get_property_offset(zobj->ce, name, (zobj->ce->__get != NULL), cache_slot, &prop_info);
+	if (prop_info_p) {
+		*prop_info_p = prop_info;
+	}
 
 	if (EXPECTED(IS_VALID_PROPERTY_OFFSET(property_offset))) {
 		retval = OBJ_PROP(zobj, property_offset);
@@ -1326,7 +1332,7 @@ ZEND_API zval *zend_std_get_property_ptr_ptr(zend_object *zobj, zend_string *nam
 						return &EG(error_zval);
 					}
 
-					return zend_std_get_property_ptr_ptr(zobj, name, type, cache_slot);
+					return zend_std_get_property_ptr_ptr(zobj, name, type, cache_slot, prop_info_p);
 				}
 				if (UNEXPECTED(type == BP_VAR_RW || type == BP_VAR_R)) {
 					if (prop_info) {
@@ -1384,7 +1390,7 @@ ZEND_API zval *zend_std_get_property_ptr_ptr(zend_object *zobj, zend_string *nam
 					return &EG(error_zval);
 				}
 
-				return zend_std_get_property_ptr_ptr(zobj, name, type, cache_slot);
+				return zend_std_get_property_ptr_ptr(zobj, name, type, cache_slot, prop_info_p);
 			}
 			if (UNEXPECTED(!zobj->properties)) {
 				rebuild_object_properties_internal(zobj);
@@ -1653,7 +1659,7 @@ static ZEND_FUNCTION(zend_parent_hook_get_trampoline)
 	}
 
 	zval rv;
-	zval *retval = obj->handlers->read_property(obj, prop_name, BP_VAR_R, NULL, &rv);
+	zval *retval = obj->handlers->read_property(obj, prop_name, BP_VAR_R, NULL, &rv, NULL);
 	if (retval == &rv) {
 		RETVAL_COPY_VALUE(retval);
 	} else {

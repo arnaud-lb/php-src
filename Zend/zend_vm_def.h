@@ -1012,9 +1012,8 @@ ZEND_VM_HANDLER(28, ZEND_ASSIGN_OBJ_OP, VAR|UNUSED|THIS|CV, CONST|TMPVAR|CV, OP)
 	zval *property;
 	zval *value;
 	zval *zptr;
-	void *_cache_slot[3] = {0};
 	void **cache_slot;
-	zend_property_info *prop_info;
+	const zend_property_info *prop_info;
 	zend_object *zobj;
 	zend_string *name, *tmp_name;
 
@@ -1050,8 +1049,8 @@ ZEND_VM_C_LABEL(assign_op_object):
 				break;
 			}
 		}
-		cache_slot = (OP2_TYPE == IS_CONST) ? CACHE_ADDR((opline+1)->extended_value) : _cache_slot;
-		if (EXPECTED((zptr = zobj->handlers->get_property_ptr_ptr(zobj, name, BP_VAR_RW, cache_slot)) != NULL)) {
+		cache_slot = (OP2_TYPE == IS_CONST) ? CACHE_ADDR((opline+1)->extended_value) : NULL;
+		if (EXPECTED((zptr = zobj->handlers->get_property_ptr_ptr(zobj, name, BP_VAR_RW, cache_slot, &prop_info)) != NULL)) {
 			if (UNEXPECTED(Z_ISERROR_P(zptr))) {
 				if (UNEXPECTED(RETURN_VALUE_USED(opline))) {
 					ZVAL_NULL(EX_VAR(opline->result.var));
@@ -1069,7 +1068,6 @@ ZEND_VM_C_LABEL(assign_op_object):
 						}
 					}
 
-					prop_info = (zend_property_info*)CACHED_PTR_EX(cache_slot + 2);
 					if (prop_info) {
 						/* special case for typed properties */
 						zend_binary_assign_op_typed_prop(prop_info, zptr, value OPLINE_CC EXECUTE_DATA_CC);
@@ -1282,9 +1280,8 @@ ZEND_VM_HANDLER(132, ZEND_PRE_INC_OBJ, VAR|UNUSED|THIS|CV, CONST|TMPVAR|CV, CACH
 	zval *object;
 	zval *property;
 	zval *zptr;
-	void *_cache_slot[3] = {0};
 	void **cache_slot;
-	zend_property_info *prop_info;
+	const zend_property_info *prop_info;
 	zend_object *zobj;
 	zend_string *name, *tmp_name;
 
@@ -1318,14 +1315,13 @@ ZEND_VM_C_LABEL(pre_incdec_object):
 				break;
 			}
 		}
-		cache_slot = (OP2_TYPE == IS_CONST) ? CACHE_ADDR(opline->extended_value) : _cache_slot;
-		if (EXPECTED((zptr = zobj->handlers->get_property_ptr_ptr(zobj, name, BP_VAR_RW, cache_slot)) != NULL)) {
+		cache_slot = (OP2_TYPE == IS_CONST) ? CACHE_ADDR(opline->extended_value) : NULL;
+		if (EXPECTED((zptr = zobj->handlers->get_property_ptr_ptr(zobj, name, BP_VAR_RW, cache_slot, &prop_info)) != NULL)) {
 			if (UNEXPECTED(Z_ISERROR_P(zptr))) {
 				if (UNEXPECTED(RETURN_VALUE_USED(opline))) {
 					ZVAL_NULL(EX_VAR(opline->result.var));
 				}
 			} else {
-				prop_info = (zend_property_info *) CACHED_PTR_EX(cache_slot + 2);
 				zend_pre_incdec_property_zval(zptr, prop_info OPLINE_CC EXECUTE_DATA_CC);
 			}
 		} else {
@@ -1352,9 +1348,8 @@ ZEND_VM_HANDLER(134, ZEND_POST_INC_OBJ, VAR|UNUSED|THIS|CV, CONST|TMPVAR|CV, CAC
 	zval *object;
 	zval *property;
 	zval *zptr;
-	void *_cache_slot[3] = {0};
 	void **cache_slot;
-	zend_property_info *prop_info;
+	const zend_property_info *prop_info;
 	zend_object *zobj;
 	zend_string *name, *tmp_name;
 
@@ -1388,12 +1383,11 @@ ZEND_VM_C_LABEL(post_incdec_object):
 				break;
 			}
 		}
-		cache_slot = (OP2_TYPE == IS_CONST) ? CACHE_ADDR(opline->extended_value) : _cache_slot;
-		if (EXPECTED((zptr = zobj->handlers->get_property_ptr_ptr(zobj, name, BP_VAR_RW, cache_slot)) != NULL)) {
+		cache_slot = (OP2_TYPE == IS_CONST) ? CACHE_ADDR(opline->extended_value) : NULL;
+		if (EXPECTED((zptr = zobj->handlers->get_property_ptr_ptr(zobj, name, BP_VAR_RW, cache_slot, &prop_info)) != NULL)) {
 			if (UNEXPECTED(Z_ISERROR_P(zptr))) {
 				ZVAL_NULL(EX_VAR(opline->result.var));
 			} else {
-				prop_info = (zend_property_info*)CACHED_PTR_EX(cache_slot + 2);
 				zend_post_incdec_property_zval(zptr, prop_info OPLINE_CC EXECUTE_DATA_CC);
 			}
 		} else {
@@ -2166,7 +2160,7 @@ ZEND_VM_C_LABEL(fetch_obj_r_fast_copy):
 			prop_info = zend_get_property_info(zobj->ce, name, /* silent */ true);
 		}
 #endif
-		retval = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, EX_VAR(opline->result.var));
+		retval = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, EX_VAR(opline->result.var), NULL);
 #if ZEND_DEBUG
 		if (!EG(exception) && prop_info && prop_info != ZEND_WRONG_PROPERTY_INFO
 				&& ZEND_TYPE_IS_SET(prop_info->type)) {
@@ -2332,7 +2326,7 @@ ZEND_VM_C_LABEL(fetch_obj_is_fast_copy):
 			}
 		}
 
-		retval = zobj->handlers->read_property(zobj, name, BP_VAR_IS, cache_slot, EX_VAR(opline->result.var));
+		retval = zobj->handlers->read_property(zobj, name, BP_VAR_IS, cache_slot, EX_VAR(opline->result.var), NULL);
 
 		if (OP2_TYPE != IS_CONST) {
 			zend_tmp_string_release(tmp_name);

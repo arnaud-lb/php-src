@@ -14,6 +14,7 @@
    +----------------------------------------------------------------------+
 */
 
+#include "zend_compile.h"
 #ifdef HAVE_CONFIG_H
 # include "config.h"
 #endif
@@ -801,7 +802,7 @@ static HashTable *spl_array_get_gc(zend_object *obj, zval **gc_data, int *gc_dat
 }
 /* }}} */
 
-static zval *spl_array_read_property(zend_object *object, zend_string *name, int type, void **cache_slot, zval *rv) /* {{{ */
+static zval *spl_array_read_property(zend_object *object, zend_string *name, int type, void **cache_slot, zval *rv, const zend_property_info **prop_info_p) /* {{{ */
 {
 	spl_array_object *intern = spl_array_from_obj(object);
 
@@ -809,9 +810,12 @@ static zval *spl_array_read_property(zend_object *object, zend_string *name, int
 		&& !zend_std_has_property(object, name, ZEND_PROPERTY_EXISTS, NULL)) {
 		zval member;
 		ZVAL_STR(&member, name);
+		if (prop_info_p) {
+			*prop_info_p = NULL;
+		}
 		return spl_array_read_dimension(object, &member, type, rv);
 	}
-	return zend_std_read_property(object, name, type, cache_slot, rv);
+	return zend_std_read_property(object, name, type, cache_slot, rv, prop_info_p);
 } /* }}} */
 
 static zval *spl_array_write_property(zend_object *object, zend_string *name, zval *value, void **cache_slot) /* {{{ */
@@ -828,7 +832,7 @@ static zval *spl_array_write_property(zend_object *object, zend_string *name, zv
 	return zend_std_write_property(object, name, value, cache_slot);
 } /* }}} */
 
-static zval *spl_array_get_property_ptr_ptr(zend_object *object, zend_string *name, int type, void **cache_slot) /* {{{ */
+static zval *spl_array_get_property_ptr_ptr(zend_object *object, zend_string *name, int type, void **cache_slot, const zend_property_info **prop_info_p) /* {{{ */
 {
 	spl_array_object *intern = spl_array_from_obj(object);
 
@@ -841,9 +845,12 @@ static zval *spl_array_get_property_ptr_ptr(zend_object *object, zend_string *na
 			return NULL;
 		}
 		ZVAL_STR(&member, name);
+		if (prop_info_p) {
+			*prop_info_p = NULL;
+		}
 		return spl_array_get_dimension_ptr(1, intern, object->ce->name, &member, type);
 	}
-	return zend_std_get_property_ptr_ptr(object, name, type, cache_slot);
+	return zend_std_get_property_ptr_ptr(object, name, type, cache_slot, prop_info_p);
 } /* }}} */
 
 static int spl_array_has_property(zend_object *object, zend_string *name, int has_set_exists, void **cache_slot) /* {{{ */

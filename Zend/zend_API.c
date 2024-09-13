@@ -5184,7 +5184,7 @@ ZEND_API zval *zend_read_property_ex(zend_class_entry *scope, zend_object *objec
 
 	EG(fake_scope) = scope;
 
-	value = object->handlers->read_property(object, name, silent?BP_VAR_IS:BP_VAR_R, NULL, rv);
+	value = object->handlers->read_property(object, name, silent?BP_VAR_IS:BP_VAR_R, NULL, rv, NULL);
 
 	EG(fake_scope) = old_scope;
 	return value;

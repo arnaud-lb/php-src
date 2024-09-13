@@ -81,7 +81,7 @@ struct _zend_property_info;
 
 
 /* Used to fetch property from the object, read-only */
-typedef zval *(*zend_object_read_property_t)(zend_object *object, zend_string *member, int type, void **cache_slot, zval *rv);
+typedef zval *(*zend_object_read_property_t)(zend_object *object, zend_string *member, int type, void **cache_slot, zval *rv, const zend_property_info **prop_info_p);
 
 /* Used to fetch dimension from the object, read-only */
 typedef zval *(*zend_object_read_dimension_t)(zend_object *object, zval *offset, int type, zval *rv);
@@ -103,7 +103,7 @@ typedef void (*zend_object_write_dimension_t)(zend_object *object, zval *offset,
  *  * NULL, if acquiring a direct pointer is not possible.
  *    In this case, the VM will fall back to using read_property and write_property.
  */
-typedef zval *(*zend_object_get_property_ptr_ptr_t)(zend_object *object, zend_string *member, int type, void **cache_slot);
+typedef zval *(*zend_object_get_property_ptr_ptr_t)(zend_object *object, zend_string *member, int type, void **cache_slot, const zend_property_info **prop_info_p);
 
 /* Used to check if a property of the object exists */
 /* param has_set_exists:
@@ -257,8 +257,8 @@ ZEND_API HashTable *zend_get_properties_no_lazy_init(zend_object *zobj);
 ZEND_API HashTable *zend_std_get_gc(zend_object *object, zval **table, int *n);
 ZEND_API HashTable *zend_std_get_debug_info(zend_object *object, int *is_temp);
 ZEND_API zend_result zend_std_cast_object_tostring(zend_object *object, zval *writeobj, int type);
-ZEND_API zval *zend_std_get_property_ptr_ptr(zend_object *object, zend_string *member, int type, void **cache_slot);
-ZEND_API zval *zend_std_read_property(zend_object *object, zend_string *member, int type, void **cache_slot, zval *rv);
+ZEND_API zval *zend_std_get_property_ptr_ptr(zend_object *object, zend_string *member, int type, void **cache_slot, const zend_property_info **prop_info_p);
+ZEND_API zval *zend_std_read_property(zend_object *object, zend_string *member, int type, void **cache_slot, zval *rv, const zend_property_info **prop_info_p);
 ZEND_API zval *zend_std_write_property(zend_object *object, zend_string *member, zval *value, void **cache_slot);
 ZEND_API int zend_std_has_property(zend_object *object, zend_string *member, int has_set_exists, void **cache_slot);
 ZEND_API void zend_std_unset_property(zend_object *object, zend_string *member, void **cache_slot);

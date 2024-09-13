@@ -1846,7 +1846,7 @@ static void ZEND_FASTCALL zend_jit_fetch_obj_r_slow(zend_object *zobj)
 	zval *result = EX_VAR(opline->result.var);
 	void **cache_slot = CACHE_ADDR(opline->extended_value & ~ZEND_FETCH_OBJ_FLAGS);
 
-	retval = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, result);
+	retval = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, result, NULL);
 	if (retval != result) {
 		ZVAL_COPY_DEREF(result, retval);
 	} else if (UNEXPECTED(Z_ISREF_P(retval))) {
@@ -1902,7 +1902,7 @@ static void ZEND_FASTCALL zend_jit_fetch_obj_is_slow(zend_object *zobj)
 	zval *result = EX_VAR(opline->result.var);
 	void **cache_slot = CACHE_ADDR(opline->extended_value & ~ZEND_FETCH_OBJ_FLAGS);
 
-	retval = zobj->handlers->read_property(zobj, name, BP_VAR_IS, cache_slot, result);
+	retval = zobj->handlers->read_property(zobj, name, BP_VAR_IS, cache_slot, result, NULL);
 	if (retval != result) {
 		ZVAL_COPY_DEREF(result, retval);
 	} else if (UNEXPECTED(Z_ISREF_P(retval))) {
@@ -1958,7 +1958,7 @@ static zval* ZEND_FASTCALL zend_jit_fetch_obj_r_slow_ex(zend_object *zobj)
 	zval *result = EX_VAR(opline->result.var);
 	void **cache_slot = CACHE_ADDR(opline->extended_value & ~ZEND_FETCH_OBJ_FLAGS);
 
-	retval = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, result);
+	retval = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, result, NULL);
 	if (retval == result && UNEXPECTED(Z_ISREF_P(retval))) {
 		zend_unwrap_reference(retval);
 	}
@@ -2010,7 +2010,7 @@ static zval* ZEND_FASTCALL zend_jit_fetch_obj_is_slow_ex(zend_object *zobj)
 	zval *result = EX_VAR(opline->result.var);
 	void **cache_slot = CACHE_ADDR(opline->extended_value & ~ZEND_FETCH_OBJ_FLAGS);
 
-	retval = zobj->handlers->read_property(zobj, name, BP_VAR_IS, cache_slot, result);
+	retval = zobj->handlers->read_property(zobj, name, BP_VAR_IS, cache_slot, result, NULL);
 	if (retval == result && UNEXPECTED(Z_ISREF_P(retval))) {
 		zend_unwrap_reference(retval);
 	}
@@ -2134,9 +2134,9 @@ static void ZEND_FASTCALL zend_jit_fetch_obj_w_slow(zend_object *zobj)
 	void **cache_slot = CACHE_ADDR(opline->extended_value & ~ZEND_FETCH_OBJ_FLAGS);
 	ZEND_ASSERT(cache_slot);
 
-	retval = zobj->handlers->get_property_ptr_ptr(zobj, name, BP_VAR_W, cache_slot);
+	retval = zobj->handlers->get_property_ptr_ptr(zobj, name, BP_VAR_W, cache_slot, NULL);
 	if (NULL == retval) {
-		retval = zobj->handlers->read_property(zobj, name, BP_VAR_W, cache_slot, result);
+		retval = zobj->handlers->read_property(zobj, name, BP_VAR_W, cache_slot, result, NULL);
 		if (retval == result) {
 			if (UNEXPECTED(Z_ISREF_P(retval) && Z_REFCOUNT_P(retval) == 1)) {
 				ZVAL_UNREF(retval);
@@ -2310,9 +2310,9 @@ static zval* ZEND_FASTCALL zend_jit_assign_cv_to_typed_ref2(zend_reference *ref,
 	return zend_jit_assign_to_typed_ref2_helper(ref, value, result, IS_CV);
 }
 
-static zend_property_info *zend_jit_get_prop_not_accepting_double(zend_reference *ref)
+static const zend_property_info *zend_jit_get_prop_not_accepting_double(zend_reference *ref)
 {
-	zend_property_info *prop;
+	const zend_property_info *prop;
 	ZEND_REF_FOREACH_TYPE_SOURCES(ref, prop) {
 		if (!(ZEND_TYPE_FULL_MASK(prop->type) & MAY_BE_DOUBLE)) {
 			return prop;
@@ -2321,7 +2321,7 @@ static zend_property_info *zend_jit_get_prop_not_accepting_double(zend_reference
 	return NULL;
 }
 
-static ZEND_COLD void zend_jit_throw_inc_ref_error(zend_reference *ref, zend_property_info *error_prop)
+static ZEND_COLD void zend_jit_throw_inc_ref_error(zend_reference *ref, const zend_property_info *error_prop)
 {
 	zend_string *type_str = zend_type_to_string(error_prop->type);
 
@@ -2333,7 +2333,7 @@ static ZEND_COLD void zend_jit_throw_inc_ref_error(zend_reference *ref, zend_pro
 	zend_string_release(type_str);
 }
 
-static ZEND_COLD void zend_jit_throw_dec_ref_error(zend_reference *ref, zend_property_info *error_prop)
+static ZEND_COLD void zend_jit_throw_dec_ref_error(zend_reference *ref, const zend_property_info *error_prop)
 {
 	zend_string *type_str = zend_type_to_string(error_prop->type);
 
@@ -2355,7 +2355,7 @@ static void ZEND_FASTCALL zend_jit_pre_inc_typed_ref(zend_reference *ref, zval *
 	increment_function(var_ptr);
 
 	if (UNEXPECTED(Z_TYPE_P(var_ptr) == IS_DOUBLE) && Z_TYPE(tmp) == IS_LONG) {
-		zend_property_info *error_prop = zend_jit_get_prop_not_accepting_double(ref);
+		const zend_property_info *error_prop = zend_jit_get_prop_not_accepting_double(ref);
 		if (UNEXPECTED(error_prop)) {
 			zend_jit_throw_inc_ref_error(ref, error_prop);
 			ZVAL_LONG(var_ptr, ZEND_LONG_MAX);
@@ -2381,7 +2381,7 @@ static void ZEND_FASTCALL zend_jit_pre_dec_typed_ref(zend_reference *ref, zval *
 	decrement_function(var_ptr);
 
 	if (UNEXPECTED(Z_TYPE_P(var_ptr) == IS_DOUBLE) && Z_TYPE(tmp) == IS_LONG) {
-		zend_property_info *error_prop = zend_jit_get_prop_not_accepting_double(ref);
+		const zend_property_info *error_prop = zend_jit_get_prop_not_accepting_double(ref);
 		if (UNEXPECTED(error_prop)) {
 			zend_jit_throw_dec_ref_error(ref, error_prop);
 			ZVAL_LONG(var_ptr, ZEND_LONG_MIN);
@@ -2405,7 +2405,7 @@ static void ZEND_FASTCALL zend_jit_post_inc_typed_ref(zend_reference *ref, zval 
 	increment_function(var_ptr);
 
 	if (UNEXPECTED(Z_TYPE_P(var_ptr) == IS_DOUBLE) && Z_TYPE_P(ret) == IS_LONG) {
-		zend_property_info *error_prop = zend_jit_get_prop_not_accepting_double(ref);
+		const zend_property_info *error_prop = zend_jit_get_prop_not_accepting_double(ref);
 		if (UNEXPECTED(error_prop)) {
 			zend_jit_throw_inc_ref_error(ref, error_prop);
 			ZVAL_LONG(var_ptr, ZEND_LONG_MAX);
@@ -2424,7 +2424,7 @@ static void ZEND_FASTCALL zend_jit_post_dec_typed_ref(zend_reference *ref, zval 
 	decrement_function(var_ptr);
 
 	if (UNEXPECTED(Z_TYPE_P(var_ptr) == IS_DOUBLE) && Z_TYPE_P(ret) == IS_LONG) {
-		zend_property_info *error_prop = zend_jit_get_prop_not_accepting_double(ref);
+		const zend_property_info *error_prop = zend_jit_get_prop_not_accepting_double(ref);
 		if (UNEXPECTED(error_prop)) {
 			zend_jit_throw_dec_ref_error(ref, error_prop);
 			ZVAL_LONG(var_ptr, ZEND_LONG_MIN);
@@ -2688,7 +2688,7 @@ static zend_never_inline void _zend_jit_assign_op_overloaded_property(zend_objec
 	zval rv, res;
 
 	GC_ADDREF(object);
-	z = object->handlers->read_property(object, name, BP_VAR_R, cache_slot, &rv);
+	z = object->handlers->read_property(object, name, BP_VAR_R, cache_slot, &rv, NULL);
 	if (UNEXPECTED(EG(exception))) {
 		OBJ_RELEASE(object);
 //???		if (UNEXPECTED(RETURN_VALUE_USED(opline))) {
@@ -2741,7 +2741,7 @@ static void ZEND_FASTCALL zend_jit_assign_obj_op_helper(zend_object *zobj, zend_
 	zval *zptr;
 	zend_property_info *prop_info;
 
-	if (EXPECTED((zptr = zobj->handlers->get_property_ptr_ptr(zobj, name, BP_VAR_RW, cache_slot)) != NULL)) {
+	if (EXPECTED((zptr = zobj->handlers->get_property_ptr_ptr(zobj, name, BP_VAR_RW, cache_slot, NULL)) != NULL)) {
 		if (UNEXPECTED(Z_ISERROR_P(zptr))) {
 //???			if (UNEXPECTED(RETURN_VALUE_USED(opline))) {
 //???				ZVAL_NULL(EX_VAR(opline->result.var));
@@ -2954,7 +2954,7 @@ static void ZEND_FASTCALL zend_jit_pre_inc_obj_helper(zend_object *zobj, zend_st
 {
 	zval *prop;
 
-	if (EXPECTED((prop = zobj->handlers->get_property_ptr_ptr(zobj, name, BP_VAR_RW, cache_slot)) != NULL)) {
+	if (EXPECTED((prop = zobj->handlers->get_property_ptr_ptr(zobj, name, BP_VAR_RW, cache_slot, NULL)) != NULL)) {
 		if (UNEXPECTED(Z_ISERROR_P(prop))) {
 			if (UNEXPECTED(result)) {
 				ZVAL_NULL(result);
@@ -2997,7 +2997,7 @@ static void ZEND_FASTCALL zend_jit_pre_inc_obj_helper(zend_object *zobj, zend_st
 		zval z_copy;
 
 		GC_ADDREF(zobj);
-		z = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, &rv);
+		z = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, &rv, NULL);
 		if (UNEXPECTED(EG(exception))) {
 			OBJ_RELEASE(zobj);
 			if (UNEXPECTED(result)) {
@@ -3024,7 +3024,7 @@ static void ZEND_FASTCALL zend_jit_pre_dec_obj_helper(zend_object *zobj, zend_st
 {
 	zval *prop;
 
-	if (EXPECTED((prop = zobj->handlers->get_property_ptr_ptr(zobj, name, BP_VAR_RW, cache_slot)) != NULL)) {
+	if (EXPECTED((prop = zobj->handlers->get_property_ptr_ptr(zobj, name, BP_VAR_RW, cache_slot, NULL)) != NULL)) {
 		if (UNEXPECTED(Z_ISERROR_P(prop))) {
 			if (UNEXPECTED(result)) {
 				ZVAL_NULL(result);
@@ -3067,7 +3067,7 @@ static void ZEND_FASTCALL zend_jit_pre_dec_obj_helper(zend_object *zobj, zend_st
 		zval z_copy;
 
 		GC_ADDREF(zobj);
-		z = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, &rv);
+		z = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, &rv, NULL);
 		if (UNEXPECTED(EG(exception))) {
 			OBJ_RELEASE(zobj);
 			if (UNEXPECTED(result)) {
@@ -3094,7 +3094,7 @@ static void ZEND_FASTCALL zend_jit_post_inc_obj_helper(zend_object *zobj, zend_s
 {
 	zval *prop;
 
-	if (EXPECTED((prop = zobj->handlers->get_property_ptr_ptr(zobj, name, BP_VAR_RW, cache_slot)) != NULL)) {
+	if (EXPECTED((prop = zobj->handlers->get_property_ptr_ptr(zobj, name, BP_VAR_RW, cache_slot, NULL)) != NULL)) {
 		if (UNEXPECTED(Z_ISERROR_P(prop))) {
 			ZVAL_NULL(result);
 		} else {
@@ -3132,7 +3132,7 @@ static void ZEND_FASTCALL zend_jit_post_inc_obj_helper(zend_object *zobj, zend_s
 		zval z_copy;
 
 		GC_ADDREF(zobj);
-		z = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, &rv);
+		z = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, &rv, NULL);
 		if (UNEXPECTED(EG(exception))) {
 			OBJ_RELEASE(zobj);
 			ZVAL_UNDEF(result);
@@ -3155,7 +3155,7 @@ static void ZEND_FASTCALL zend_jit_post_dec_obj_helper(zend_object *zobj, zend_s
 {
 	zval *prop;
 
-	if (EXPECTED((prop = zobj->handlers->get_property_ptr_ptr(zobj, name, BP_VAR_RW, cache_slot)) != NULL)) {
+	if (EXPECTED((prop = zobj->handlers->get_property_ptr_ptr(zobj, name, BP_VAR_RW, cache_slot, NULL)) != NULL)) {
 		if (UNEXPECTED(Z_ISERROR_P(prop))) {
 			ZVAL_NULL(result);
 		} else {
@@ -3193,7 +3193,7 @@ static void ZEND_FASTCALL zend_jit_post_dec_obj_helper(zend_object *zobj, zend_s
 		zval z_copy;
 
 		GC_ADDREF(zobj);
-		z = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, &rv);
+		z = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, &rv, NULL);
 		if (UNEXPECTED(EG(exception))) {
 			OBJ_RELEASE(zobj);
 			ZVAL_UNDEF(result);

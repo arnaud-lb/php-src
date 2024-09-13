@@ -48,7 +48,7 @@ static void throw_incomplete_class_error(zend_object *object, const char *what)
 	}
 }
 
-static zval *incomplete_class_get_property(zend_object *object, zend_string *member, int type, void **cache_slot, zval *rv) /* {{{ */
+static zval *incomplete_class_get_property(zend_object *object, zend_string *member, int type, void **cache_slot, zval *rv, const zend_property_info **prop_info_p) /* {{{ */
 {
 	incomplete_class_message(object);
 
@@ -68,7 +68,7 @@ static zval *incomplete_class_write_property(zend_object *object, zend_string *m
 }
 /* }}} */
 
-static zval *incomplete_class_get_property_ptr_ptr(zend_object *object, zend_string *member, int type, void **cache_slot) /* {{{ */
+static zval *incomplete_class_get_property_ptr_ptr(zend_object *object, zend_string *member, int type, void **cache_slot, const zend_property_info **prop_info_p) /* {{{ */
 {
 	throw_incomplete_class_error(object, "modify a property");
 	return &EG(error_zval);

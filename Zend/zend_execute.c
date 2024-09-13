@@ -571,7 +571,7 @@ static inline void zend_assign_to_variable_reference(zval *variable_ptr, zval *v
 	ZVAL_REF(variable_ptr, ref);
 }
 
-static zend_never_inline zval* zend_assign_to_typed_property_reference(zend_property_info *prop_info, zval *prop, zval *value_ptr, zend_refcounted **garbage_ptr EXECUTE_DATA_DC)
+static zend_never_inline zval* zend_assign_to_typed_property_reference(const zend_property_info *prop_info, zval *prop, zval *value_ptr, zend_refcounted **garbage_ptr EXECUTE_DATA_DC)
 {
 	if (!zend_verify_prop_assignable_by_ref(prop_info, value_ptr, EX_USES_STRICT_TYPES())) {
 		return &EG(uninitialized_zval);
@@ -609,7 +609,7 @@ ZEND_API ZEND_COLD void ZEND_FASTCALL zend_cannot_pass_by_reference(uint32_t arg
 	zend_string_release(func_name);
 }
 
-static zend_never_inline ZEND_COLD void zend_throw_auto_init_in_prop_error(zend_property_info *prop) {
+static zend_never_inline ZEND_COLD void zend_throw_auto_init_in_prop_error(const zend_property_info *prop) {
 	zend_string *type_str = zend_type_to_string(prop->type);
 	zend_type_error(
 		"Cannot auto-initialize an array inside property %s::$%s of type %s",
@@ -619,7 +619,7 @@ static zend_never_inline ZEND_COLD void zend_throw_auto_init_in_prop_error(zend_
 	zend_string_release(type_str);
 }
 
-static zend_never_inline ZEND_COLD void zend_throw_auto_init_in_ref_error(zend_property_info *prop) {
+static zend_never_inline ZEND_COLD void zend_throw_auto_init_in_ref_error(const zend_property_info *prop) {
 	zend_string *type_str = zend_type_to_string(prop->type);
 	zend_type_error(
 		"Cannot auto-initialize an array inside a reference held by property %s::$%s of type %s",
@@ -630,7 +630,7 @@ static zend_never_inline ZEND_COLD void zend_throw_auto_init_in_ref_error(zend_p
 }
 
 static zend_never_inline ZEND_COLD void zend_throw_access_uninit_prop_by_ref_error(
-		zend_property_info *prop) {
+		const zend_property_info *prop) {
 	zend_throw_error(NULL,
 		"Cannot access uninitialized non-nullable property %s::$%s by reference",
 		ZSTR_VAL(prop->ce->name),
@@ -1704,7 +1704,7 @@ static zend_never_inline void zend_binary_assign_op_typed_ref(zend_reference *re
 	}
 }
 
-static zend_never_inline void zend_binary_assign_op_typed_prop(zend_property_info *prop_info, zval *zptr, zval *value OPLINE_DC EXECUTE_DATA_DC)
+static zend_never_inline void zend_binary_assign_op_typed_prop(const zend_property_info *prop_info, zval *zptr, zval *value OPLINE_DC EXECUTE_DATA_DC)
 {
 	zval z_copy;
 
@@ -2067,9 +2067,9 @@ static zend_never_inline void zend_assign_to_string_offset(zval *str, zval *dim,
 	}
 }
 
-static zend_property_info *zend_get_prop_not_accepting_double(zend_reference *ref)
+static const zend_property_info *zend_get_prop_not_accepting_double(zend_reference *ref)
 {
-	zend_property_info *prop;
+	const zend_property_info *prop;
 	ZEND_REF_FOREACH_TYPE_SOURCES(ref, prop) {
 		if (!(ZEND_TYPE_FULL_MASK(prop->type) & MAY_BE_DOUBLE)) {
 			return prop;
@@ -2079,7 +2079,7 @@ static zend_property_info *zend_get_prop_not_accepting_double(zend_reference *re
 }
 
 static ZEND_COLD zend_long zend_throw_incdec_ref_error(
-		zend_reference *ref, zend_property_info *error_prop OPLINE_DC)
+		zend_reference *ref, const zend_property_info *error_prop OPLINE_DC)
 {
 	zend_string *type_str = zend_type_to_string(error_prop->type);
 	if (ZEND_IS_INCREMENT(opline->opcode)) {
@@ -2101,7 +2101,7 @@ static ZEND_COLD zend_long zend_throw_incdec_ref_error(
 	}
 }
 
-static ZEND_COLD zend_long zend_throw_incdec_prop_error(zend_property_info *prop OPLINE_DC) {
+static ZEND_COLD zend_long zend_throw_incdec_prop_error(const zend_property_info *prop OPLINE_DC) {
 	zend_string *type_str = zend_type_to_string(prop->type);
 	if (ZEND_IS_INCREMENT(opline->opcode)) {
 		zend_type_error("Cannot increment property %s::$%s of type %s past its maximal value",
@@ -2138,7 +2138,7 @@ static void zend_incdec_typed_ref(zend_reference *ref, zval *copy OPLINE_DC EXEC
 	}
 
 	if (UNEXPECTED(Z_TYPE_P(var_ptr) == IS_DOUBLE) && Z_TYPE_P(copy) == IS_LONG) {
-		zend_property_info *error_prop = zend_get_prop_not_accepting_double(ref);
+		const zend_property_info *error_prop = zend_get_prop_not_accepting_double(ref);
 		if (UNEXPECTED(error_prop)) {
 			zend_long val = zend_throw_incdec_ref_error(ref, error_prop OPLINE_CC);
 			ZVAL_LONG(var_ptr, val);
@@ -2152,7 +2152,7 @@ static void zend_incdec_typed_ref(zend_reference *ref, zval *copy OPLINE_DC EXEC
 	}
 }
 
-static void zend_incdec_typed_prop(zend_property_info *prop_info, zval *var_ptr, zval *copy OPLINE_DC EXECUTE_DATA_DC)
+static void zend_incdec_typed_prop(const zend_property_info *prop_info, zval *var_ptr, zval *copy OPLINE_DC EXECUTE_DATA_DC)
 {
 	zval tmp;
 
@@ -2182,7 +2182,7 @@ static void zend_incdec_typed_prop(zend_property_info *prop_info, zval *var_ptr,
 	}
 }
 
-static void zend_pre_incdec_property_zval(zval *prop, zend_property_info *prop_info OPLINE_DC EXECUTE_DATA_DC)
+static void zend_pre_incdec_property_zval(zval *prop, const zend_property_info *prop_info OPLINE_DC EXECUTE_DATA_DC)
 {
 	if (EXPECTED(Z_TYPE_P(prop) == IS_LONG)) {
 		if (ZEND_IS_INCREMENT(opline->opcode)) {
@@ -2220,7 +2220,7 @@ static void zend_pre_incdec_property_zval(zval *prop, zend_property_info *prop_i
 	}
 }
 
-static void zend_post_incdec_property_zval(zval *prop, zend_property_info *prop_info OPLINE_DC EXECUTE_DATA_DC)
+static void zend_post_incdec_property_zval(zval *prop, const zend_property_info *prop_info OPLINE_DC EXECUTE_DATA_DC)
 {
 	if (EXPECTED(Z_TYPE_P(prop) == IS_LONG)) {
 		ZVAL_LONG(EX_VAR(opline->result.var), Z_LVAL_P(prop));
@@ -2264,7 +2264,7 @@ static zend_never_inline void zend_post_incdec_overloaded_property(zend_object *
 	zval z_copy;
 
 	GC_ADDREF(object);
-	z =object->handlers->read_property(object, name, BP_VAR_R, cache_slot, &rv);
+	z =object->handlers->read_property(object, name, BP_VAR_R, cache_slot, &rv, NULL);
 	if (UNEXPECTED(EG(exception))) {
 		OBJ_RELEASE(object);
 		ZVAL_UNDEF(EX_VAR(opline->result.var));
@@ -2293,7 +2293,7 @@ static zend_never_inline void zend_pre_incdec_overloaded_property(zend_object *o
 	zval z_copy;
 
 	GC_ADDREF(object);
-	z = object->handlers->read_property(object, name, BP_VAR_R, cache_slot, &rv);
+	z = object->handlers->read_property(object, name, BP_VAR_R, cache_slot, &rv, NULL);
 	if (UNEXPECTED(EG(exception))) {
 		OBJ_RELEASE(object);
 		if (UNEXPECTED(RETURN_VALUE_USED(opline))) {
@@ -2325,7 +2325,7 @@ static zend_never_inline void zend_assign_op_overloaded_property(zend_object *ob
 	zval rv, res;
 
 	GC_ADDREF(object);
-	z = object->handlers->read_property(object, name, BP_VAR_R, cache_slot, &rv);
+	z = object->handlers->read_property(object, name, BP_VAR_R, cache_slot, &rv, NULL);
 	if (UNEXPECTED(EG(exception))) {
 		OBJ_RELEASE(object);
 		if (UNEXPECTED(RETURN_VALUE_USED(opline))) {
@@ -3279,7 +3279,7 @@ static zend_always_inline bool check_type_array_assignable(zend_type type) {
 
 /* Checks whether an array can be assigned to the reference. Throws error if not assignable. */
 ZEND_API bool zend_verify_ref_array_assignable(zend_reference *ref) {
-	zend_property_info *prop;
+	const zend_property_info *prop;
 	ZEND_ASSERT(ZEND_REF_HAS_TYPE_SOURCES(ref));
 	ZEND_REF_FOREACH_TYPE_SOURCES(ref, prop) {
 		if (!check_type_array_assignable(prop->type)) {
@@ -3291,7 +3291,7 @@ ZEND_API bool zend_verify_ref_array_assignable(zend_reference *ref) {
 }
 
 static zend_never_inline bool zend_handle_fetch_obj_flags(
-		zval *result, zval *ptr, zend_object *obj, zend_property_info *prop_info, uint32_t flags)
+		zval *result, zval *ptr, zend_object *obj, const zend_property_info *prop_info, uint32_t flags)
 {
 	switch (flags) {
 		case ZEND_FETCH_DIM_WRITE:
@@ -3329,17 +3329,12 @@ static zend_never_inline bool zend_handle_fetch_obj_flags(
 	return 1;
 }
 
-static zend_always_inline void zend_fetch_property_address(zval *result, zval *container, uint32_t container_op_type, zval *prop_ptr, uint32_t prop_op_type, void **cache_slot, int type, uint32_t flags, zend_property_info **prop_info_p OPLINE_DC EXECUTE_DATA_DC)
+static zend_always_inline void zend_fetch_property_address(zval *result, zval *container, uint32_t container_op_type, zval *prop_ptr, uint32_t prop_op_type, void **cache_slot, int type, uint32_t flags, const zend_property_info **prop_info_p OPLINE_DC EXECUTE_DATA_DC)
 {
 	zval *ptr;
 	zend_object *zobj;
 	zend_string *name, *tmp_name;
-	void *_cache_slot[3] = {0};
-	if (prop_op_type != IS_CONST) {
-		cache_slot = _cache_slot;
-	} else {
-		ZEND_ASSERT(cache_slot);
-	}
+	const zend_property_info *prop_info;
 
 	if (container_op_type != IS_UNUSED && UNEXPECTED(Z_TYPE_P(container) != IS_OBJECT)) {
 		do {
@@ -3378,7 +3373,7 @@ static zend_always_inline void zend_fetch_property_address(zval *result, zval *c
 			ptr = OBJ_PROP(zobj, prop_offset);
 			if (EXPECTED(Z_TYPE_P(ptr) != IS_UNDEF)) {
 				ZVAL_INDIRECT(result, ptr);
-				zend_property_info *prop_info = CACHED_PTR_EX(cache_slot + 2);
+				prop_info = CACHED_PTR_EX(cache_slot + 2);
 				if (prop_info) {
 					if (UNEXPECTED(prop_info->flags & (ZEND_ACC_READONLY|ZEND_ACC_PPP_SET_MASK))
 					 && ((prop_info->flags & ZEND_ACC_READONLY) || !zend_asymmetric_property_has_set_access(prop_info))) {
@@ -3431,9 +3426,9 @@ static zend_always_inline void zend_fetch_property_address(zval *result, zval *c
 	} else {
 		name = zval_get_tmp_string(prop_ptr, &tmp_name);
 	}
-	ptr = zobj->handlers->get_property_ptr_ptr(zobj, name, type, cache_slot);
+	ptr = zobj->handlers->get_property_ptr_ptr(zobj, name, type, cache_slot, &prop_info);
 	if (NULL == ptr) {
-		ptr = zobj->handlers->read_property(zobj, name, type, cache_slot, result);
+		ptr = zobj->handlers->read_property(zobj, name, type, cache_slot, result, &prop_info);
 		if (ptr == result) {
 			if (UNEXPECTED(Z_ISREF_P(ptr) && Z_REFCOUNT_P(ptr) == 1)) {
 				ZVAL_UNREF(ptr);
@@ -3452,7 +3447,6 @@ static zend_always_inline void zend_fetch_property_address(zval *result, zval *c
 	ZVAL_INDIRECT(result, ptr);
 	flags &= ZEND_FETCH_OBJ_FLAGS;
 	if (flags) {
-		zend_property_info *prop_info = CACHED_PTR_EX(cache_slot + 2);
 		if (prop_info && ZEND_TYPE_IS_SET(prop_info->type)) {
 			if (UNEXPECTED(!zend_handle_fetch_obj_flags(result, ptr, NULL, prop_info, flags))) {
 				goto end;
@@ -3462,7 +3456,7 @@ static zend_always_inline void zend_fetch_property_address(zval *result, zval *c
 
 end:
 	if (prop_info_p) {
-		*prop_info_p = CACHED_PTR_EX(cache_slot + 2);
+		*prop_info_p = prop_info;
 	}
 	if (prop_op_type != IS_CONST) {
 		zend_tmp_string_release(tmp_name);
@@ -3474,7 +3468,7 @@ static zend_always_inline void zend_assign_to_property_reference(zval *container
 	zval variable, *variable_ptr = &variable;
 	void **cache_addr = (prop_op_type == IS_CONST) ? CACHE_ADDR(opline->extended_value & ~ZEND_RETURNS_FUNCTION) : NULL;
 	zend_refcounted *garbage = NULL;
-	zend_property_info *prop_info = NULL;
+	const zend_property_info *prop_info = NULL;
 
 	zend_fetch_property_address(variable_ptr, container, container_op_type, prop_ptr, prop_op_type,
 		cache_addr, BP_VAR_W, 0, &prop_info OPLINE_CC EXECUTE_DATA_CC);
@@ -3894,7 +3888,7 @@ ZEND_API bool ZEND_FASTCALL zend_verify_prop_assignable_by_ref(const zend_proper
 	return zend_verify_prop_assignable_by_ref_ex(prop_info, orig_val, strict, ZEND_VERIFY_PROP_ASSIGNABLE_BY_REF_CONTEXT_ASSIGNMENT);
 }
 
-ZEND_API void ZEND_FASTCALL zend_ref_add_type_source(zend_property_info_source_list *source_list, zend_property_info *prop)
+ZEND_API void ZEND_FASTCALL zend_ref_add_type_source(zend_property_info_source_list *source_list, const zend_property_info *prop)
 {
 	zend_property_info_list *list;
 	if (source_list->ptr == NULL) {
@@ -3920,7 +3914,7 @@ ZEND_API void ZEND_FASTCALL zend_ref_add_type_source(zend_property_info_source_l
 ZEND_API void ZEND_FASTCALL zend_ref_del_type_source(zend_property_info_source_list *source_list, const zend_property_info *prop)
 {
 	zend_property_info_list *list = ZEND_PROPERTY_INFO_SOURCE_TO_LIST(source_list->list);
-	zend_property_info **ptr, **end;
+	const zend_property_info **ptr, **end;
 
 	ZEND_ASSERT(prop);
 	if (!ZEND_PROPERTY_INFO_SOURCE_IS_LIST(source_list->list)) {

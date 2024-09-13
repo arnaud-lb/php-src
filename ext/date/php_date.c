@@ -21,6 +21,7 @@
 #include "ext/standard/php_versioning.h"
 #include "php_date.h"
 #include "zend_attributes.h"
+#include "zend_compile.h"
 #include "zend_interfaces.h"
 #include "zend_exceptions.h"
 #include "lib/timelib.h"
@@ -356,12 +357,12 @@ static HashTable *date_object_get_debug_info_timezone(zend_object *object, int *
 static void php_timezone_to_string(php_timezone_obj *tzobj, zval *zv);
 
 static int date_interval_compare_objects(zval *o1, zval *o2);
-static zval *date_interval_read_property(zend_object *object, zend_string *member, int type, void **cache_slot, zval *rv);
+static zval *date_interval_read_property(zend_object *object, zend_string *member, int type, void **cache_slot, zval *rv, const zend_property_info **prop_info_p);
 static zval *date_interval_write_property(zend_object *object, zend_string *member, zval *value, void **cache_slot);
-static zval *date_interval_get_property_ptr_ptr(zend_object *object, zend_string *member, int type, void **cache_slot);
-static zval *date_period_read_property(zend_object *object, zend_string *name, int type, void **cache_slot, zval *rv);
+static zval *date_interval_get_property_ptr_ptr(zend_object *object, zend_string *member, int type, void **cache_slot, const zend_property_info **prop_info_p);
+static zval *date_period_read_property(zend_object *object, zend_string *name, int type, void **cache_slot, zval *rv, const zend_property_info **prop_info_p);
 static zval *date_period_write_property(zend_object *object, zend_string *name, zval *value, void **cache_slot);
-static zval *date_period_get_property_ptr_ptr(zend_object *object, zend_string *name, int type, void **cache_slot);
+static zval *date_period_get_property_ptr_ptr(zend_object *object, zend_string *name, int type, void **cache_slot, const zend_property_info **prop_info_p);
 
 static int date_object_compare_timezone(zval *tz1, zval *tz2);
 
@@ -1755,7 +1756,7 @@ static int date_interval_has_property(zend_object *object, zend_string *name, in
 		return retval;
 	}
 
-	prop = date_interval_read_property(object, name, BP_VAR_IS, cache_slot, &rv);
+	prop = date_interval_read_property(object, name, BP_VAR_IS, cache_slot, &rv, NULL);
 
 	if (prop != &EG(uninitialized_zval)) {
 		if (type == 2) {
@@ -4511,7 +4512,7 @@ static int date_interval_compare_objects(zval *o1, zval *o2)
 }
 
 /* {{{ date_interval_read_property */
-static zval *date_interval_read_property(zend_object *object, zend_string *name, int type, void **cache_slot, zval *rv)
+static zval *date_interval_read_property(zend_object *object, zend_string *name, int type, void **cache_slot, zval *rv, const zend_property_info **prop_info_p)
 {
 	php_interval_obj *obj;
 	zval *retval;
@@ -4521,13 +4522,16 @@ static zval *date_interval_read_property(zend_object *object, zend_string *name,
 	obj = php_interval_obj_from_obj(object);
 
 	if (!obj->initialized) {
-		retval = zend_std_read_property(object, name, type, cache_slot, rv);
+		retval = zend_std_read_property(object, name, type, cache_slot, rv, prop_info_p);
 		return retval;
 	}
 
 #define GET_VALUE_FROM_STRUCT(n,m)            \
 	if (zend_string_equals_literal(name, m)) { \
 		value = obj->diff->n; \
+		if (prop_info_p) { \
+			*prop_info_p = NULL; \
+		} \
 		break; \
 	}
 	do {
@@ -4544,7 +4548,7 @@ static zval *date_interval_read_property(zend_object *object, zend_string *name,
 		GET_VALUE_FROM_STRUCT(invert, "invert");
 		GET_VALUE_FROM_STRUCT(days, "days");
 		/* didn't find any */
-		retval = zend_std_read_property(object, name, type, cache_slot, rv);
+		retval = zend_std_read_property(object, name, type, cache_slot, rv, prop_info_p);
 
 		return retval;
 	} while(0);
@@ -4557,6 +4561,10 @@ static zval *date_interval_read_property(zend_object *object, zend_string *name,
 		ZVAL_LONG(retval, value);
 	} else {
 		ZVAL_FALSE(retval);
+	}
+
+	if (prop_info_p) {
+		*prop_info_p = NULL;
 	}
 
 	return retval;
@@ -4601,7 +4609,7 @@ static zval *date_interval_write_property(zend_object *object, zend_string *name
 /* }}} */
 
 /* {{{ date_interval_get_property_ptr_ptr */
-static zval *date_interval_get_property_ptr_ptr(zend_object *object, zend_string *name, int type, void **cache_slot)
+static zval *date_interval_get_property_ptr_ptr(zend_object *object, zend_string *name, int type, void **cache_slot, const zend_property_info **prop_info_p)
 {
 	zval *ret;
 
@@ -4618,7 +4626,7 @@ static zval *date_interval_get_property_ptr_ptr(zend_object *object, zend_string
 		/* Fallback to read_property. */
 		ret = NULL;
 	} else {
-		ret = zend_std_get_property_ptr_ptr(object, name, type, cache_slot);
+		ret = zend_std_get_property_ptr_ptr(object, name, type, cache_slot, prop_info_p);
 	}
 
 	return ret;
@@ -5958,7 +5966,7 @@ PHP_METHOD(DatePeriod, __wakeup)
 /* }}} */
 
 /* {{{ date_period_read_property */
-static zval *date_period_read_property(zend_object *object, zend_string *name, int type, void **cache_slot, zval *rv)
+static zval *date_period_read_property(zend_object *object, zend_string *name, int type, void **cache_slot, zval *rv, const zend_property_info **prop_info_p)
 {
 	if (type != BP_VAR_IS && type != BP_VAR_R) {
 		if (date_period_is_internal_property(name)) {
@@ -5967,7 +5975,7 @@ static zval *date_period_read_property(zend_object *object, zend_string *name, i
 		}
 	}
 
-	return zend_std_read_property(object, name, type, cache_slot, rv);
+	return zend_std_read_property(object, name, type, cache_slot, rv, prop_info_p);
 }
 /* }}} */
 
@@ -5981,12 +5989,12 @@ static zval *date_period_write_property(zend_object *object, zend_string *name, 
 	return zend_std_write_property(object, name, value, cache_slot);
 }
 
-static zval *date_period_get_property_ptr_ptr(zend_object *object, zend_string *name, int type, void **cache_slot)
+static zval *date_period_get_property_ptr_ptr(zend_object *object, zend_string *name, int type, void **cache_slot, const zend_property_info **prop_info_p)
 {
 	if (date_period_is_internal_property(name)) {
 		zend_readonly_property_modification_error_ex("DatePeriod", ZSTR_VAL(name));
 		return &EG(error_zval);
 	}
 
-	return zend_std_get_property_ptr_ptr(object, name, type, cache_slot);
+	return zend_std_get_property_ptr_ptr(object, name, type, cache_slot, prop_info_p);
 }

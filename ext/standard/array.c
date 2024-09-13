@@ -4597,7 +4597,7 @@ static inline zval *array_column_fetch_prop(zval *data, zend_string *name_str, z
 		 * implement __isset (which is not called in "exists" mode). */
 		if (Z_OBJ_HANDLER_P(data, has_property)(Z_OBJ_P(data), tmp_str, ZEND_PROPERTY_EXISTS, cache_slot)
 				|| Z_OBJ_HANDLER_P(data, has_property)(Z_OBJ_P(data), tmp_str, ZEND_PROPERTY_ISSET, cache_slot)) {
-			prop = Z_OBJ_HANDLER_P(data, read_property)(Z_OBJ_P(data), tmp_str, BP_VAR_R, cache_slot, rv);
+			prop = Z_OBJ_HANDLER_P(data, read_property)(Z_OBJ_P(data), tmp_str, BP_VAR_R, cache_slot, rv, NULL);
 			if (prop) {
 				ZVAL_DEREF(prop);
 				if (prop != rv) {
