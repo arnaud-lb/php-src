@@ -502,7 +502,11 @@ class ReflectionProperty implements Reflector
 
     public function skipLazyInitialization(object $object): void {}
 
-    public function isUninitializedLazy(object $object): bool {}
+    public function isLazy(object $object): bool {}
+
+    public function getRawValueWithoutLazyInitialization(object $object, mixed &$hasValue): mixed {}
+
+    public function getRawValueWithoutLazyInitializationTuple(object $object): array {}
 
     /** @tentative-return-type */
     public function isInitialized(?object $object = null): bool {}

@@ -6272,7 +6272,7 @@ ZEND_METHOD(ReflectionProperty, skipLazyInitialization)
 }
 
 /* {{{ Returns whether property is uninitialized and lazy */
-ZEND_METHOD(ReflectionProperty, isUninitializedLazy)
+ZEND_METHOD(ReflectionProperty, isLazy)
 {
 	reflection_object *intern;
 	property_reference *ref;
@@ -6294,6 +6294,104 @@ ZEND_METHOD(ReflectionProperty, isUninitializedLazy)
 	}
 
 	RETURN_BOOL(Z_PROP_FLAG_P(OBJ_PROP(object, ref->prop->offset)) & IS_PROP_LAZY);
+}
+
+static void get_raw_value(zval *return_value, zend_object *object, reflection_object *intern, property_reference *ref) {
+	if (!ref->prop || !ref->prop->hooks || !ref->prop->hooks[ZEND_PROPERTY_HOOK_GET]) {
+		zval rv;
+		zval *member_p = zend_read_property_ex(intern->ce, object, ref->unmangled_name, 0, &rv);
+
+		if (member_p != &rv) {
+			RETURN_COPY_DEREF(member_p);
+		} else {
+			if (Z_ISREF_P(member_p)) {
+				zend_unwrap_reference(member_p);
+			}
+			RETURN_COPY_VALUE(member_p);
+		}
+	} else {
+		zend_function *func = zend_get_property_hook_trampoline(ref->prop, ZEND_PROPERTY_HOOK_GET, ref->unmangled_name);
+		zend_call_known_instance_method_with_0_params(func, object, return_value);
+	}
+}
+
+ZEND_METHOD(ReflectionProperty, getRawValueWithoutLazyInitialization)
+{
+	reflection_object *intern;
+	property_reference *ref;
+	zend_object *object;
+	zval *has_value;
+
+	GET_REFLECTION_OBJECT_PTR(ref);
+
+	ZEND_PARSE_PARAMETERS_START(2, 2) {
+		Z_PARAM_OBJ_OF_CLASS(object, intern->ce)
+		Z_PARAM_ZVAL(has_value)
+	} ZEND_PARSE_PARAMETERS_END();
+
+	if ((UNEXPECTED(object->handlers->read_property != zend_std_read_property)
+			&& !zend_object_is_lazy(object))
+			|| !ref->prop || ref->prop->flags & (ZEND_ACC_STATIC | ZEND_ACC_VIRTUAL)) {
+		return get_raw_value(return_value, object, intern, ref);
+	}
+
+	if (zend_object_is_lazy_proxy(object)
+			&& zend_lazy_object_initialized(object)) {
+		object = zend_lazy_object_get_instance(object);
+	}
+
+	zval *prop = OBJ_PROP(object, ref->prop->offset);
+
+	if (Z_TYPE_P(prop) == IS_UNDEF) {
+		ZEND_TRY_ASSIGN_REF_BOOL(has_value, 0);
+		RETURN_NULL();
+	}
+
+	ZVAL_COPY(return_value, prop);
+	ZEND_TRY_ASSIGN_REF_BOOL(has_value, 1);
+}
+
+ZEND_METHOD(ReflectionProperty, getRawValueWithoutLazyInitializationTuple)
+{
+	reflection_object *intern;
+	property_reference *ref;
+	zend_object *object;
+
+	GET_REFLECTION_OBJECT_PTR(ref);
+
+	ZEND_PARSE_PARAMETERS_START(1, 1) {
+		Z_PARAM_OBJ_OF_CLASS(object, intern->ce)
+	} ZEND_PARSE_PARAMETERS_END();
+
+	if ((UNEXPECTED(object->handlers->read_property != zend_std_read_property)
+			&& !zend_object_is_lazy(object))
+			|| !ref->prop || ref->prop->flags & (ZEND_ACC_STATIC | ZEND_ACC_VIRTUAL)) {
+		return get_raw_value(return_value, object, intern, ref);
+	}
+
+	if (zend_object_is_lazy_proxy(object)
+			&& zend_lazy_object_initialized(object)) {
+		object = zend_lazy_object_get_instance(object);
+	}
+
+	zval *prop = OBJ_PROP(object, ref->prop->offset);
+
+	array_init_size(return_value, 2);
+	zend_array *arr = Z_ARRVAL_P(return_value);
+
+	if (Z_TYPE_P(prop) == IS_UNDEF) {
+		zval zv;
+		ZVAL_NULL(&zv);
+		zend_hash_next_index_insert(arr, &zv);
+		ZVAL_BOOL(&zv, 0);
+		zend_hash_next_index_insert(arr, &zv);
+	} else {
+		zval zv;
+		Z_TRY_ADDREF_P(prop);
+		zend_hash_next_index_insert(arr, prop);
+		ZVAL_BOOL(&zv, 1);
+		zend_hash_next_index_insert(arr, &zv);
+	}
 }
 
 /* {{{ Returns true if property was initialized */
