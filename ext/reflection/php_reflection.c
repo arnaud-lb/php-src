@@ -6320,12 +6320,13 @@ ZEND_METHOD(ReflectionProperty, getRawValueWithoutLazyInitialization)
 	reflection_object *intern;
 	property_reference *ref;
 	zend_object *object;
-	zval *has_value;
+	zval *has_value = NULL;
 
 	GET_REFLECTION_OBJECT_PTR(ref);
 
-	ZEND_PARSE_PARAMETERS_START(2, 2) {
+	ZEND_PARSE_PARAMETERS_START(1, 2) {
 		Z_PARAM_OBJ_OF_CLASS(object, intern->ce)
+		Z_PARAM_OPTIONAL
 		Z_PARAM_ZVAL(has_value)
 	} ZEND_PARSE_PARAMETERS_END();
 
@@ -6343,12 +6344,16 @@ ZEND_METHOD(ReflectionProperty, getRawValueWithoutLazyInitialization)
 	zval *prop = OBJ_PROP(object, ref->prop->offset);
 
 	if (Z_TYPE_P(prop) == IS_UNDEF) {
-		ZEND_TRY_ASSIGN_REF_BOOL(has_value, 0);
+		if (has_value) {
+			ZEND_TRY_ASSIGN_REF_BOOL(has_value, 0);
+		}
 		RETURN_NULL();
 	}
 
 	ZVAL_COPY(return_value, prop);
-	ZEND_TRY_ASSIGN_REF_BOOL(has_value, 1);
+	if (has_value) {
+		ZEND_TRY_ASSIGN_REF_BOOL(has_value, 1);
+	}
 }
 
 ZEND_METHOD(ReflectionProperty, getRawValueWithoutLazyInitializationTuple)
