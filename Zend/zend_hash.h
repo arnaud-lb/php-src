@@ -1328,6 +1328,10 @@ static zend_always_inline void *zend_hash_get_current_data_ptr_ex(HashTable *ht,
 	ZEND_HASH_MAP_FOREACH(ht, 0); \
 	_ptr = Z_PTR_P(_z);
 
+#define ZEND_HASH_MAP_FOREACH_VAL_FROM(ht, _val, _from) \
+	ZEND_HASH_MAP_FOREACH_FROM(ht, 0, _from); \
+	_val = _z;
+
 #define ZEND_HASH_MAP_FOREACH_PTR_FROM(ht, _ptr, _from) \
 	ZEND_HASH_MAP_FOREACH_FROM(ht, 0, _from); \
 	_ptr = Z_PTR_P(_z);

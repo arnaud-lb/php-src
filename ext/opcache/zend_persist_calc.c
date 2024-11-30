@@ -685,6 +685,7 @@ uint32_t zend_accel_user_module_persist_calc(zend_persistent_user_module *module
 	ZCG(current_persistent_script) = module->script;
 
 	ADD_SIZE(sizeof(zend_persistent_user_module));
+	zend_shared_alloc_register_xlat_entry(module, module);
 
 	ADD_INTERNED_STRING(module->module.desc.desc_path);
 	ADD_INTERNED_STRING(module->module.desc.name);
@@ -708,20 +709,24 @@ uint32_t zend_accel_user_module_persist_calc(zend_persistent_user_module *module
 			str++;
 		}
 	}
+
 	zend_hash_persist_calc(&module->module.deps);
-	zend_hash_persist_calc(&module->module.class_table);
+
 	Bucket *p;
+
+	zend_hash_persist_calc(&module->module.class_table);
 	ZEND_HASH_MAP_FOREACH_BUCKET(&module->module.class_table, p) {
 		ZEND_ASSERT(p->key != NULL);
 		ADD_INTERNED_STRING(p->key);
 	} ZEND_HASH_FOREACH_END();
+
 	zend_hash_persist_calc(&module->module.function_table);
 	ZEND_HASH_MAP_FOREACH_BUCKET(&module->module.function_table, p) {
 		ZEND_ASSERT(p->key != NULL);
 		ADD_INTERNED_STRING(p->key);
 	} ZEND_HASH_FOREACH_END();
 
-	zend_accel_user_module_dir_cache_persist_calc(module->dir_cache);
+	zend_accel_user_module_dir_cache_persist_calc(module->module.dir_cache);
 
 #if defined(__AVX__) || defined(__SSE2__)
 	/* Align size to 64-byte boundary */
@@ -730,5 +735,18 @@ uint32_t zend_accel_user_module_persist_calc(zend_persistent_user_module *module
 
 	ZCG(current_persistent_script) = NULL;
 
-	return module->script->size;
+	size_t size = module->script->size;
+
+	zend_user_module *dep;
+	ZEND_HASH_MAP_FOREACH_PTR(&module->module.deps, dep) {
+		if (zend_accel_in_shm(dep)) {
+			continue;
+		}
+		zend_persistent_user_module *pdep = (zend_persistent_user_module*)((char*)dep - XtOffsetOf(zend_persistent_user_module, module));
+		if (!zend_shared_alloc_get_xlat_entry(pdep)) {
+			size += zend_accel_user_module_persist_calc(pdep, for_shm);
+		}
+	} ZEND_HASH_FOREACH_END();
+
+	return size;
 }

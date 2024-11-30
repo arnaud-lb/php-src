@@ -23,6 +23,7 @@
 #include "ZendAccelerator.h"
 #include "zend_persist.h"
 #include "zend_extensions.h"
+#include "zend_portability.h"
 #include "zend_shared_alloc.h"
 #include "zend_types.h"
 #include "zend_vm.h"
@@ -1469,7 +1470,7 @@ zend_persistent_user_module *zend_accel_user_module_persist(zend_persistent_user
 
 	ZCG(current_persistent_script) = module->script;
 
-	module = zend_shared_memdup_free(module, sizeof(*module));
+	module = zend_shared_memdup_put_free(module, sizeof(*module));
 
 	zend_accel_store_interned_string(module->module.desc.desc_path);
 	zend_accel_store_interned_string(module->module.desc.name);
@@ -1497,20 +1498,24 @@ zend_persistent_user_module *zend_accel_user_module_persist(zend_persistent_user
 			str++;
 		}
 	}
+
 	zend_hash_persist(&module->module.deps);
-	zend_hash_persist(&module->module.class_table);
+
 	Bucket *p;
+
+	zend_hash_persist(&module->module.class_table);
 	ZEND_HASH_MAP_FOREACH_BUCKET(&module->module.class_table, p) {
 		ZEND_ASSERT(p->key != NULL);
 		zend_accel_store_interned_string(p->key);
 	} ZEND_HASH_FOREACH_END();
+
 	zend_hash_persist(&module->module.function_table);
 	ZEND_HASH_MAP_FOREACH_BUCKET(&module->module.function_table, p) {
 		ZEND_ASSERT(p->key != NULL);
 		zend_accel_store_interned_string(p->key);
 	} ZEND_HASH_FOREACH_END();
 
-	module->dir_cache = zend_accel_user_module_dir_cache_persist(module->dir_cache);
+	module->module.dir_cache = zend_accel_user_module_dir_cache_persist(module->module.dir_cache);
 
 	// TODO: We need these during compilation, but not after. Maybe store these
 	// elsewhere.
@@ -1524,6 +1529,20 @@ zend_persistent_user_module *zend_accel_user_module_persist(zend_persistent_user
 #endif
 
 	ZCG(current_persistent_script) = NULL;
+
+	zval *zv;
+	ZEND_HASH_MAP_FOREACH_VAL(&module->module.deps, zv) {
+		zend_user_module *dep = Z_PTR_P(zv);
+		if (zend_accel_in_shm(dep)) {
+			continue;
+		}
+		zend_persistent_user_module *pdep = (zend_persistent_user_module*)((char*)dep - XtOffsetOf(zend_persistent_user_module, module));
+		zend_persistent_user_module *persisted_pdep = zend_shared_alloc_get_xlat_entry(pdep);
+		if (!persisted_pdep) {
+			persisted_pdep = zend_accel_user_module_persist(pdep, for_shm);
+		}
+		Z_PTR_P(zv) = &persisted_pdep->module;
+	} ZEND_HASH_FOREACH_END();
 
 	return module;
 }

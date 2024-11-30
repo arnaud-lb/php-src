@@ -34,7 +34,6 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 
-ZEND_API zend_never_inline ZEND_COLD void zend_circular_module_dependency_error(zend_user_module *module);
 ZEND_API zend_never_inline ZEND_COLD zend_string *zend_autoload_stack_str(void);
 
 #if ZTS
@@ -226,7 +225,7 @@ static zend_persistent_script *zum_compile_file(zend_user_module *module, zend_f
 	if (!persistent_script) {
 		/* For PoC purpose, we only support files that can be cached in SHM for
 		 * now. */
-		zend_error_noreturn(E_ERROR, "File %s could not be cached in SHM, this is unsupported yet.",
+		zend_error_noreturn(E_ERROR, "File %s could not be cached in SHM. This is unsupported in modules (yet).",
 				ZSTR_VAL(file_handle->filename));
 		return NULL;
 	}
@@ -549,10 +548,12 @@ static zend_result zum_check_deps_type(zend_user_module *module, zend_type type)
 	ZEND_TYPE_FOREACH(type, single_type) {
 		if (ZEND_TYPE_HAS_NAME(*single_type)) {
 			if (UNEXPECTED(zum_check_deps_class_name(module, ZEND_TYPE_NAME(*single_type), NULL) == FAILURE)) {
+				ZEND_ASSERT(EG(exception));
 				return FAILURE;
 			}
 		} else if (ZEND_TYPE_HAS_LIST(*single_type)) {
 			if (UNEXPECTED(zum_check_deps_type(module, *single_type) == FAILURE)) {
+				ZEND_ASSERT(EG(exception));
 				return FAILURE;
 			}
 		}
@@ -590,11 +591,6 @@ static zend_result zum_check_deps_class(zend_user_module *module, zend_class_ent
 
 		zend_user_module *dep = zend_hash_find_ptr(CG(module_table), ce->info.user.module);
 		ZEND_ASSERT(dep);
-		if (dep->is_loading) {
-			zend_circular_module_dependency_error(dep);
-			return FAILURE;
-		}
-		ZEND_ASSERT(zend_accel_in_shm(dep));
 		zend_hash_add_ptr(&module->deps, ce->info.user.module, dep);
 	}
 
@@ -629,12 +625,14 @@ static zend_result zum_check_deps_class_decl(zend_user_module *module, zend_clas
 	// we don't visit through op_array walk, e.g. eval'ed classes.
 	if (ce->parent) {
 		if (zum_check_deps_class_decl_dep(module, ce->parent) == FAILURE) {
+			ZEND_ASSERT(EG(exception));
 			return FAILURE;
 		}
 	}
 
 	for (uint32_t i = 0; i < ce->num_interfaces; i++) {
 		if (zum_check_deps_class_decl_dep(module, ce->interfaces[i]) == FAILURE) {
+			ZEND_ASSERT(EG(exception));
 			return FAILURE;
 		}
 	}
@@ -642,6 +640,7 @@ static zend_result zum_check_deps_class_decl(zend_user_module *module, zend_clas
 	for (uint32_t i = 0; i < ce->num_traits; i++) {
 		zend_class_name *trait_name = &ce->trait_names[i];
 		if (zum_check_deps_class_name(module, trait_name->name, trait_name->lc_name) == FAILURE) {
+			ZEND_ASSERT(EG(exception));
 			return FAILURE;
 		}
 	}
@@ -649,6 +648,7 @@ static zend_result zum_check_deps_class_decl(zend_user_module *module, zend_clas
 	zend_property_info *prop_info;
 	ZEND_HASH_MAP_FOREACH_PTR(&ce->properties_info, prop_info) {
 		if (UNEXPECTED(zum_check_deps_type(module, prop_info->type) == FAILURE)) {
+			ZEND_ASSERT(EG(exception));
 			return FAILURE;
 		}
 		// TODO: hooks
@@ -659,6 +659,7 @@ static zend_result zum_check_deps_class_decl(zend_user_module *module, zend_clas
 		if (fn->type == ZEND_USER_FUNCTION && fn->op_array.scope == ce
 				&& !(fn->common.fn_flags & ZEND_ACC_TRAIT_CLONE)) {
 			if (UNEXPECTED(zum_check_deps_op_array(module, &fn->op_array) == FAILURE)) {
+				ZEND_ASSERT(EG(exception));
 				return FAILURE;
 			}
 		}
@@ -677,8 +678,12 @@ static zend_result zum_check_deps_class_name_ex(zend_user_module *module, zend_s
 		return SUCCESS;
 	}
 
-	zend_class_entry *ce = zend_fetch_class_by_name(name, lcname, fetch_type | ZEND_FETCH_CLASS_SILENT);
+	zend_class_entry *ce = zend_fetch_class_by_name(name, lcname, fetch_type);
 	if (UNEXPECTED(!ce)) {
+		if (fetch_type & ZEND_FETCH_CLASS_SILENT) {
+			return SUCCESS;
+		}
+		ZEND_ASSERT(EG(exception));
 		return FAILURE;
 	}
 
@@ -804,6 +809,7 @@ static zend_result zum_check_deps_op_array(zend_user_module *module, zend_op_arr
 				if (ce) {
 					ZEND_ASSERT(ce->ce_flags & ZEND_ACC_LINKED);
 					if (UNEXPECTED(zum_check_deps_class_decl(module, ce) == FAILURE)) {
+						ZEND_ASSERT(EG(exception));
 						return FAILURE;
 					}
 					zend_hash_add_new_ptr(&module->class_table, lcname, ce);
@@ -820,11 +826,13 @@ static zend_result zum_check_deps_op_array(zend_user_module *module, zend_op_arr
 					EG(lineno_override) = ce->info.user.line_start;
 					ce = zend_do_link_class(ce, (opline->op2_type == IS_CONST) ? Z_STR_P(RT_CONSTANT(opline, opline->op2)) : NULL, rtd_key);
 					if (UNEXPECTED(!ce)) {
+						ZEND_ASSERT(EG(exception));
 						return FAILURE;
 					}
 					ZEND_ASSERT(ce->ce_flags & ZEND_ACC_LINKED);
 				}
 				if (UNEXPECTED(zum_check_deps_class_decl(module, ce) == FAILURE)) {
+					ZEND_ASSERT(EG(exception));
 					return FAILURE;
 				}
 				if (zend_hash_add_ptr(&module->class_table, rtd_key, ce)) {
@@ -841,6 +849,7 @@ static zend_result zum_check_deps_op_array(zend_user_module *module, zend_op_arr
 						// (*fn->op_array.refcount)++;
 					}
 					if (UNEXPECTED(zum_check_deps_op_array(module, &fn->op_array) == FAILURE)) {
+						ZEND_ASSERT(EG(exception));
 						return FAILURE;
 					}
 				}
@@ -853,6 +862,7 @@ static zend_result zum_check_deps_op_array(zend_user_module *module, zend_op_arr
 	if (op_array->num_dynamic_func_defs) {
 		for (uint32_t i = 0; i < op_array->num_dynamic_func_defs; i++) {
 			if (UNEXPECTED(zum_check_deps_op_array(module, op_array->dynamic_func_defs[i]) == FAILURE)) {
+				ZEND_ASSERT(EG(exception));
 				return FAILURE;
 			}
 		}
@@ -899,9 +909,8 @@ static zend_result zum_check_deps(zend_user_module *module,
 		zend_string *key;
 		zend_class_entry *ce;
 		if (UNEXPECTED(zum_check_deps_op_array(module, &persistent_script->script.main_op_array) == FAILURE)) {
-			EG(filename_override) = filename_override;
-			EG(lineno_override) = lineno_override;
-			return FAILURE;
+			ZEND_ASSERT(EG(exception));
+			goto failure;
 		}
 		// Opcache may elide some DECLARE opcodes, so we have to check
 		// persistent_script->script.class_table as well.
@@ -926,11 +935,12 @@ static zend_result zum_check_deps(zend_user_module *module,
 				ce = zend_do_link_class(ce, NULL, key);
 				if (!ce) {
 					ZEND_ASSERT(EG(exception));
-					return FAILURE;
+					goto failure;
 				}
 			}
 			if (zend_hash_add_ptr(&module->class_table, key, ce)) {
 				if (UNEXPECTED(zum_check_deps_class_decl(module, ce) == FAILURE)) {
+					ZEND_ASSERT(EG(exception));
 					goto failure;
 				}
 			}
@@ -938,9 +948,8 @@ static zend_result zum_check_deps(zend_user_module *module,
 		zend_function *function;
 		ZEND_HASH_MAP_FOREACH_PTR(&persistent_script->script.function_table, function) {
 			if (UNEXPECTED(zum_check_deps_op_array(module, &function->op_array) == FAILURE)) {
-				EG(filename_override) = filename_override;
-				EG(lineno_override) = lineno_override;
-				return FAILURE;
+				ZEND_ASSERT(EG(exception));
+				goto failure;
 			}
 		} ZEND_HASH_FOREACH_END();
 	} ZEND_HASH_FOREACH_END();
@@ -952,6 +961,7 @@ static zend_result zum_check_deps(zend_user_module *module,
 failure:
 	EG(filename_override) = filename_override;
 	EG(lineno_override) = lineno_override;
+	ZEND_ASSERT(EG(exception));
 	return FAILURE;
 }
 
@@ -991,7 +1001,6 @@ static void bzero_aligned(void *mem, size_t size)
 
 static zend_persistent_user_module* zum_save_in_shared_memory(zend_persistent_user_module *pmodule)
 {
-	zend_accel_hash_entry *bucket;
 	uint32_t memory_used;
 	uint32_t checkpoint;
 
@@ -1021,7 +1030,7 @@ static zend_persistent_user_module* zum_save_in_shared_memory(zend_persistent_us
 	// new_persistent_script->is_phar = is_phar_file(new_persistent_script->script.filename);
 
 	/* Consistency check */
-	if ((char*)pmodule->script->mem + pmodule->script->size != (char*)ZCG(mem)) {
+	if ((char*)pmodule->script->mem + memory_used != (char*)ZCG(mem)) {
 		zend_accel_error(
 			((char*)pmodule->script->mem + pmodule->script->size < (char*)ZCG(mem)) ? ACCEL_LOG_ERROR : ACCEL_LOG_WARNING,
 			"Internal error: wrong size calculation: module %s start=" ZEND_ADDR_FMT ", end=" ZEND_ADDR_FMT ", real=" ZEND_ADDR_FMT "\n",
@@ -1029,20 +1038,6 @@ static zend_persistent_user_module* zum_save_in_shared_memory(zend_persistent_us
 			(size_t)pmodule->script->mem,
 			(size_t)((char *)pmodule->script->mem + pmodule->script->size),
 			(size_t)ZCG(mem));
-	}
-
-	// TODO: hack
-	zend_string *key = accel_new_interned_string(zend_string_concat2(
-			"module://", strlen("module://"),
-			ZSTR_VAL(pmodule->module.desc.desc_path), ZSTR_LEN(pmodule->module.desc.desc_path)));
-	if (!ZSTR_IS_INTERNED(key)) {
-		// TODO
-		zend_error_noreturn(E_CORE_ERROR, "Could not intern module key (increase opcache.interned_strings_buffer size)");
-	}
-	bucket = zend_accel_hash_update(&ZCSG(hash), key, 0, pmodule);
-	zend_string_release(key);
-	if (bucket) {
-		zend_accel_error(ACCEL_LOG_INFO, "Cached module '%s'", ZSTR_VAL(pmodule->module.desc.desc_path));
 	}
 
 	pmodule->script->dynamic_members.memory_consumption = ZEND_ALIGNED_SIZE(pmodule->script->size);
@@ -1066,7 +1061,7 @@ static bool zum_cache_is_valid(zend_file_handle *desc_file_handle, zend_persiste
 		return false;
 	}
 
-	if (!zum_validate_timestamps(&pmodule->module.desc, pmodule->dir_cache)) {
+	if (!zum_validate_timestamps(&pmodule->module.desc, pmodule->module.dir_cache)) {
 		ZUM_DEBUG_VALIDATION("Module timestamps did not validate: %s\n", ZSTR_VAL(desc_file_handle->filename));
 		return false;
 	}
@@ -1080,6 +1075,9 @@ static zend_result zum_load(zend_file_handle *desc_file_handle, zend_persistent_
 
 	ZEND_ASSERT(zend_accel_in_shm(pmodule));
 
+	// Register module early to prevent recursive loading in case of cycles
+	zend_hash_add_ptr(CG(module_table), pmodule->module.desc.lcname, &pmodule->module);
+
 	zend_user_module *dep;
 	ZEND_HASH_MAP_FOREACH_PTR(&pmodule->module.deps, dep) {
 		ZEND_ASSERT(zend_accel_in_shm(dep));
@@ -1089,7 +1087,7 @@ static zend_result zum_load(zend_file_handle *desc_file_handle, zend_persistent_
 			if (UNEXPECTED(module != dep)) {
 				/* A different version of the dependency is loaded. This
 				 * invalidates the module. */
-				return FAILURE;
+				goto fail;
 			}
 			continue;
 		}
@@ -1101,14 +1099,14 @@ static zend_result zum_load(zend_file_handle *desc_file_handle, zend_persistent_
 
 		if (zum_load(&file_handle, pdep) == FAILURE) {
 			zend_destroy_file_handle(&file_handle);
-			return FAILURE;
+			goto fail;
 		}
 		zend_destroy_file_handle(&file_handle);
 	} ZEND_HASH_FOREACH_END();
 
 	/* Validate file list and timestamps */
 	if (!zum_cache_is_valid(desc_file_handle, pmodule)) {
-		return FAILURE;
+		goto fail;
 	}
 
 	if (ZCSG(map_ptr_last) > CG(map_ptr_last)) {
@@ -1165,6 +1163,11 @@ static zend_result zum_load(zend_file_handle *desc_file_handle, zend_persistent_
 	zend_hash_add_ptr(CG(module_table), pmodule->module.desc.lcname, &pmodule->module);
 
 	return SUCCESS;
+
+fail:
+	zend_hash_del(CG(module_table), pmodule->module.desc.lcname);
+
+	return FAILURE;
 }
 
 static zend_result zum_execute(zend_op_array *op_array)
@@ -1184,33 +1187,52 @@ static zend_result zum_execute(zend_op_array *op_array)
 
 static zend_class_entry *(*zum_orig_zend_autoload)(zend_string *name, zend_string *lc_name) = NULL;
 
-static bool zum_autoload_from_current_module(zend_string *lc_name)
+static bool zum_autoload_from_modules(zend_string *lc_name)
 {
 	ZUM_DEBUG("autoload: %s\n", ZSTR_VAL(lc_name));
 
-	zend_user_module *module = CG(active_module);
+	// Find module being loaded whose name is the longer prefix of the class
+	// name
+	zend_user_module *candidate;
+	zend_user_module *module = NULL;
+	ZEND_HASH_MAP_REVERSE_FOREACH_PTR(CG(module_table), candidate) {
+		if (candidate->is_loading
+				&& zend_string_starts_with(lc_name, candidate->desc.lcname)
+				&& ZSTR_VAL(lc_name)[ZSTR_LEN(candidate->desc.lcname)] == '\\'
+				&& (module == NULL || ZSTR_LEN(candidate->desc.lcname) > ZSTR_LEN(module->desc.lcname))) {
+			module = candidate;
+		}
+	} ZEND_HASH_FOREACH_END();
 
 	if (!module) {
 		return false;
 	}
 
+	zend_user_module *orig_module = CG(active_module);
+	CG(active_module) = module;
+
 	zend_persistent_script *persistent_script = zend_hash_find_ptr(&module->classmap, lc_name);
 	if (!persistent_script) {
-		return false;
+		goto fail;
 	}
 
 	if (!zend_hash_add_empty_element(&EG(included_files), persistent_script->script.filename)) {
-		return false;
+		goto fail;
 	}
 
 	zend_op_array *op_array = zend_accel_load_script(persistent_script, true);
 
 	ZUM_DEBUG("execute: %s (autoload)\n", ZSTR_VAL(op_array->filename));
-	if (zum_execute(op_array) == FAILURE) {
-		return false;
+	if (zum_execute(op_array) == FAILURE || EG(exception)) {
+		goto fail;
 	}
 
+	CG(active_module) = orig_module;
 	return true;
+
+fail:
+	CG(active_module) = orig_module;
+	return false;
 }
 
 static zend_class_entry *zum_autoload(zend_string *name, zend_string *lc_name)
@@ -1218,7 +1240,7 @@ static zend_class_entry *zum_autoload(zend_string *name, zend_string *lc_name)
 	zend_user_module *module = CG(active_module);
 
 	if (module) {
-		if (zum_autoload_from_current_module(lc_name)) {
+		if (zum_autoload_from_modules(lc_name)) {
 			if (ZSTR_HAS_CE_CACHE(name) && ZSTR_GET_CE_CACHE(name)) {
 				return (zend_class_entry*)ZSTR_GET_CE_CACHE(name);
 			} else {
@@ -1238,18 +1260,13 @@ static zend_class_entry *zum_autoload(zend_string *name, zend_string *lc_name)
 static void zum_handle_loaded_module(zend_user_module *loaded_module, zend_string *module_path)
 {
 	if (loaded_module->is_loading) {
-		if (CG(active_module)
-				&& zend_string_equals_ci(CG(active_module)->desc.lcname, loaded_module->desc.lcname)) {
-			zend_throw_error(NULL,
-					"Can not require module %s while it is being loaded",
-					ZSTR_VAL(loaded_module->desc.name));
-		} else {
-			zend_circular_module_dependency_error(loaded_module);
-		}
+		zend_throw_error(NULL,
+				"Can not require module %s while it is being loaded",
+				ZSTR_VAL(loaded_module->desc.name));
 	} else {
 		if (!zend_string_equals(module_path, loaded_module->desc.desc_path)) {
 			zend_throw_error(NULL,
-					"Tried to load module %s described by %s, but this module was already loaded from %s",
+					"Tried to load module %s from %s, but this module was already loaded from %s",
 					ZSTR_VAL(loaded_module->desc.name),
 					ZSTR_VAL(module_path),
 					ZSTR_VAL(loaded_module->desc.desc_path));
@@ -1257,11 +1274,12 @@ static void zum_handle_loaded_module(zend_user_module *loaded_module, zend_strin
 	}
 }
 
-ZEND_API void zum_persist(zend_user_module *module, zend_user_module_dir_cache *dir_cache);
+static void zum_persist_modules(uint32_t module_table_offset);
 
 ZEND_API void zend_require_user_module(zend_string *module_path)
 {
 	zend_user_module *orig_module = CG(active_module);
+	uint32_t module_table_offset = CG(module_table)->nNumUsed;
 
 	/* TODO: move this in MINIT */
 	if (zum_orig_zend_autoload == NULL) {
@@ -1296,7 +1314,7 @@ ZEND_API void zend_require_user_module(zend_string *module_path)
 	if (cached_module) {
 		zend_user_module *loaded_module = zend_hash_find_ptr(EG(module_table), cached_module->module.desc.lcname);
 		if (loaded_module) {
-			zum_handle_loaded_module(loaded_module, full_path);
+			zum_handle_loaded_module(loaded_module, file_handle.filename);
 			zend_destroy_file_handle(&file_handle);
 			return;
 		}
@@ -1307,6 +1325,8 @@ ZEND_API void zend_require_user_module(zend_string *module_path)
 	}
 
 	/* Parse module descriptor */
+
+	ZUM_DEBUG("no valid cache for module %s\n", ZSTR_VAL(module_path));
 
 	struct stat st;
 	if (stat(ZSTR_VAL(file_handle.filename), &st) != 0) {
@@ -1330,7 +1350,7 @@ ZEND_API void zend_require_user_module(zend_string *module_path)
 
 	zend_user_module *loaded_module = zend_hash_find_ptr(EG(module_table), module_desc.lcname);
 	if (loaded_module) {
-		zum_handle_loaded_module(loaded_module, module_path);
+		zum_handle_loaded_module(loaded_module, file_handle.filename);
 		zend_destroy_file_handle(&file_handle);
 		zum_desc_destroy(&module_desc);
 		return;
@@ -1348,6 +1368,7 @@ ZEND_API void zend_require_user_module(zend_string *module_path)
 	zend_user_module *module = emalloc(sizeof(zend_user_module));
 	module->desc = module_desc;
 	module->is_loading = true;
+	module->is_persistent = false;
 	zend_hash_init(&module->scripts, 0, NULL, NULL, 0);
 	zend_hash_init(&module->classmap, 0, NULL, NULL, 0);
 	zend_hash_init(&module->class_table, 0, NULL, NULL, 0);
@@ -1484,20 +1505,21 @@ cleanup:
 
 		CG(active_module) = orig_module;
 		module->is_loading = false;
+		module->dir_cache = dir_cache;
 
 		if (EG(exception)) {
 			zum_desc_destroy(&module_desc);
 			zend_hash_del(EG(module_table), module->desc.lcname);
 			efree(module);
-		} else {
-			zum_persist(module, dir_cache);
+		} else if (!orig_module) {
+			zum_persist_modules(module_table_offset);
 		}
 	}
 }
 
-ZEND_API void zum_persist(zend_user_module *module, zend_user_module_dir_cache *dir_cache)
+static zend_persistent_user_module *zum_build_persistent_module(zend_user_module *module)
 {
-	ZUM_DEBUG("Persist module %s\n", ZSTR_VAL(module->desc.name));
+	ZUM_DEBUG("Build persistent module %s\n", ZSTR_VAL(module->desc.name));
 
 	ZEND_ASSERT(!module->is_loading);
 	ZEND_ASSERT(!zend_accel_in_shm(module));
@@ -1541,27 +1563,97 @@ ZEND_API void zum_persist(zend_user_module *module, zend_user_module_dir_cache *
 
 	pmodule->script = pscript;
 	pmodule->module = *module;
-	pmodule->dir_cache = dir_cache;
+	pmodule->module.is_persistent = true;
+
+	CG(compiled_filename) = orig_compiled_filename;
+
+	zend_shared_alloc_register_xlat_entry(module, pmodule);
+
+	return pmodule;
+}
+
+static void zum_persist_modules(uint32_t module_table_offset)
+{
+	ZEND_ASSERT(!CG(active_module));
 
 	zend_shared_alloc_init_xlat_table();
+
+	/* Replace zend_user_modules by zend_persistent_user_modules
+	 * in module_table and module dependencies. */
+
+	zval *zv;
+	ZEND_HASH_MAP_FOREACH_VAL_FROM(CG(module_table), zv, module_table_offset) {
+		zend_user_module *module = Z_PTR_P(zv);
+		if (zend_accel_in_shm(module)) {
+			continue;
+		}
+		zend_persistent_user_module *pmodule = zum_build_persistent_module(module);
+		Z_PTR_P(zv) = &pmodule->module;
+		efree(module);
+	} ZEND_HASH_FOREACH_END();
+
+	zend_user_module *module;
+	ZEND_HASH_MAP_FOREACH_PTR_FROM(CG(module_table), module, module_table_offset) {
+		if (zend_accel_in_shm(module)) {
+			continue;
+		}
+		ZEND_HASH_MAP_FOREACH_VAL(&module->deps, zv) {
+			zend_user_module *dep = Z_PTR_P(zv);
+			zend_persistent_user_module *pdep = zend_shared_alloc_get_xlat_entry(dep);
+			if (!pdep) {
+				ZEND_ASSERT(zend_accel_in_shm(dep));
+				continue;
+			}
+			Z_PTR_P(zv) = &pdep->module;
+		} ZEND_HASH_FOREACH_END();
+	} ZEND_HASH_FOREACH_END();
+
+	zend_shared_alloc_clear_xlat_table();
 
 	HANDLE_BLOCK_INTERRUPTIONS();
 	SHM_UNPROTECT();
 	zend_shared_alloc_lock();
 
-	pmodule = zum_save_in_shared_memory(pmodule);
+	ZEND_HASH_MAP_FOREACH_VAL_FROM(CG(module_table), zv, module_table_offset) {
+		zend_user_module *module = Z_PTR_P(zv);
+		zend_persistent_user_module *pmodule = (zend_persistent_user_module*)((char*)module - XtOffsetOf(zend_persistent_user_module, module));
+		zend_persistent_user_module *persisted_pmodule = zend_shared_alloc_get_xlat_entry(pmodule);
+		if (!persisted_pmodule) {
+			if (zend_accel_in_shm(pmodule)) {
+				continue;
+			}
+			persisted_pmodule = zum_save_in_shared_memory(pmodule);
+		}
+		Z_PTR_P(zv) = &persisted_pmodule->module;
+		zend_shared_alloc_register_xlat_entry(persisted_pmodule, persisted_pmodule);
+	} ZEND_HASH_FOREACH_END();
 
-	zend_shared_alloc_destroy_xlat_table();
+	ZEND_HASH_MAP_FOREACH_PTR_FROM(CG(module_table), module, module_table_offset) {
+		zend_persistent_user_module *pmodule = (zend_persistent_user_module*)((char*)module - XtOffsetOf(zend_persistent_user_module, module));
+		if (!zend_shared_alloc_get_xlat_entry(pmodule)) {
+			continue;
+		}
+
+		zend_string *key = accel_new_interned_string(zend_string_concat2(
+					"module://", strlen("module://"),
+					ZSTR_VAL(pmodule->module.desc.desc_path), ZSTR_LEN(pmodule->module.desc.desc_path)));
+		if (!ZSTR_IS_INTERNED(key)) {
+			// TODO
+			zend_error_noreturn(E_CORE_ERROR, "Could not intern module key (increase opcache.interned_strings_buffer size)");
+		}
+
+		zend_accel_hash_entry *bucket = zend_accel_hash_update(&ZCSG(hash), key, 0, pmodule);
+		zend_string_release(key);
+		if (bucket) {
+			zend_accel_error(ACCEL_LOG_INFO, "Cached module '%s'", ZSTR_VAL(pmodule->module.desc.desc_path));
+		}
+	} ZEND_HASH_FOREACH_END();
+
 	zend_shared_alloc_save_state();
 	ZCSG(interned_strings).saved_top = ZCSG(interned_strings).top;
 	zend_shared_alloc_unlock();
 	SHM_PROTECT();
 	HANDLE_UNBLOCK_INTERRUPTIONS();
 
-	zend_hash_update_ptr(CG(module_table), pmodule->module.desc.lcname,
-			&pmodule->module);
-
-	efree(module);
-
-	CG(compiled_filename) = orig_compiled_filename;
+	zend_shared_alloc_destroy_xlat_table();
 }

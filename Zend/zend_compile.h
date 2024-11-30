@@ -574,12 +574,14 @@ typedef struct _zend_user_module_desc {
 struct _zend_user_module {
 	zend_user_module_desc   desc;
 	bool                    is_loading;
+	bool                    is_persistent;
 	HashTable               deps;
 	HashTable               class_table;
 	HashTable               function_table;
 	// TODO: move these elsewhere
 	HashTable               scripts;
 	HashTable               classmap;
+	struct _zend_user_module_dir_cache *dir_cache;
 };
 
 #define ZEND_RETURN_VALUE				0

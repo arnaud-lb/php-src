@@ -24,7 +24,6 @@ typedef struct _zend_user_module_dir_cache {
 typedef struct _zend_persistent_user_module {
 	zend_user_module                      module;
 	zend_persistent_script               *script;
-	zend_user_module_dir_cache           *dir_cache;
 } zend_persistent_user_module;
 
 ZEND_API void zend_require_user_module(zend_string *module_path);

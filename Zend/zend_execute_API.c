@@ -1680,45 +1680,13 @@ void zend_unset_timeout(void) /* {{{ */
 }
 /* }}} */
 
-ZEND_API zend_never_inline ZEND_COLD void zend_circular_module_dependency_error(zend_user_module *module)
-{
-	smart_str s = {0};
-	zend_user_module *other;
-	bool add = false;
-	ZEND_HASH_FOREACH_PTR(CG(module_table), other) {
-		if (!add) {
-			if (other == module) {
-				add = true;
-			} else {
-				continue;
-			}
-		}
-		if (!other->is_loading) {
-			continue;
-		}
-		if (smart_str_get_len(&s) != 0) {
-			smart_str_appends(&s, " -> ");
-		}
-		smart_str_append(&s, other->desc.name);
-	} ZEND_HASH_FOREACH_END();
-
-	smart_str_0(&s);
-
-	zend_string *path_str = smart_str_extract(&s);
-
-	zend_throw_exception_ex(NULL, 0,
-			"Circular dependency found between the following modules: %s",
-			ZSTR_VAL(path_str));
-
-	zend_string_release(path_str);
-}
-
 static ZEND_COLD void report_class_fetch_error(zend_string *class_name, uint32_t fetch_type)
 {
 	if (fetch_type & ZEND_FETCH_CLASS_SILENT) {
 		return;
 	}
 
+#if 0
 	if (CG(active_module)) {
 		/* We are loading a module. Check if the class is part of a module being
 		 * loaded. */
@@ -1743,6 +1711,7 @@ static ZEND_COLD void report_class_fetch_error(zend_string *class_name, uint32_t
 			}
 		} ZEND_HASH_FOREACH_END();
 	}
+#endif
 
 	if (EG(exception)) {
 		if (!(fetch_type & ZEND_FETCH_CLASS_EXCEPTION)) {
