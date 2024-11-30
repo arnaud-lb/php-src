@@ -298,6 +298,8 @@ static void zum_dir_cache_entry_dtor(zval *pDest) {
 	}
 }
 
+#define ZUM_OPENDIR_FLAGS O_RDONLY|O_NDELAY|O_DIRECTORY|O_LARGEFILE|O_CLOEXEC
+
 static bool zum_validate_timestamps_fd(zend_user_module_desc *module_desc,
 		int dirfd, zend_user_module_dir_cache *cache)
 {
@@ -322,7 +324,7 @@ static bool zum_validate_timestamps_fd(zend_user_module_desc *module_desc,
 				return false;
 			}
 		} else {
-			int fd = openat(dirfd, ZSTR_VAL(name), O_DIRECTORY);
+			int fd = openat(dirfd, ZSTR_VAL(name), ZUM_OPENDIR_FLAGS);
 			if (fd == -1) {
 				ZUM_DEBUG("opendat(%s) failed: %s\n", ZSTR_VAL(name), strerror(errno));
 				return false;
@@ -356,7 +358,7 @@ static bool zum_validate_timestamps_fd(zend_user_module_desc *module_desc,
 static bool zum_validate_timestamps(zend_user_module_desc *module_desc,
 		zend_user_module_dir_cache *cache)
 {
-	int fd = open(ZSTR_VAL(module_desc->root), O_DIRECTORY);
+	int fd = open(ZSTR_VAL(module_desc->root), ZUM_OPENDIR_FLAGS);
 	if (fd == -1) {
 		ZUM_DEBUG("Failed opening module root directory: %s: %s\n",
 				ZSTR_VAL(module_desc->root), strerror(errno));
