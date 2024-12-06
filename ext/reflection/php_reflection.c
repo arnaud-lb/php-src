@@ -5527,7 +5527,7 @@ ZEND_METHOD(ReflectionClass, inModule)
 
 	GET_REFLECTION_OBJECT_PTR(ce);
 
-	RETURN_BOOL(ce->type == ZEND_USER_CLASS && ce->info.user.module);
+	RETURN_BOOL(ce->type == ZEND_USER_CLASS && ce->info.user.user_module);
 }
 /* }}} */
 
@@ -5543,8 +5543,8 @@ ZEND_METHOD(ReflectionClass, getModuleName)
 
 	GET_REFLECTION_OBJECT_PTR(ce);
 
-	if (ce->type == ZEND_USER_CLASS && ce->info.user.module) {
-		zend_user_module *module = zend_hash_find_ptr(CG(module_table), ce->info.user.module);
+	if (ce->type == ZEND_USER_CLASS && ce->info.user.user_module) {
+		zend_user_module *module = zend_hash_find_ptr(CG(module_table), ce->info.user.user_module);
 		RETURN_STR(module->desc.name);
 	}
 	RETURN_EMPTY_STRING();

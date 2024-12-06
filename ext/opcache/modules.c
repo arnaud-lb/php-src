@@ -574,15 +574,15 @@ static zend_result zum_check_deps_class(zend_user_module *module, zend_class_ent
 		return SUCCESS;
 	}
 
-	if (UNEXPECTED(!ce->info.user.module)) {
+	if (UNEXPECTED(!ce->info.user.user_module)) {
 		zend_throw_error(NULL,
 				"Module %s can not depend on non-module class %s",
 				ZSTR_VAL(module->desc.name), ZSTR_VAL(ce->name));
 		return FAILURE;
 	}
 
-	if (!zend_string_equals(ce->info.user.module, module->desc.lcname)) {
-		ZUM_DEBUG("Module %s depends on %s\n", ZSTR_VAL(module->desc.lcname), ZSTR_VAL(ce->info.user.module));
+	if (!zend_string_equals(ce->info.user.user_module, module->desc.lcname)) {
+		ZUM_DEBUG("Module %s depends on %s\n", ZSTR_VAL(module->desc.lcname), ZSTR_VAL(ce->info.user.user_module));
 
 		if (!(ce->ce_flags & ZEND_ACC_IMMUTABLE) && !ZCG(accel_directives).file_cache_only) {
 			zend_throw_error(NULL,
@@ -591,9 +591,9 @@ static zend_result zum_check_deps_class(zend_user_module *module, zend_class_ent
 			return FAILURE;
 		}
 
-		zend_user_module *dep = zend_hash_find_ptr(CG(module_table), ce->info.user.module);
+		zend_user_module *dep = zend_hash_find_ptr(CG(module_table), ce->info.user.user_module);
 		ZEND_ASSERT(dep);
-		zend_hash_add_ptr(&module->deps, ce->info.user.module, dep);
+		zend_hash_add_ptr(&module->deps, ce->info.user.user_module, dep);
 	}
 
 	return SUCCESS;
@@ -1440,7 +1440,7 @@ ZEND_API void zend_require_user_module(zend_string *module_path)
 
 		zend_class_entry *ce;
 		ZEND_HASH_FOREACH_PTR_FROM(CG(class_table), ce, file_class_table_offset) {
-			ZEND_ASSERT(zend_string_equals(ce->info.user.module, module->desc.lcname));
+			ZEND_ASSERT(zend_string_equals(ce->info.user.user_module, module->desc.lcname));
 			ZEND_ASSERT(ce->type == ZEND_USER_CLASS);
 			zend_string *lcname = zend_string_tolower(ce->name);
 			zend_hash_add_ptr(&module->classmap, lcname, persistent_script);

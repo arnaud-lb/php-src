@@ -9091,9 +9091,9 @@ static void zend_compile_class_decl(znode *result, zend_ast *ast, bool toplevel)
 
 	ce->ce_flags |= decl->flags;
 	if (CG(active_module)) {
-		ce->info.user.module = zend_string_copy(CG(active_module)->desc.lcname);
+		ce->info.user.user_module = zend_string_copy(CG(active_module)->desc.lcname);
 	} else {
-		ce->info.user.module = NULL;
+		ce->info.user.user_module = NULL;
 	}
 	ce->info.user.filename = zend_string_copy(zend_get_compiled_filename());
 	ce->info.user.line_start = decl->start_lineno;

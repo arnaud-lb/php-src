@@ -506,8 +506,8 @@ void zend_persist_class_entry_calc(zend_class_entry *ce)
 			return;
 		}
 
-		if (ce->info.user.module) {
-			ADD_STRING(ce->info.user.module);
+		if (ce->info.user.user_module) {
+			ADD_STRING(ce->info.user.user_module);
 		}
 		if (ce->info.user.filename) {
 			ADD_STRING(ce->info.user.filename);

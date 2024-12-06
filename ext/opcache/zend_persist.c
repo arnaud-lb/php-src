@@ -1029,8 +1029,8 @@ zend_class_entry *zend_persist_class_entry(zend_class_entry *orig_ce)
 
 		ce->ce_flags |= ZEND_ACC_CACHED;
 
-		if (ce->info.user.module) {
-			zend_accel_store_string(ce->info.user.module);
+		if (ce->info.user.user_module) {
+			zend_accel_store_string(ce->info.user.user_module);
 		}
 		if (ce->info.user.filename) {
 			zend_accel_store_string(ce->info.user.filename);
