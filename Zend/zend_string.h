@@ -171,9 +171,9 @@ static zend_always_inline uint32_t zend_string_delref(zend_string *s)
 	return 1;
 }
 
-static zend_always_inline zend_string *zend_string_alloc(size_t len, bool persistent)
+static zend_always_inline zend_string *_zend_string_alloc(size_t len, bool persistent ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC)
 {
-	zend_string *ret = (zend_string *)pemalloc(ZEND_MM_ALIGNED_SIZE(_ZSTR_STRUCT_SIZE(len)), persistent);
+	zend_string *ret = (zend_string *)pemalloc_rel(ZEND_MM_ALIGNED_SIZE(_ZSTR_STRUCT_SIZE(len)), persistent);
 
 	GC_SET_REFCOUNT(ret, 1);
 	GC_TYPE_INFO(ret) = GC_STRING | ((persistent ? IS_STR_PERSISTENT : 0) << GC_FLAGS_SHIFT);
@@ -181,6 +181,8 @@ static zend_always_inline zend_string *zend_string_alloc(size_t len, bool persis
 	ZSTR_LEN(ret) = len;
 	return ret;
 }
+
+#define zend_string_alloc(len, persistent) _zend_string_alloc(len, persistent ZEND_FILE_LINE_CC ZEND_FILE_LINE_EMPTY_CC)
 
 static zend_always_inline zend_string *zend_string_safe_alloc(size_t n, size_t m, size_t l, bool persistent)
 {

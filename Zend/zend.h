@@ -225,6 +225,7 @@ struct _zend_class_entry {
 
 	union {
 		struct {
+			zend_string *user_module;
 			zend_string *filename;
 			uint32_t line_start;
 			uint32_t line_end;

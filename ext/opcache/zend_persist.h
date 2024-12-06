@@ -22,10 +22,14 @@
 #ifndef ZEND_PERSIST_H
 #define ZEND_PERSIST_H
 
+#include "modules.h"
+
 BEGIN_EXTERN_C()
 
 uint32_t zend_accel_script_persist_calc(zend_persistent_script *script, int for_shm);
 zend_persistent_script *zend_accel_script_persist(zend_persistent_script *script, int for_shm);
+uint32_t zend_accel_user_module_persist_calc(zend_persistent_user_module *module, int for_shm);
+zend_persistent_user_module *zend_accel_user_module_persist(zend_persistent_user_module *module, int for_shm);
 
 void zend_persist_class_entry_calc(zend_class_entry *ce);
 zend_class_entry *zend_persist_class_entry(zend_class_entry *ce);

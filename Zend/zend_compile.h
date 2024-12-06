@@ -51,6 +51,7 @@
 	} \
 } while (0)
 
+typedef struct _zend_user_module zend_user_module;
 typedef struct _zend_op_array zend_op_array;
 typedef struct _zend_op zend_op;
 
@@ -109,6 +110,9 @@ typedef struct _zend_declarables {
 /* Compilation context that is different for each file, but shared between op arrays. */
 typedef struct _zend_file_context {
 	zend_declarables declarables;
+
+	zend_user_module *current_module;
+	bool in_module;
 
 	zend_string *current_namespace;
 	bool in_namespace;
@@ -534,6 +538,7 @@ struct _zend_op_array {
 	zend_live_range *live_range;
 	zend_try_catch_element *try_catch_array;
 
+	zend_string *user_module;
 	zend_string *filename;
 	uint32_t line_start;
 	uint32_t line_end;
@@ -549,6 +554,35 @@ struct _zend_op_array {
 	void *reserved[ZEND_MAX_RESERVED_RESOURCES];
 };
 
+typedef struct _zend_user_module_desc {
+	zend_string *desc_path;
+	// TODO
+#ifdef ZEND_WIN32
+	unsigned __int64 timestamp;
+#else
+	time_t timestamp;
+#endif
+	zend_string  *name;
+	zend_string  *lcname;
+	zend_string  *root; /* ends with DEFAULT_SLASH_STR */
+	zend_string **include_patterns;
+	size_t        num_include_patterns;
+	zend_string **exclude_patterns;
+	size_t        num_exclude_patterns;
+} zend_user_module_desc;
+
+struct _zend_user_module {
+	zend_user_module_desc   desc;
+	bool                    is_loading;
+	bool                    is_persistent;
+	HashTable               deps;
+	HashTable               class_table;
+	HashTable               function_table;
+	// TODO: move these elsewhere
+	HashTable               scripts;
+	HashTable               classmap;
+	struct _zend_user_module_dir_cache *dir_cache;
+};
 
 #define ZEND_RETURN_VALUE				0
 #define ZEND_RETURN_REFERENCE			1
