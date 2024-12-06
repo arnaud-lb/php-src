@@ -948,11 +948,14 @@ static zend_result zum_check_deps(zend_user_module *module,
 			}
 		} ZEND_HASH_FOREACH_END();
 		zend_function *function;
-		ZEND_HASH_MAP_FOREACH_PTR(&persistent_script->script.function_table, function) {
+		ZEND_HASH_MAP_FOREACH_STR_KEY_PTR(&persistent_script->script.function_table, key, function) {
 			if (UNEXPECTED(zum_check_deps_op_array(module, &function->op_array) == FAILURE)) {
 				ZEND_ASSERT(EG(exception));
 				goto failure;
 			}
+
+			ZEND_ASSERT(function->type == ZEND_USER_FUNCTION);
+			zend_hash_add_ptr(&module->function_table, key, function);
 		} ZEND_HASH_FOREACH_END();
 	} ZEND_HASH_FOREACH_END();
 
