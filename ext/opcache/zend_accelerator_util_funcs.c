@@ -187,12 +187,12 @@ failure:
 	}
 }
 
-static zend_always_inline void zend_accel_function_hash_copy(HashTable *target, HashTable *source)
+zend_always_inline void zend_accel_function_hash_copy(HashTable *target, HashTable *source)
 {
 	_zend_accel_function_hash_copy(target, source, 0);
 }
 
-static zend_never_inline void zend_accel_function_hash_copy_notify(HashTable *target, HashTable *source)
+zend_never_inline void zend_accel_function_hash_copy_notify(HashTable *target, HashTable *source)
 {
 	_zend_accel_function_hash_copy(target, source, 1);
 }
@@ -248,12 +248,12 @@ static zend_always_inline void _zend_accel_class_hash_copy(HashTable *target, Ha
 	target->nInternalPointer = 0;
 }
 
-static zend_always_inline void zend_accel_class_hash_copy(HashTable *target, HashTable *source)
+zend_always_inline void zend_accel_class_hash_copy(HashTable *target, HashTable *source)
 {
 	_zend_accel_class_hash_copy(target, source, 0);
 }
 
-static zend_never_inline void zend_accel_class_hash_copy_notify(HashTable *target, HashTable *source)
+zend_never_inline void zend_accel_class_hash_copy_notify(HashTable *target, HashTable *source)
 {
 	_zend_accel_class_hash_copy(target, source, 1);
 }

@@ -1116,6 +1116,24 @@ static zend_result zum_load(zend_file_handle *desc_file_handle, zend_persistent_
 	}
 
 	/* Load into process tables */
+
+#if 0
+	if (zend_hash_num_elements(&pmodule->module.function_table) > 0) {
+		if (EXPECTED(!zend_observer_function_declared_observed)) {
+			zend_accel_function_hash_copy(CG(function_table), &pmodule->module.function_table);
+		} else {
+			zend_accel_function_hash_copy_notify(CG(function_table), &pmodule->module.function_table);
+		}
+	}
+
+	if (zend_hash_num_elements(&pmodule->module.class_table) > 0) {
+		if (EXPECTED(!zend_observer_class_linked_observed)) {
+			zend_accel_class_hash_copy(CG(class_table), &pmodule->module.class_table);
+		} else {
+			zend_accel_class_hash_copy_notify(CG(class_table), &pmodule->module.class_table);
+		}
+	}
+#else
 	if (zend_hash_num_elements(&pmodule->module.function_table)) {
 		Bucket *p = pmodule->module.function_table.arData;
 		Bucket *end = p + pmodule->module.function_table.nNumUsed;
@@ -1161,6 +1179,7 @@ static zend_result zum_load(zend_file_handle *desc_file_handle, zend_persistent_
 			_zend_hash_append_ex(EG(class_table), p->key, &p->val, 1);
 		}
 	}
+#endif
 
 	zend_hash_add_ptr(CG(module_table), pmodule->module.desc.lcname, &pmodule->module);
 
