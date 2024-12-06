@@ -484,6 +484,7 @@ static void zend_file_cache_serialize_op_array(zend_op_array            *op_arra
 			SERIALIZE_PTR(op_array->arg_info);
 			SERIALIZE_PTR(op_array->vars);
 			SERIALIZE_STR(op_array->function_name);
+			SERIALIZE_STR(op_array->user_module);
 			SERIALIZE_STR(op_array->filename);
 			SERIALIZE_PTR(op_array->live_range);
 			SERIALIZE_PTR(op_array->scope);
@@ -636,6 +637,7 @@ static void zend_file_cache_serialize_op_array(zend_op_array            *op_arra
 		}
 
 		SERIALIZE_STR(op_array->function_name);
+		SERIALIZE_STR(op_array->user_module);
 		SERIALIZE_STR(op_array->filename);
 		SERIALIZE_PTR(op_array->live_range);
 		SERIALIZE_PTR(op_array->scope);
@@ -772,6 +774,7 @@ static void zend_file_cache_serialize_class(zval                     *zv,
 		}
 	}
 	zend_file_cache_serialize_hash(&ce->constants_table, script, info, buf, zend_file_cache_serialize_class_constant);
+	SERIALIZE_STR(ce->info.user.module);
 	SERIALIZE_STR(ce->info.user.filename);
 	SERIALIZE_STR(ce->doc_comment);
 	SERIALIZE_ATTRIBUTES(ce->attributes);
@@ -1373,6 +1376,7 @@ static void zend_file_cache_unserialize_op_array(zend_op_array           *op_arr
 		UNSERIALIZE_PTR(op_array->arg_info);
 		UNSERIALIZE_PTR(op_array->vars);
 		UNSERIALIZE_STR(op_array->function_name);
+		UNSERIALIZE_STR(op_array->user_module);
 		UNSERIALIZE_STR(op_array->filename);
 		UNSERIALIZE_PTR(op_array->live_range);
 		UNSERIALIZE_PTR(op_array->scope);
@@ -1509,6 +1513,7 @@ static void zend_file_cache_unserialize_op_array(zend_op_array           *op_arr
 		}
 
 		UNSERIALIZE_STR(op_array->function_name);
+		UNSERIALIZE_STR(op_array->user_module);
 		UNSERIALIZE_STR(op_array->filename);
 		UNSERIALIZE_PTR(op_array->live_range);
 		UNSERIALIZE_STR(op_array->doc_comment);
@@ -1637,6 +1642,7 @@ static void zend_file_cache_unserialize_class(zval                    *zv,
 	}
 	zend_file_cache_unserialize_hash(&ce->constants_table,
 			script, buf, zend_file_cache_unserialize_class_constant, NULL);
+	UNSERIALIZE_STR(ce->info.user.module);
 	UNSERIALIZE_STR(ce->info.user.filename);
 	UNSERIALIZE_STR(ce->doc_comment);
 	UNSERIALIZE_ATTRIBUTES(ce->attributes);

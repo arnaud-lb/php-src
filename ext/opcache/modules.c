@@ -225,7 +225,7 @@ static zend_persistent_script *zum_compile_file(zend_user_module *module, zend_f
 	if (!persistent_script) {
 		/* For PoC purpose, we only support files that can be cached in SHM for
 		 * now. */
-		zend_error_noreturn(E_ERROR, "File %s could not be cached in SHM. This is unsupported in modules (yet).",
+		zend_error_noreturn(E_ERROR, "File %s could not be cached in opcache (SHM or file cache). This is unsupported in modules (yet).",
 				ZSTR_VAL(file_handle->filename));
 		return NULL;
 	}
@@ -584,7 +584,7 @@ static zend_result zum_check_deps_class(zend_user_module *module, zend_class_ent
 	if (!zend_string_equals(ce->info.user.module, module->desc.lcname)) {
 		ZUM_DEBUG("Module %s depends on %s\n", ZSTR_VAL(module->desc.lcname), ZSTR_VAL(ce->info.user.module));
 
-		if (!(ce->ce_flags & ZEND_ACC_IMMUTABLE)) {
+		if (!(ce->ce_flags & ZEND_ACC_IMMUTABLE) && !ZCG(accel_directives).file_cache_only) {
 			zend_throw_error(NULL,
 					"Module %s can not depend on uncacheable class %s",
 					ZSTR_VAL(module->desc.name), ZSTR_VAL(ce->name));
@@ -616,7 +616,7 @@ static zend_result zum_check_deps_class_decl(zend_user_module *module, zend_clas
 	ZEND_ASSERT(!EG(exception));
 	ZEND_ASSERT(ce->ce_flags & ZEND_ACC_LINKED);
 
-	if (!(ce->ce_flags & ZEND_ACC_IMMUTABLE)) {
+	if (!(ce->ce_flags & ZEND_ACC_IMMUTABLE) && !ZCG(accel_directives).file_cache_only) {
 		zend_throw_error(NULL,
 				"Class %s is uncacheable",
 				ZSTR_VAL(ce->name));
@@ -1313,7 +1313,7 @@ ZEND_API void zend_require_user_module(zend_string *module_path)
 
 	ZUM_DEBUG("require module: %s\n", ZSTR_VAL(module_path));
 
-	if (!ZCG(accelerator_enabled)) {
+	if (!ZCG(accelerator_enabled) && !ZCG(accel_directives).file_cache) {
 		zend_throw_error(NULL, "require_modules() not supported when opcache is not enabled, yet");
 		return;
 	}
@@ -1330,21 +1330,23 @@ ZEND_API void zend_require_user_module(zend_string *module_path)
 	zend_stream_init_filename_ex(&file_handle, full_path);
 	zend_string_release(full_path);
 
-	zend_string *module_key = zend_string_concat2(
-			"module://", strlen("module://"),
-			ZSTR_VAL(file_handle.filename), ZSTR_LEN(file_handle.filename));
-	zend_persistent_user_module *cached_module = zend_accel_hash_find(&ZCSG(hash), module_key);
-	zend_string_release(module_key);
-	if (cached_module) {
-		zend_user_module *loaded_module = zend_hash_find_ptr(EG(module_table), cached_module->module.desc.lcname);
-		if (loaded_module) {
-			zum_handle_loaded_module(loaded_module, file_handle.filename);
-			zend_destroy_file_handle(&file_handle);
-			return;
-		}
-		if (zum_load(&file_handle, cached_module) == SUCCESS) {
-			zend_destroy_file_handle(&file_handle);
-			return;
+	if (ZCG(accelerator_enabled)) {
+		zend_string *module_key = zend_string_concat2(
+				"module://", strlen("module://"),
+				ZSTR_VAL(file_handle.filename), ZSTR_LEN(file_handle.filename));
+		zend_persistent_user_module *cached_module = zend_accel_hash_find(&ZCSG(hash), module_key);
+		zend_string_release(module_key);
+		if (cached_module) {
+			zend_user_module *loaded_module = zend_hash_find_ptr(EG(module_table), cached_module->module.desc.lcname);
+			if (loaded_module) {
+				zum_handle_loaded_module(loaded_module, file_handle.filename);
+				zend_destroy_file_handle(&file_handle);
+				return;
+			}
+			if (zum_load(&file_handle, cached_module) == SUCCESS) {
+				zend_destroy_file_handle(&file_handle);
+				return;
+			}
 		}
 	}
 
@@ -1599,6 +1601,11 @@ static zend_persistent_user_module *zum_build_persistent_module(zend_user_module
 static void zum_persist_modules(uint32_t module_table_offset)
 {
 	ZEND_ASSERT(!CG(active_module));
+
+	if (ZCG(accel_directives).file_cache_only) {
+		// TODO: leaks
+		return;
+	}
 
 	zend_shared_alloc_init_xlat_table();
 

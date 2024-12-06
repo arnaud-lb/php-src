@@ -1890,7 +1890,7 @@ static zend_persistent_script *opcache_compile_file(zend_file_handle *file_handl
 	return new_persistent_script;
 }
 
-static zend_op_array *file_cache_compile_file(zend_file_handle *file_handle, int type)
+static zend_op_array *file_cache_compile_file(zend_file_handle *file_handle, int type, zend_persistent_script **persistent_script_p)
 {
 	zend_persistent_script *persistent_script;
 	zend_op_array *op_array = NULL;
@@ -1949,6 +1949,9 @@ static zend_op_array *file_cache_compile_file(zend_file_handle *file_handle, int
 			zend_accel_set_auto_globals(persistent_script->ping_auto_globals_mask & ~ZCG(auto_globals_mask));
 		}
 
+		if (persistent_script_p) {
+			*persistent_script_p = persistent_script;
+		}
 		return zend_accel_load_script(persistent_script, 1);
 	}
 
@@ -1957,6 +1960,9 @@ static zend_op_array *file_cache_compile_file(zend_file_handle *file_handle, int
 	if (persistent_script) {
 		from_memory = false;
 		persistent_script = cache_script_in_file_cache(persistent_script, &from_memory);
+		if (persistent_script_p) {
+			*persistent_script_p = persistent_script;
+		}
 		return zend_accel_load_script(persistent_script, from_memory);
 	}
 
@@ -1998,16 +2004,16 @@ zend_op_array *persistent_compile_file_ex(zend_file_handle *file_handle, int typ
 		if (file_handle->filename
 		 && ZCG(accel_directives).file_cache
 		 && ZCG(enabled) && accel_startup_ok) {
-			return file_cache_compile_file(file_handle, type);
+			return file_cache_compile_file(file_handle, type, persistent_script_p);
 		}
 		return accelerator_orig_compile_file(file_handle, type);
 	} else if (file_cache_only) {
 		ZCG(cache_opline) = NULL;
 		ZCG(cache_persistent_script) = NULL;
-		return file_cache_compile_file(file_handle, type);
+		return file_cache_compile_file(file_handle, type, persistent_script_p);
 	} else if ((ZCSG(restart_in_progress) && accel_restart_is_active())) {
 		if (ZCG(accel_directives).file_cache) {
-			return file_cache_compile_file(file_handle, type);
+			return file_cache_compile_file(file_handle, type, persistent_script_p);
 		}
 		ZCG(cache_opline) = NULL;
 		ZCG(cache_persistent_script) = NULL;
@@ -2099,7 +2105,7 @@ zend_op_array *persistent_compile_file_ex(zend_file_handle *file_handle, int typ
 	if (!ZCG(counted)) {
 		if (accel_activate_add() == FAILURE) {
 			if (ZCG(accel_directives).file_cache) {
-				return file_cache_compile_file(file_handle, type);
+				return file_cache_compile_file(file_handle, type, persistent_script_p);
 			}
 			return accelerator_orig_compile_file(file_handle, type);
 		}
@@ -2150,7 +2156,7 @@ zend_op_array *persistent_compile_file_ex(zend_file_handle *file_handle, int typ
 			SHM_PROTECT();
 			HANDLE_UNBLOCK_INTERRUPTIONS();
 			if (ZCG(accel_directives).file_cache) {
-				return file_cache_compile_file(file_handle, type);
+				return file_cache_compile_file(file_handle, type, persistent_script_p);
 			}
 			return accelerator_orig_compile_file(file_handle, type);
 		}
@@ -2239,7 +2245,7 @@ zend_op_array *persistent_compile_file_ex(zend_file_handle *file_handle, int typ
 		zend_accel_set_auto_globals(persistent_script->ping_auto_globals_mask & ~ZCG(auto_globals_mask));
 	}
 
-	if (persistent_script_p && from_shared_memory) {
+	if (persistent_script_p) {
 		*persistent_script_p = persistent_script;
 	}
 	return zend_accel_load_script(persistent_script, from_shared_memory);
