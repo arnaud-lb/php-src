@@ -108,7 +108,7 @@ static zend_always_inline zend_function* zend_partial_signature_create(zend_part
 				num++;
 				required++;
 				memcpy(info,
-					&prototype->common.arg_info[offset], 
+					&prototype->common.arg_info[offset],
 					sizeof(zend_arg_info));
 				ZEND_TYPE_FULL_MASK(info->type) &= ~_ZEND_IS_VARIADIC_BIT;
 				info++;
@@ -132,7 +132,7 @@ static zend_always_inline zend_function* zend_partial_signature_create(zend_part
 			if (offset < partial->func.common.num_args) {
 				while (offset < partial->func.common.num_args) {
 					if ((offset < partial->argc) &&
-						!Z_IS_PLACEHOLDER_P(&partial->argv[offset]) && 
+						!Z_IS_PLACEHOLDER_P(&partial->argv[offset]) &&
 						!Z_ISUNDEF(partial->argv[offset])) {
 						offset++;
 						continue;
@@ -140,7 +140,7 @@ static zend_always_inline zend_function* zend_partial_signature_create(zend_part
 
 					num++;
 					memcpy(info,
-						&partial->func.common.arg_info[offset], 
+						&partial->func.common.arg_info[offset],
 						sizeof(zend_arg_info));
 					ZEND_TYPE_FULL_MASK(info->type) &= ~_ZEND_IS_VARIADIC_BIT;
 					info++;
@@ -484,7 +484,7 @@ static zend_always_inline zend_string* zend_partial_symbol_name(zend_execute_dat
 	zend_string *name = zend_partial_function_name(function),
 				*scope = zend_partial_scope_name(call, function),
 				*symbol;
- 
+
 	if (scope) {
 		symbol = zend_create_member_string(scope, name);
 	} else {
@@ -570,20 +570,26 @@ void zend_partial_args_check(zend_execute_data *call) {
 	zend_function *function = call->func;
 
 	uint32_t num = ZEND_CALL_NUM_ARGS(call) +
+#if 0
 		(ZEND_PARTIAL_CALL_FLAG(call, ZEND_CALL_VARIADIC_PLACEHOLDER) ? -1 : 0);
-	
+#else
+		0;
+#endif
+
 	if (num < function->common.required_num_args) {
+#if 0
 		/* this check is delayed in the case of variadic application */
 		if (ZEND_PARTIAL_CALL_FLAG(call, ZEND_CALL_VARIADIC_PLACEHOLDER)) {
 			return;
 		}
+#endif
 
 		zend_string *symbol = zend_partial_symbol_name(call, function);
 		zend_partial_args_underflow(
 			function, symbol,
 			num, function->common.required_num_args, false, true);
 		zend_string_release(symbol);
-	} else if (num > function->common.num_args && 
+	} else if (num > function->common.num_args &&
 			!ZEND_PARTIAL_FUNC_FLAG(function, ZEND_ACC_VARIADIC)) {
 		zend_string *symbol = zend_partial_symbol_name(call, function);
 		zend_partial_args_overflow(
@@ -697,14 +703,14 @@ ZEND_NAMED_FUNCTION(zend_partial_call_magic)
 		zend_string *symbol = zend_partial_symbol_name(execute_data, &partial->prototype);
 		zend_partial_prototype_underflow(
 			&partial->prototype, symbol, num_all_params,
-			partial->prototype.common.required_num_args, 
+			partial->prototype.common.required_num_args,
 			ZEND_PARTIAL_CALL_FLAG(partial, ZEND_APPLY_VARIADIC));
 		zend_string_release(symbol);
 		if (ZEND_PARTIAL_IS_CALL_TRAMPOLINE(&partial->prototype)) {
 			EG(trampoline).common.function_name = NULL;
 		}
 		RETURN_THROWS();
-	} else if (num_all_params > partial->prototype.common.num_args && 
+	} else if (num_all_params > partial->prototype.common.num_args &&
 			  !ZEND_PARTIAL_CALL_FLAG(partial, ZEND_APPLY_VARIADIC)) {
 		zend_string *symbol = zend_partial_symbol_name(execute_data, &partial->prototype);
 		zend_partial_prototype_overflow(
@@ -769,7 +775,7 @@ ZEND_NAMED_FUNCTION(zend_partial_call_magic)
 		fci.named_params = named_args;
 	}
 
-	fci.params = ecalloc(sizeof(zval), partial->argc + num_params);
+	fci.params = ecalloc(partial->argc + num_params, sizeof(zval));
 	fci.param_count = zend_partial_apply(
 		partial->argv, partial->argv + partial->argc,
 		params ? params : NULL,

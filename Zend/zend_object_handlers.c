@@ -1593,7 +1593,7 @@ ZEND_API bool zend_check_protected(const zend_class_entry *ce, const zend_class_
 }
 /* }}} */
 
-static zend_always_inline zend_arg_info* zend_get_call_trampoline_arginfo() {
+static zend_always_inline zend_arg_info* zend_get_call_trampoline_arginfo(void) {
 	if (UNEXPECTED(zend_call_trampoline_arginfo[0].name == NULL)) {
 		zend_call_trampoline_arginfo[0].name = ZSTR_KNOWN(ZEND_STR_ARGS);
 	}

@@ -4050,7 +4050,7 @@ static bool zend_compile_call_common(znode *result, zend_ast *args_ast, zend_fun
 
 	if (is_partial_call) {
 		zend_compile_call_partial(result, arg_count, may_have_extra_named_args, opnum_init, fbc);
-		return;
+		return true;
 	}
 
 	zend_do_extended_fcall_begin();
@@ -4804,7 +4804,7 @@ static void zend_compile_ns_call(znode *result, znode *name_node, zend_ast *args
 	/* Find frameless function with same name. */
 	zend_function *frameless_function = NULL;
 	if (args_ast->kind != ZEND_AST_CALLABLE_CONVERT
-	 && !zend_args_contain_unpack_or_named(zend_ast_get_list(args_ast))
+	 && !zend_args_contain_unpack_or_named_or_partial(zend_ast_get_list(args_ast))
 	 /* Avoid blowing up op count with nested frameless branches. */
 	 && !CG(context).in_jmp_frameless_branch) {
 		zend_string *lc_func_name = Z_STR_P(CT_CONSTANT_EX(CG(active_op_array), name_constants + 2));
@@ -5113,7 +5113,7 @@ static zend_result zend_try_compile_special_func(znode *result, zend_string *lcn
 		return FAILURE;
 	}
 
-	if (zend_args_contain_unpack_or_named(args)) {
+	if (zend_args_contain_unpack_or_named_or_partial(args)) {
 		return FAILURE;
 	}
 
