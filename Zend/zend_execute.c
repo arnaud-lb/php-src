@@ -5358,7 +5358,7 @@ zval * ZEND_FASTCALL zend_handle_named_arg(
 		arg = zend_hash_add_empty_element(call->extra_named_params, arg_name);
 		if (!arg) {
 			zend_throw_error(NULL, "Named parameter $%s overwrites previous %s",
-				ZSTR_VAL(arg_name), Z_TYPE_P(arg) == _IS_PLACEHOLDER_ARG ? "placeholder" : "argument");
+				ZSTR_VAL(arg_name), Z_TYPE_P(arg) == _IS_PLACEHOLDER ? "placeholder" : "argument");
 			return NULL;
 		}
 		*arg_num_ptr = arg_offset + 1;
@@ -5388,13 +5388,13 @@ zval * ZEND_FASTCALL zend_handle_named_arg(
 	} else {
 		arg = ZEND_CALL_VAR_NUM(call, arg_offset);
 
-		if (UNEXPECTED(Z_TYPE_P(arg) == _IS_PLACEHOLDER_VARIADIC)) {
+		if (UNEXPECTED(Z_TYPE_P(arg) == _IS_PLACEHOLDER)) {
 			ZVAL_UNDEF(arg);
 		}
 
 		if (UNEXPECTED(!Z_ISUNDEF_P(arg))) {
 			zend_throw_error(NULL, "Named parameter $%s overwrites previous %s",
-				ZSTR_VAL(arg_name), Z_TYPE_P(arg) == _IS_PLACEHOLDER_ARG ? "placeholder" : "argument");
+				ZSTR_VAL(arg_name), Z_TYPE_P(arg) == _IS_PLACEHOLDER ? "placeholder" : "argument");
 			return NULL;
 		}
 	}

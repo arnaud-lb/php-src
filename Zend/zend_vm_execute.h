@@ -3743,12 +3743,6 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_DO_FCALL_PARTIAL_SPEC_HANDLER(
 		result = EX_VAR(opline->result.var);
 	}
 
-#if 0
-	if (ZEND_CALL_INFO(call) & ZEND_CALL_VARIADIC_PLACEHOLDER) {
-		ZEND_ADD_CALL_FLAG_EX(info, ZEND_APPLY_VARIADIC);
-	}
-#endif
-
 	if (result) {
 		zend_partial_create(result, info,
 		    &call->This, call->func,

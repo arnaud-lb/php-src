@@ -3723,7 +3723,7 @@ static uint32_t zend_compile_args(
 	zend_ast_list *args = zend_ast_get_list(ast);
 	uint32_t i;
 	bool uses_arg_unpack = 0;
-	bool uses_variadic_placeholder = 0;
+	bool uses_placeholder = 0;
 	uint32_t arg_count = 0; /* number of arguments not including unpacks */
 
 	/* Whether named arguments are used syntactically, to enforce language level limitations.
@@ -3733,8 +3733,6 @@ static uint32_t zend_compile_args(
 	bool may_have_undef = 0;
 	/* Whether there may be any extra named arguments collected into a variadic. */
 	*may_have_extra_named_args = 0;
-	/* Whether this is a partial call */
-	*is_call_partial = false;
 
 	for (i = 0; i < args->children; ++i) {
 		zend_ast *arg = args->child[i];
@@ -3751,7 +3749,7 @@ static uint32_t zend_compile_args(
 					"Cannot use argument unpacking after named arguments");
 			}
 
-			if (*is_call_partial) {
+			if (uses_placeholder) {
 				zend_error_noreturn(E_COMPILE_ERROR,
 					"Cannot combine partial application and unpacking");
 			}
@@ -3773,29 +3771,17 @@ static uint32_t zend_compile_args(
 					"Cannot combine partial application and unpacking");
 			}
 
-			if (arg->attr == _IS_PLACEHOLDER_VARIADIC) {
-				if (uses_named_args) {
-					zend_error_noreturn(E_COMPILE_ERROR,
-						"Named arguments must come after all placeholders");
-				}
-
-				if (uses_variadic_placeholder) {
-					zend_error_noreturn(E_COMPILE_ERROR,
-						"Variadic placeholder may only appear once");
-				}
-
-				uses_variadic_placeholder = true;
-			} else if (arg->attr == _IS_PLACEHOLDER_ARG) {
-				if (uses_named_args) {
-					zend_error_noreturn(E_COMPILE_ERROR,
-						"Named arguments must come after all placeholders");
-				}
-
-				if (uses_variadic_placeholder) {
-					zend_error_noreturn(E_COMPILE_ERROR,
-						"Only named arguments may follow variadic placeholder");
-				}
+			if (uses_named_args) {
+				zend_error_noreturn(E_COMPILE_ERROR,
+					"Named arguments must come after all placeholders");
 			}
+
+			if (uses_placeholder) {
+				zend_error_noreturn(E_COMPILE_ERROR,
+					"Variadic placeholder may only appear once");
+			}
+
+			uses_placeholder = true;
 
 			fbc = NULL;
 
@@ -3803,7 +3789,6 @@ static uint32_t zend_compile_args(
 			opline->op1.num = arg->attr;
 			opline->op2.num = arg_num;
 
-			*is_call_partial = true;
 			arg_count++;
 			continue;
 		}
@@ -3842,7 +3827,7 @@ static uint32_t zend_compile_args(
 					"Cannot use positional argument after named argument");
 			}
 
-			if (uses_variadic_placeholder) {
+			if (uses_placeholder) {
 				zend_error_noreturn(E_COMPILE_ERROR,
 					"Only named arguments may follow variadic placeholder");
 			}
@@ -3960,7 +3945,9 @@ static uint32_t zend_compile_args(
 		}
 	}
 
-	if (!*is_call_partial) {
+	*is_call_partial = uses_placeholder;
+
+	if (!uses_placeholder) {
 		if (may_have_undef) {
 			zend_emit_op(NULL, ZEND_CHECK_UNDEF_ARGS, NULL, NULL);
 		}

@@ -40,17 +40,8 @@ static zend_object_handlers zend_partial_handlers;
 
 static zend_arg_info zend_call_magic_arginfo[1];
 
-#define Z_IS_PLACEHOLDER_ARG_P(p) \
-	(Z_TYPE_P(p) == _IS_PLACEHOLDER_ARG)
-
-#define Z_IS_PLACEHOLDER_VARIADIC_P(p) \
-	(Z_TYPE_P(p) == _IS_PLACEHOLDER_VARIADIC)
-
 #define Z_IS_PLACEHOLDER_P(p) \
-	(Z_IS_PLACEHOLDER_ARG_P(p) || Z_IS_PLACEHOLDER_VARIADIC_P(p))
-
-#define Z_IS_NOT_PLACEHOLDER_P(p) \
-	(!Z_IS_PLACEHOLDER_ARG_P(p) && !Z_IS_PLACEHOLDER_VARIADIC_P(p))
+	(Z_TYPE_P(p) == _IS_PLACEHOLDER)
 
 #define ZEND_PARTIAL_IS_CALL_TRAMPOLINE(func) \
 	UNEXPECTED(((func)->type == ZEND_USER_FUNCTION) && ((func)->op_array.opcodes == &EG(call_trampoline_op)))
@@ -77,8 +68,7 @@ static zend_always_inline uint32_t zend_partial_signature_size(zend_partial *par
 		count++;
 	}
 
-	if (ZEND_PARTIAL_CALL_FLAG(partial, ZEND_APPLY_VARIADIC)||
-		ZEND_PARTIAL_FUNC_FLAG(&partial->func, ZEND_ACC_VARIADIC)) {
+	if (ZEND_PARTIAL_FUNC_FLAG(&partial->func, ZEND_ACC_VARIADIC)) {
 		count++;
 	}
 
@@ -103,32 +93,7 @@ static zend_always_inline zend_function* zend_partial_signature_create(zend_part
 	while (offset < limit) {
 		zval *arg = &partial->argv[offset];
 
-		if (Z_IS_PLACEHOLDER_ARG_P(arg)) {
-			if (offset < prototype->common.num_args) {
-				num++;
-				required++;
-				memcpy(info,
-					&prototype->common.arg_info[offset],
-					sizeof(zend_arg_info));
-				ZEND_TYPE_FULL_MASK(info->type) &= ~_ZEND_IS_VARIADIC_BIT;
-				info++;
-			} else if (ZEND_PARTIAL_FUNC_FLAG(prototype, ZEND_ACC_VARIADIC)) {
-				num++;
-				required++;
-				if (ZEND_PARTIAL_IS_CALL_TRAMPOLINE(prototype)) {
-					memcpy(info, zend_call_magic_arginfo, sizeof(zend_arg_info));
-				} else {
-					memcpy(info,
-						prototype->common.arg_info + prototype->common.num_args,
-						sizeof(zend_arg_info));
-				}
-
-				ZEND_TYPE_FULL_MASK(info->type) &= ~_ZEND_IS_VARIADIC_BIT;
-				info++;
-			} else {
-				ZEND_ASSERT(0);
-			}
-		} else if (Z_IS_PLACEHOLDER_VARIADIC_P(arg) || Z_ISUNDEF_P(arg)) {
+		if (Z_IS_PLACEHOLDER_P(arg) || Z_ISUNDEF_P(arg)) {
 			if (offset < partial->func.common.num_args) {
 				while (offset < partial->func.common.num_args) {
 					if ((offset < partial->argc) &&
@@ -285,7 +250,7 @@ static zend_always_inline void zend_partial_debug_fill(zend_partial *partial, Ha
 		ZVAL_NULL(&param);
 
 		if (arg < aend) {
-			if (Z_IS_NOT_PLACEHOLDER_P(arg)) {
+			if (!Z_IS_PLACEHOLDER_P(arg)) {
 				ZVAL_COPY(&param, arg);
 			}
 			arg++;
@@ -308,7 +273,7 @@ static zend_always_inline void zend_partial_debug_fill(zend_partial *partial, Ha
 
 			ZVAL_NULL(&param);
 
-			if (Z_IS_NOT_PLACEHOLDER_P(arg)) {
+			if (!Z_IS_PLACEHOLDER_P(arg)) {
 				ZVAL_COPY(&param, arg);
 			}
 
@@ -495,19 +460,17 @@ static zend_always_inline zend_string* zend_partial_symbol_name(zend_execute_dat
 	return symbol;
 }
 
-static zend_always_inline void zend_partial_prototype_underflow(zend_function *function, zend_string *symbol, uint32_t args, uint32_t expected, bool variadic) {
-	char *limit = variadic ? "at least" : "exactly";
-
+static zend_always_inline void zend_partial_prototype_underflow(zend_function *function, zend_string *symbol, uint32_t args, uint32_t expected) {
 	if (function->type == ZEND_USER_FUNCTION) {
 		zend_throw_error(NULL,
 			"not enough arguments for application of %s, "
-			"%d given and %s %d expected, declared in %s on line %d",
-			ZSTR_VAL(symbol), args, limit, expected,
+			"%d given and at least %d expected, declared in %s on line %d",
+			ZSTR_VAL(symbol), args, expected,
 			ZSTR_VAL(function->op_array.filename), function->op_array.line_start);
 	} else {
 		zend_throw_error(NULL,
-			"not enough arguments for application of %s, %d given and %s %d expected",
-			ZSTR_VAL(symbol), args, limit, expected);
+			"not enough arguments for application of %s, %d given and at least %d expected",
+			ZSTR_VAL(symbol), args, expected);
 	}
 }
 
@@ -569,26 +532,10 @@ void zend_partial_args_check(zend_execute_data *call) {
 	/* this is invoked by VM before the creation of zend_partial */
 	zend_function *function = call->func;
 
-	uint32_t num = ZEND_CALL_NUM_ARGS(call) +
-#if 0
-		(ZEND_PARTIAL_CALL_FLAG(call, ZEND_CALL_VARIADIC_PLACEHOLDER) ? -1 : 0);
-#else
-		0;
-#endif
+	uint32_t num = ZEND_CALL_NUM_ARGS(call) - 1;
 
 	if (num < function->common.required_num_args) {
-#if 0
 		/* this check is delayed in the case of variadic application */
-		if (ZEND_PARTIAL_CALL_FLAG(call, ZEND_CALL_VARIADIC_PLACEHOLDER)) {
-			return;
-		}
-#endif
-
-		zend_string *symbol = zend_partial_symbol_name(call, function);
-		zend_partial_args_underflow(
-			function, symbol,
-			num, function->common.required_num_args, false, true);
-		zend_string_release(symbol);
 	} else if (num > function->common.num_args &&
 			!ZEND_PARTIAL_FUNC_FLAG(function, ZEND_ACC_VARIADIC)) {
 		zend_string *symbol = zend_partial_symbol_name(call, function);
@@ -609,7 +556,7 @@ static zend_always_inline uint32_t zend_partial_apply(
 	/* this optimizes the most general case, partial variadic application followed by
 		all arguments on call, and initial application */
 	if ((pEnd - pStart) == 0 ||
-		((pEnd - pStart) == 1 && Z_IS_PLACEHOLDER_VARIADIC_P(pStart))) {
+		((pEnd - pStart) == 1 && Z_IS_PLACEHOLDER_P(pStart))) {
 		if ((pCount = (cEnd - cStart)) > 0) {
 			memcpy(fParam, cStart, sizeof(zval) * pCount);
 		}
@@ -703,15 +650,13 @@ ZEND_NAMED_FUNCTION(zend_partial_call_magic)
 		zend_string *symbol = zend_partial_symbol_name(execute_data, &partial->prototype);
 		zend_partial_prototype_underflow(
 			&partial->prototype, symbol, num_all_params,
-			partial->prototype.common.required_num_args,
-			ZEND_PARTIAL_CALL_FLAG(partial, ZEND_APPLY_VARIADIC));
+			partial->prototype.common.required_num_args);
 		zend_string_release(symbol);
 		if (ZEND_PARTIAL_IS_CALL_TRAMPOLINE(&partial->prototype)) {
 			EG(trampoline).common.function_name = NULL;
 		}
 		RETURN_THROWS();
-	} else if (num_all_params > partial->prototype.common.num_args &&
-			  !ZEND_PARTIAL_CALL_FLAG(partial, ZEND_APPLY_VARIADIC)) {
+	} else if (num_all_params > partial->prototype.common.num_args) {
 		zend_string *symbol = zend_partial_symbol_name(execute_data, &partial->prototype);
 		zend_partial_prototype_overflow(
 			&partial->prototype, symbol, num_all_params,
@@ -818,7 +763,7 @@ void zend_partial_create(zval *result, uint32_t info, zval *this_ptr, zend_funct
 	zend_partial *applied, *partial = (zend_partial*) Z_OBJ_P(result);
 
 	if ((applied = zend_partial_fetch(this_ptr))) {
-		ZEND_ADD_CALL_FLAG(partial, ZEND_CALL_INFO(applied) & ~ZEND_APPLY_VARIADIC);
+		ZEND_ADD_CALL_FLAG(partial, ZEND_CALL_INFO(applied));
 
 		function  = &applied->func;
 		prototype = &applied->prototype;
@@ -891,7 +836,6 @@ void zend_partial_create(zval *result, uint32_t info, zval *this_ptr, zend_funct
 	partial->func.common.prototype = zend_partial_signature_create(partial, prototype);
 
 	if (!ZEND_PARTIAL_CALL_FLAG(partial, ZEND_APPLY_FACTORY)) {
-		/* partial info may contain ZEND_APPLY_VARIADIC */
 		uint32_t backup_info = ZEND_CALL_INFO(partial);
 
 		if(Z_TYPE_P(this_ptr) == IS_UNDEF && Z_CE_P(this_ptr)) {

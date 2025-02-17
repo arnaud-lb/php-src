@@ -25,7 +25,6 @@ void zend_partial_startup(void);
 #define ZEND_APPLY_NORMAL   (1<<16)
 #define ZEND_APPLY_FACTORY  (1<<17)
 #define ZEND_APPLY_PASS     (1<<18)
-#define ZEND_APPLY_VARIADIC (1<<19)
 
 void zend_partial_create(zval *result, uint32_t info, zval *this_ptr, zend_function *function, uint32_t argc, zval *argv, zend_array *extra_named_params);
 
