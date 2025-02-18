@@ -17,9 +17,16 @@
 */
 #include "zend.h"
 #include "zend_API.h"
+#include "zend_compile.h"
 #include "zend_interfaces.h"
 #include "zend_closures.h"
+#include "zend_string.h"
 #include "zend_partial.h"
+
+typedef struct _zend_placeholder_span {
+	uint32_t first_param;
+	uint32_t last_param;
+} zend_placeholder_span;
 
 typedef struct _zend_partial {
 	zend_object      std;
@@ -31,6 +38,7 @@ typedef struct _zend_partial {
 	/* this will be returned by get_closure, and has arginfo of prototype
 	    and will invoke func */
 	zend_function    trampoline;
+	zend_placeholder_span span;
 	uint32_t         argc;
 	zval            *argv;
 	zend_array      *named;
@@ -61,8 +69,30 @@ static zend_arg_info zend_call_magic_arginfo[1];
 #define ZEND_PARTIAL_CALL_FLAG(partial, flag) \
 	(ZEND_CALL_INFO(partial) & flag)
 
+void zend_partial_compute_placeholder_span(zend_partial *partial, zend_function *function, uint32_t argc, zval *argv) {
+	uint32_t offset = 0;
+	uint32_t limit = argc;
+
+	while (offset < limit) {
+		zval *arg = &argv[offset];
+		if (Z_IS_PLACEHOLDER_P(arg)) {
+			partial->span.first_param = offset;
+			partial->span.last_param = offset;
+			offset++;
+			while (offset <= function->common.num_args
+					&& Z_ISUNDEF(argv[offset])) {
+				ZEND_ASSERT(offset < function->common.num_args
+						|| function->common.fn_flags & ZEND_ACC_VARIADIC);
+				partial->span.last_param++;
+				offset++;
+			}
+			break;
+		}
+	}
+}
+
 static zend_always_inline uint32_t zend_partial_signature_size(zend_partial *partial) {
-	uint32_t count = MAX(partial->func.common.num_args, partial->argc);
+	uint32_t count = MAX(partial->func.common.num_args, partial->span.last_param + 1);
 
 	if (ZEND_PARTIAL_FUNC_FLAG(&partial->func, ZEND_ACC_HAS_RETURN_TYPE)) {
 		count++;
@@ -75,7 +105,21 @@ static zend_always_inline uint32_t zend_partial_signature_size(zend_partial *par
 	return count * sizeof(zend_arg_info);
 }
 
-static zend_always_inline zend_function* zend_partial_signature_create(zend_partial *partial, zend_function *prototype) {
+static zend_arg_info *zend_partial_find_named_param(zend_arg_info *arg_info,
+		size_t num_args, zend_string *name) {
+	for (uint32_t i = 0; i < num_args; i++) {
+		if (zend_string_equals(arg_info[i].name, name)) {
+			return &arg_info[i];
+		}
+	}
+	return NULL;
+}
+
+static zend_always_inline zend_function* zend_partial_signature_create(
+		zend_partial *partial,
+		zend_function *prototype,
+		zval *argv,
+		uint32_t argc) {
 	zend_arg_info *signature = emalloc(zend_partial_signature_size(partial)), *info = signature;
 
 	memcpy(&partial->prototype, prototype, ZEND_PARTIAL_FUNC_SIZE(prototype));
@@ -86,67 +130,56 @@ static zend_always_inline zend_function* zend_partial_signature_create(zend_part
 		info++;
 	}
 
-	uint32_t offset = 0, num = 0, required = 0, limit = partial->argc;
+	uint32_t required = 0;
 
-	ZEND_PARTIAL_FUNC_DEL(&partial->prototype, ZEND_ACC_VARIADIC);
-
-	while (offset < limit) {
-		zval *arg = &partial->argv[offset];
-
-		if (Z_IS_PLACEHOLDER_P(arg) || Z_ISUNDEF_P(arg)) {
-			if (offset < partial->func.common.num_args) {
-				while (offset < partial->func.common.num_args) {
-					if ((offset < partial->argc) &&
-						!Z_IS_PLACEHOLDER_P(&partial->argv[offset]) &&
-						!Z_ISUNDEF(partial->argv[offset])) {
-						offset++;
-						continue;
-					}
-
-					num++;
-					memcpy(info,
-						&partial->func.common.arg_info[offset],
-						sizeof(zend_arg_info));
-					ZEND_TYPE_FULL_MASK(info->type) &= ~_ZEND_IS_VARIADIC_BIT;
-					info++;
-					offset++;
-				}
-
-				if (ZEND_PARTIAL_FUNC_FLAG(prototype, ZEND_ACC_VARIADIC)) {
-					ZEND_ASSERT(!ZEND_PARTIAL_IS_CALL_TRAMPOLINE(prototype));
-					memcpy(info,
-							prototype->common.arg_info + prototype->common.num_args,
-							sizeof(zend_arg_info));
-
-					if (ZEND_TYPE_FULL_MASK(info->type) & _ZEND_IS_VARIADIC_BIT) {
-						ZEND_PARTIAL_FUNC_ADD(&partial->prototype, ZEND_ACC_VARIADIC);
-					}
-					num++;
-				}
-				break;
-			} else if (ZEND_PARTIAL_FUNC_FLAG(prototype, ZEND_ACC_VARIADIC)) {
-				ZEND_PARTIAL_FUNC_ADD(&partial->prototype, ZEND_ACC_VARIADIC);
-				num++;
-				if (ZEND_PARTIAL_IS_CALL_TRAMPOLINE(prototype)) {
-					memcpy(info, zend_call_magic_arginfo, sizeof(zend_arg_info));
-				} else {
-					memcpy(info,
-						prototype->common.arg_info + prototype->common.num_args,
-						sizeof(zend_arg_info));
-				}
-				info++;
-				break;
-			}
+	if (partial->span.first_param < prototype->common.num_args) {
+		info = mempcpy(info, prototype->common.arg_info + partial->span.first_param,
+				MIN(partial->span.last_param - partial->span.first_param + 1,
+					prototype->common.num_args = partial->span.first_param)
+					* sizeof(zend_arg_info));
+		if (partial->span.first_param < prototype->common.required_num_args) {
+			required = prototype->common.required_num_args
+				- partial->span.first_param;
 		}
-
-		offset++;
 	}
 
+	if (partial->span.last_param >= prototype->common.num_args) {
+		ZEND_ASSERT(prototype->common.fn_flags & ZEND_ACC_VARIADIC);
+
+		memcpy(info, prototype->common.arg_info + prototype->common.num_args,
+				sizeof(zend_arg_info));
+
+		ZEND_TYPE_FULL_MASK(info->type) &= ~_ZEND_IS_VARIADIC_BIT;
+
+		/* Generate a unique name */
+		uint32_t unique = 0;
+		zend_string *name;
+		do {
+			if (unique != 0) {
+				zend_string_free(name);
+			}
+			name = zend_strpprintf(0, "%s%u", ZSTR_VAL(info->name), unique);
+			unique++;
+		} while (zend_partial_find_named_param(signature, info - signature, name));
+
+		// TODO: leak
+		info->name = name;
+		info++;
+		required++;
+	}
+
+	if (prototype->common.fn_flags & ZEND_ACC_VARIADIC) {
+		memcpy(info, prototype->common.arg_info + prototype->common.num_args,
+				sizeof(zend_arg_info));
+		info++;
+	}
+
+	uint32_t num_args = info - signature;
 	if (ZEND_PARTIAL_FUNC_FLAG(&partial->prototype, ZEND_ACC_VARIADIC)) {
-		num--;
+		num_args--;
 	}
 
-	partial->prototype.common.num_args = num;
+	partial->prototype.common.num_args = num_args;
 	partial->prototype.common.required_num_args = required;
 	partial->prototype.common.arg_info = signature;
 
@@ -833,7 +866,8 @@ void zend_partial_create(zval *result, uint32_t info, zval *this_ptr, zend_funct
 		prototype = &partial->func;
 	}
 
-	partial->func.common.prototype = zend_partial_signature_create(partial, prototype);
+	partial->func.common.prototype = zend_partial_signature_create(partial,
+			prototype, );
 
 	if (!ZEND_PARTIAL_CALL_FLAG(partial, ZEND_APPLY_FACTORY)) {
 		uint32_t backup_info = ZEND_CALL_INFO(partial);

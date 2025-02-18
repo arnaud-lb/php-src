@@ -3827,11 +3827,6 @@ static uint32_t zend_compile_args(
 					"Cannot use positional argument after named argument");
 			}
 
-			if (uses_placeholder) {
-				zend_error_noreturn(E_COMPILE_ERROR,
-					"Only named arguments may follow variadic placeholder");
-			}
-
 			arg_count++;
 		}
 
