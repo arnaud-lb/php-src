@@ -84,6 +84,8 @@ typedef enum {
 struct _zend_compiler_globals {
 	zend_stack loop_var_stack;
 
+	zend_user_module *active_module; /* module being loaded */
+
 	zend_class_entry *active_class_entry;
 
 	zend_string *compiled_filename;
@@ -94,6 +96,7 @@ struct _zend_compiler_globals {
 
 	HashTable *function_table;	/* function symbol table */
 	HashTable *class_table;		/* class table */
+	HashTable *module_table;
 
 	HashTable *auto_globals;
 
@@ -191,6 +194,7 @@ struct _zend_executor_globals {
 	HashTable *function_table;	/* function symbol table */
 	HashTable *class_table;		/* class table */
 	HashTable *zend_constants;	/* constants table */
+	HashTable *module_table;
 
 	zval          *vm_stack_top;
 	zval          *vm_stack_end;

@@ -337,6 +337,7 @@ int main(void) {
       zend_persist.c
       zend_shared_alloc.c
       ZendAccelerator.c
+      modules.c
       $ZEND_JIT_SRC
     ]),
     [$ext_shared],,

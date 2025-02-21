@@ -25,6 +25,7 @@
 #include "zend_compile.h"
 #include "zend_execute.h"
 #include "zend_API.h"
+#include "zend_hash.h"
 #include "zend_stack.h"
 #include "zend_constants.h"
 #include "zend_extensions.h"
@@ -39,6 +40,7 @@
 #include "zend_observer.h"
 #include "zend_call_stack.h"
 #include "zend_frameless_function.h"
+#include "zend_smart_str.h"
 #ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
 #endif
@@ -148,6 +150,7 @@ void init_executor(void) /* {{{ */
 
 	EG(function_table) = CG(function_table);
 	EG(class_table) = CG(class_table);
+	EG(module_table) = CG(module_table);
 
 	EG(in_autoload) = NULL;
 	EG(error_handling) = EH_NORMAL;
@@ -465,6 +468,7 @@ void shutdown_executor(void) /* {{{ */
 		 */
 		zend_hash_discard(EG(function_table), EG(persistent_functions_count));
 		zend_hash_discard(EG(class_table), EG(persistent_classes_count));
+		zend_hash_clean(EG(module_table));
 	} else {
 		zend_vm_stack_destroy();
 
@@ -489,6 +493,8 @@ void shutdown_executor(void) /* {{{ */
 				zend_string_release_ex(key, 0);
 			} ZEND_HASH_MAP_FOREACH_END_DEL();
 		}
+
+		zend_hash_clean(EG(module_table));
 
 		while (EG(symtable_cache_ptr) > EG(symtable_cache)) {
 			EG(symtable_cache_ptr)--;
@@ -1688,6 +1694,33 @@ static ZEND_COLD void report_class_fetch_error(zend_string *class_name, uint32_t
 	if (fetch_type & ZEND_FETCH_CLASS_SILENT) {
 		return;
 	}
+
+#if 0
+	if (CG(active_module)) {
+		/* We are loading a module. Check if the class is part of a module being
+		 * loaded. */
+		zend_user_module *module;
+		ZEND_HASH_FOREACH_PTR(EG(module_table), module) {
+			if (zend_string_starts_with_ci(class_name, module->desc.name)
+					// FIXME: this is wrong with nested modules: We need to find
+					// the longest match.
+					&& ZSTR_VAL(class_name)[ZSTR_LEN(module->desc.name)] == '\\') {
+				if (module == CG(active_module) && module->is_loading) {
+					zend_throw_or_error(fetch_type, NULL, "Class %s not found while compiling module %s (possible cause: files with top-level statements may not be autoloaded.)",
+							ZSTR_VAL(class_name), ZSTR_VAL(module->desc.name));
+				} else if (!module->is_loading) {
+					/* Module that would have declared class is fully loaded
+					 * and did not declare this class: The class does not exist.
+					 */
+					break;
+				} else {
+					zend_circular_module_dependency_error(module);
+				}
+				return;
+			}
+		} ZEND_HASH_FOREACH_END();
+	}
+#endif
 
 	if (EG(exception)) {
 		if (!(fetch_type & ZEND_FETCH_CLASS_EXCEPTION)) {

@@ -334,6 +334,8 @@ uint32_t zend_accel_get_class_name_map_ptr(zend_string *type_name);
 
 END_EXTERN_C()
 
+extern zend_string *(*accelerator_orig_zend_resolve_path)(zend_string *filename);
+
 /* memory write protection */
 #define SHM_PROTECT() \
 	do { \

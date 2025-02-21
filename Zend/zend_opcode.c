@@ -61,6 +61,7 @@ void init_op_array(zend_op_array *op_array, uint8_t type, int initial_ops_size)
 	op_array->vars = NULL;
 
 	op_array->T = 0;
+	op_array->user_module = NULL;
 
 	op_array->function_name = NULL;
 	op_array->filename = zend_string_copy(zend_get_compiled_filename());

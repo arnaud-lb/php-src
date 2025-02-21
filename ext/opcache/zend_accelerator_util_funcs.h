@@ -44,6 +44,12 @@ unsigned int zend_adler32(unsigned int checksum, unsigned char *buf, uint32_t le
 
 unsigned int zend_accel_script_checksum(zend_persistent_script *persistent_script);
 
+void zend_accel_function_hash_copy(HashTable *target, HashTable *source);
+void zend_accel_function_hash_copy_notify(HashTable *target, HashTable *source);
+
+void zend_accel_class_hash_copy(HashTable *target, HashTable *source);
+void zend_accel_class_hash_copy_notify(HashTable *target, HashTable *source);
+
 END_EXTERN_C()
 
 #endif /* ZEND_ACCELERATOR_UTIL_FUNCS_H */

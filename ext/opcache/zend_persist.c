@@ -23,12 +23,15 @@
 #include "ZendAccelerator.h"
 #include "zend_persist.h"
 #include "zend_extensions.h"
+#include "zend_portability.h"
 #include "zend_shared_alloc.h"
+#include "zend_types.h"
 #include "zend_vm.h"
 #include "zend_constants.h"
 #include "zend_operators.h"
 #include "zend_interfaces.h"
 #include "zend_attributes.h"
+#include "modules.h"
 
 #ifdef HAVE_JIT
 # include "Optimizer/zend_func_info.h"
@@ -402,6 +405,10 @@ static void zend_persist_op_array_ex(zend_op_array *op_array, zend_persistent_sc
 			main_persistent_script->compiler_halt_offset = Z_LVAL_P(offset);
 		}
 		EG(current_execute_data) = orig_execute_data;
+	}
+
+	if (op_array->user_module) {
+		zend_accel_store_string(op_array->user_module);
 	}
 
 	if (op_array->function_name) {
@@ -1028,6 +1035,9 @@ zend_class_entry *zend_persist_class_entry(zend_class_entry *orig_ce)
 
 		ce->ce_flags |= ZEND_ACC_CACHED;
 
+		if (ce->info.user.user_module) {
+			zend_accel_store_string(ce->info.user.user_module);
+		}
 		if (ce->info.user.filename) {
 			zend_accel_store_string(ce->info.user.filename);
 		}
@@ -1438,4 +1448,107 @@ zend_persistent_script *zend_accel_script_persist(zend_persistent_script *script
 	ZCG(current_persistent_script) = NULL;
 
 	return script;
+}
+
+zend_user_module_dir_cache *zend_accel_user_module_dir_cache_persist(zend_user_module_dir_cache *cache)
+{
+	cache = zend_shared_memdup_free(cache, sizeof(zend_user_module_dir_cache));
+
+	Bucket *p;
+	ZEND_HASH_MAP_FOREACH_BUCKET(&cache->entries, p) {
+		ZEND_ASSERT(p->key != NULL);
+		zend_accel_store_interned_string(p->key);
+		if (!ZUM_IS_FILE_ENTRY(&p->val)) {
+			Z_PTR(p->val) = zend_accel_user_module_dir_cache_persist(Z_PTR(p->val));
+		}
+	} ZEND_HASH_FOREACH_END();
+
+	zend_hash_persist(&cache->entries);
+
+	return cache;
+}
+
+zend_persistent_user_module *zend_accel_user_module_persist(zend_persistent_user_module *module, int for_shm)
+{
+	module->script = zend_accel_script_persist(module->script, for_shm);
+
+	ZEND_ASSERT(((uintptr_t)ZCG(mem) & 0x7) == 0); /* should be 8 byte aligned */
+
+	ZCG(current_persistent_script) = module->script;
+
+	module = zend_shared_memdup_put_free(module, sizeof(*module));
+
+	zend_accel_store_interned_string(module->module.desc.desc_path);
+	zend_accel_store_interned_string(module->module.desc.name);
+	zend_accel_store_interned_string(module->module.desc.lcname);
+	zend_accel_store_interned_string(module->module.desc.root);
+	if (module->module.desc.include_patterns) {
+		module->module.desc.include_patterns = zend_shared_memdup_free(
+				module->module.desc.include_patterns,
+				sizeof(*module->module.desc.include_patterns) * module->module.desc.num_include_patterns);
+		zend_string **str = module->module.desc.include_patterns;
+		zend_string **end = module->module.desc.include_patterns + module->module.desc.num_include_patterns;
+		while (str < end) {
+			zend_accel_store_interned_string(*str);
+			str++;
+		}
+	}
+	if (module->module.desc.exclude_patterns) {
+		module->module.desc.exclude_patterns = zend_shared_memdup_free(
+				module->module.desc.exclude_patterns,
+				sizeof(*module->module.desc.exclude_patterns) * module->module.desc.num_exclude_patterns);
+		zend_string **str = module->module.desc.exclude_patterns;
+		zend_string **end = module->module.desc.exclude_patterns + module->module.desc.num_exclude_patterns;
+		while (str < end) {
+			zend_accel_store_interned_string(*str);
+			str++;
+		}
+	}
+
+	zend_hash_persist(&module->module.deps);
+
+	Bucket *p;
+
+	zend_hash_persist(&module->module.class_table);
+	ZEND_HASH_MAP_FOREACH_BUCKET(&module->module.class_table, p) {
+		ZEND_ASSERT(p->key != NULL);
+		zend_accel_store_interned_string(p->key);
+	} ZEND_HASH_FOREACH_END();
+
+	zend_hash_persist(&module->module.function_table);
+	ZEND_HASH_MAP_FOREACH_BUCKET(&module->module.function_table, p) {
+		ZEND_ASSERT(p->key != NULL);
+		zend_accel_store_interned_string(p->key);
+	} ZEND_HASH_FOREACH_END();
+
+	module->module.dir_cache = zend_accel_user_module_dir_cache_persist(module->module.dir_cache);
+
+	// TODO: We need these during compilation, but not after. Maybe store these
+	// elsewhere.
+	memset(&module->module.classmap, 0, sizeof(HashTable));
+
+#if defined(__AVX__) || defined(__SSE2__)
+	/* Align to 64-byte boundary */
+	ZCG(mem) = (void*)(((uintptr_t)ZCG(mem) + 63L) & ~63L);
+#else
+	ZEND_ASSERT(((uintptr_t)ZCG(mem) & 0x7) == 0); /* should be 8 byte aligned */
+#endif
+
+	ZCG(current_persistent_script) = NULL;
+
+	zval *zv;
+	ZEND_HASH_MAP_FOREACH_VAL(&module->module.deps, zv) {
+		zend_user_module *dep = Z_PTR_P(zv);
+		if (zend_accel_in_shm(dep)) {
+			continue;
+		}
+		zend_persistent_user_module *pdep = (zend_persistent_user_module*)((char*)dep - XtOffsetOf(zend_persistent_user_module, module));
+		zend_persistent_user_module *persisted_pdep = zend_shared_alloc_get_xlat_entry(pdep);
+		if (!persisted_pdep) {
+			persisted_pdep = zend_accel_user_module_persist(pdep, for_shm);
+		}
+		Z_PTR_P(zv) = &persisted_pdep->module;
+	} ZEND_HASH_FOREACH_END();
+
+	return module;
 }

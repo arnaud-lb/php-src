@@ -25,15 +25,19 @@
 #include "ZendAccelerator.h"
 #include "zend_API.h"
 #include "zend_closures.h"
+#include "zend_hash.h"
+#include "zend_operators.h"
 #include "zend_shared_alloc.h"
 #include "zend_accelerator_blacklist.h"
 #include "php_ini.h"
 #include "SAPI.h"
+#include "zend_types.h"
 #include "zend_virtual_cwd.h"
 #include "ext/standard/info.h"
 #include "ext/standard/php_filestat.h"
 #include "ext/date/php_date.h"
 #include "opcache_arginfo.h"
+#include "modules.h"
 
 #ifdef HAVE_JIT
 #include "jit/zend_jit.h"
@@ -598,6 +602,11 @@ static int accelerator_get_scripts(zval *return_value)
 
 			script = (zend_persistent_script *)cache_entry->data;
 
+			// TODO
+			if (strncmp(cache_entry->key->val, "module://", strlen("module://")) == 0) {
+				continue;
+			}
+
 			array_init(&persistent_script_report);
 			add_assoc_str(&persistent_script_report, "full_path", zend_string_dup(script->script.filename, 0));
 			add_assoc_long(&persistent_script_report, "hits", script->dynamic_members.hits);
@@ -997,4 +1006,25 @@ ZEND_FUNCTION(opcache_is_script_cached)
 	}
 
 	RETURN_BOOL(filename_is_in_cache(script_name));
+}
+
+ZEND_FUNCTION(require_modules)
+{
+	HashTable *modules;
+
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_ARRAY_HT(modules)
+	ZEND_PARSE_PARAMETERS_END();
+
+	zval *value;
+	ZEND_HASH_FOREACH_VAL(modules, value) {
+		convert_to_string(value);
+		if (UNEXPECTED(EG(exception))) {
+			return;
+		}
+		zend_require_user_module(Z_STR_P(value));
+		if (UNEXPECTED(EG(exception))) {
+			return;
+		}
+	} ZEND_HASH_FOREACH_END();
 }

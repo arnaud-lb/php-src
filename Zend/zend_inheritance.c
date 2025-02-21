@@ -3548,7 +3548,8 @@ ZEND_API zend_class_entry *zend_do_link_class(zend_class_entry *ce, zend_string 
 #ifndef ZEND_WIN32
 	if (ce->ce_flags & ZEND_ACC_ENUM) {
 		/* We will add internal methods. */
-		is_cacheable = false;
+		// TODO
+		// is_cacheable = false;
 	}
 #endif
 

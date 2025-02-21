@@ -3588,6 +3588,11 @@ ZEND_API zend_result zend_register_class_alias_ex(const char *name, size_t name_
 	ZVAL_ALIAS_PTR(&zv, ce);
 
 	ret = zend_hash_add(CG(class_table), lcname, &zv);
+
+	if (CG(active_module)) {
+		zend_hash_add(&CG(active_module)->class_table, lcname, &zv);
+	}
+
 	zend_string_release_ex(lcname, 0);
 	if (ret) {
 		// avoid notifying at MINIT time

@@ -55,17 +55,20 @@ ZEND_API size_t compiler_globals_offset;
 ZEND_API size_t executor_globals_offset;
 static HashTable *global_function_table = NULL;
 static HashTable *global_class_table = NULL;
+static HashTable *global_module_table = NULL;
 static HashTable *global_constants_table = NULL;
 static HashTable *global_auto_globals_table = NULL;
 static HashTable *global_persistent_list = NULL;
 TSRMLS_MAIN_CACHE_DEFINE()
 # define GLOBAL_FUNCTION_TABLE		global_function_table
 # define GLOBAL_CLASS_TABLE			global_class_table
+# define GLOBAL_MODULE_TABLE		global_module_table
 # define GLOBAL_CONSTANTS_TABLE		global_constants_table
 # define GLOBAL_AUTO_GLOBALS_TABLE	global_auto_globals_table
 #else
 # define GLOBAL_FUNCTION_TABLE		CG(function_table)
 # define GLOBAL_CLASS_TABLE			CG(class_table)
+# define GLOBAL_MODULE_TABLE		CG(module_table)
 # define GLOBAL_AUTO_GLOBALS_TABLE	CG(auto_globals)
 # define GLOBAL_CONSTANTS_TABLE		EG(zend_constants)
 #endif
@@ -724,6 +727,9 @@ static void compiler_globals_ctor(zend_compiler_globals *compiler_globals) /* {{
 	zend_hash_init(compiler_globals->class_table, 64, NULL, ZEND_CLASS_DTOR, 1);
 	zend_hash_copy(compiler_globals->class_table, global_class_table, zend_class_add_ref);
 
+	compiler_globals->module_table = (HashTable *) malloc(sizeof(HashTable));
+	zend_hash_init(compiler_globals->module_table, 64, NULL, NULL, 1);
+
 	zend_set_default_compile_time_values();
 
 	compiler_globals->auto_globals = (HashTable *) malloc(sizeof(HashTable));
@@ -753,6 +759,10 @@ static void compiler_globals_ctor(zend_compiler_globals *compiler_globals) /* {{
 
 static void compiler_globals_dtor(zend_compiler_globals *compiler_globals) /* {{{ */
 {
+	if (compiler_globals->module_table != GLOBAL_MODULE_TABLE) {
+		zend_hash_destroy(compiler_globals->module_table);
+		free(compiler_globals->module_table);
+	}
 	if (compiler_globals->function_table != GLOBAL_FUNCTION_TABLE) {
 		uint32_t n = compiler_globals->copied_functions_count;
 
@@ -1006,11 +1016,13 @@ void zend_startup(zend_utility_functions *utility_functions) /* {{{ */
 
 	GLOBAL_FUNCTION_TABLE = (HashTable *) malloc(sizeof(HashTable));
 	GLOBAL_CLASS_TABLE = (HashTable *) malloc(sizeof(HashTable));
+	GLOBAL_MODULE_TABLE = (HashTable *) malloc(sizeof(HashTable));
 	GLOBAL_AUTO_GLOBALS_TABLE = (HashTable *) malloc(sizeof(HashTable));
 	GLOBAL_CONSTANTS_TABLE = (HashTable *) malloc(sizeof(HashTable));
 
 	zend_hash_init(GLOBAL_FUNCTION_TABLE, 1024, NULL, ZEND_FUNCTION_DTOR, 1);
 	zend_hash_init(GLOBAL_CLASS_TABLE, 64, NULL, ZEND_CLASS_DTOR, 1);
+	zend_hash_init(GLOBAL_MODULE_TABLE, 64, NULL, NULL, 1);
 	zend_hash_init(GLOBAL_AUTO_GLOBALS_TABLE, 8, NULL, auto_global_dtor, 1);
 	zend_hash_init(GLOBAL_CONSTANTS_TABLE, 128, NULL, ZEND_CONSTANT_DTOR, 1);
 
@@ -1029,9 +1041,11 @@ void zend_startup(zend_utility_functions *utility_functions) /* {{{ */
 	compiler_globals->in_compilation = 0;
 	compiler_globals->function_table = (HashTable *) malloc(sizeof(HashTable));
 	compiler_globals->class_table = (HashTable *) malloc(sizeof(HashTable));
+	compiler_globals->module_table = (HashTable *) malloc(sizeof(HashTable));
 
 	*compiler_globals->function_table = *GLOBAL_FUNCTION_TABLE;
 	*compiler_globals->class_table = *GLOBAL_CLASS_TABLE;
+	*compiler_globals->module_table = *GLOBAL_MODULE_TABLE;
 	compiler_globals->auto_globals = GLOBAL_AUTO_GLOBALS_TABLE;
 
 	zend_hash_destroy(executor_globals->zend_constants);
@@ -1113,6 +1127,7 @@ zend_result zend_post_startup(void) /* {{{ */
 #ifdef ZTS
 	*GLOBAL_FUNCTION_TABLE = *compiler_globals->function_table;
 	*GLOBAL_CLASS_TABLE = *compiler_globals->class_table;
+	*GLOBAL_MODULE_TABLE = *compiler_globals->module_table;
 	*GLOBAL_CONSTANTS_TABLE = *executor_globals->zend_constants;
 	global_map_ptr_last = compiler_globals->map_ptr_last;
 
@@ -1124,6 +1139,8 @@ zend_result zend_post_startup(void) /* {{{ */
 	compiler_globals->function_table = NULL;
 	free(compiler_globals->class_table);
 	compiler_globals->class_table = NULL;
+	free(compiler_globals->module_table);
+	compiler_globals->module_table = NULL;
 	if (compiler_globals->map_ptr_real_base) {
 		free(compiler_globals->map_ptr_real_base);
 	}

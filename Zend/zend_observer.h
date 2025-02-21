@@ -22,8 +22,11 @@
 #define ZEND_OBSERVER_H
 
 #include "zend.h"
+#include "zend_arena.h"
 #include "zend_compile.h"
 #include "zend_fibers.h"
+#include "zend_map_ptr.h"
+#include "zend_extensions.h"
 
 BEGIN_EXTERN_C()
 
@@ -103,6 +106,14 @@ static zend_always_inline bool zend_observer_fcall_has_no_observers(zend_execute
 
 	if (!ZEND_MAP_PTR(runtime_cache)) {
 		return true;
+	}
+
+	/* Internal function added at runtime and cached
+	   TODO: probably slow */
+	if (!ZEND_MAP_PTR_GET(runtime_cache)) {
+		ZEND_MAP_PTR_SET(function->common.run_time_cache,
+				zend_arena_calloc(&CG(arena), 1,
+					zend_internal_run_time_cache_reserved_size()));
 	}
 
 	*handler = (zend_observer_fcall_begin_handler *)ZEND_MAP_PTR_GET(runtime_cache) + ZEND_OBSERVER_HANDLE(function);

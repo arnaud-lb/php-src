@@ -24,6 +24,7 @@
 #include "zend_object_handlers.h"
 #include "zend_type_info.h"
 #include "zend_types.h"
+#include "zend_compile.h"
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -5513,6 +5514,42 @@ ZEND_METHOD(ReflectionClass, getExtensionName)
 	} else {
 		RETURN_FALSE;
 	}
+}
+/* }}} */
+
+/* {{{ Returns whether this class is defined in a module */
+ZEND_METHOD(ReflectionClass, inModule)
+{
+	reflection_object *intern;
+	zend_class_entry *ce;
+
+	if (zend_parse_parameters_none() == FAILURE) {
+		RETURN_THROWS();
+	}
+
+	GET_REFLECTION_OBJECT_PTR(ce);
+
+	RETURN_BOOL(ce->type == ZEND_USER_CLASS && ce->info.user.user_module);
+}
+/* }}} */
+
+/* {{{ Returns the name of the module where this class is defined */
+ZEND_METHOD(ReflectionClass, getModuleName)
+{
+	reflection_object *intern;
+	zend_class_entry *ce;
+
+	if (zend_parse_parameters_none() == FAILURE) {
+		RETURN_THROWS();
+	}
+
+	GET_REFLECTION_OBJECT_PTR(ce);
+
+	if (ce->type == ZEND_USER_CLASS && ce->info.user.user_module) {
+		zend_user_module *module = zend_hash_find_ptr(CG(module_table), ce->info.user.user_module);
+		RETURN_STR(module->desc.name);
+	}
+	RETURN_EMPTY_STRING();
 }
 /* }}} */
 

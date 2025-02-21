@@ -31,6 +31,7 @@
 #include "zend_accelerator_blacklist.h"
 #include "zend_list.h"
 #include "zend_execute.h"
+#include "zend_string.h"
 #include "zend_vm.h"
 #include "zend_inheritance.h"
 #include "zend_exceptions.h"
@@ -128,7 +129,7 @@ static zend_op_array *(*accelerator_orig_compile_file)(zend_file_handle *file_ha
 static zend_class_entry* (*accelerator_orig_inheritance_cache_get)(zend_class_entry *ce, zend_class_entry *parent, zend_class_entry **traits_and_interfaces);
 static zend_class_entry* (*accelerator_orig_inheritance_cache_add)(zend_class_entry *ce, zend_class_entry *proto, zend_class_entry *parent, zend_class_entry **traits_and_interfaces, HashTable *dependencies);
 static zend_result (*accelerator_orig_zend_stream_open_function)(zend_file_handle *handle );
-static zend_string *(*accelerator_orig_zend_resolve_path)(zend_string *filename);
+zend_string *(*accelerator_orig_zend_resolve_path)(zend_string *filename);
 static zif_handler orig_chdir = NULL;
 static ZEND_INI_MH((*orig_include_path_on_modify)) = NULL;
 static zend_result (*orig_post_startup_cb)(void);
@@ -1896,7 +1897,7 @@ static zend_persistent_script *opcache_compile_file(zend_file_handle *file_handl
 	return new_persistent_script;
 }
 
-static zend_op_array *file_cache_compile_file(zend_file_handle *file_handle, int type)
+static zend_op_array *file_cache_compile_file(zend_file_handle *file_handle, int type, zend_persistent_script **persistent_script_p)
 {
 	zend_persistent_script *persistent_script;
 	zend_op_array *op_array = NULL;
@@ -1955,6 +1956,9 @@ static zend_op_array *file_cache_compile_file(zend_file_handle *file_handle, int
 			zend_accel_set_auto_globals(persistent_script->ping_auto_globals_mask & ~ZCG(auto_globals_mask));
 		}
 
+		if (persistent_script_p) {
+			*persistent_script_p = persistent_script;
+		}
 		return zend_accel_load_script(persistent_script, 1);
 	}
 
@@ -1963,6 +1967,9 @@ static zend_op_array *file_cache_compile_file(zend_file_handle *file_handle, int
 	if (persistent_script) {
 		from_memory = false;
 		persistent_script = cache_script_in_file_cache(persistent_script, &from_memory);
+		if (persistent_script_p) {
+			*persistent_script_p = persistent_script;
+		}
 		return zend_accel_load_script(persistent_script, from_memory);
 	}
 
@@ -1991,7 +1998,7 @@ static int check_persistent_script_access(zend_persistent_script *persistent_scr
 }
 
 /* zend_compile() replacement */
-zend_op_array *persistent_compile_file(zend_file_handle *file_handle, int type)
+zend_op_array *persistent_compile_file_ex(zend_file_handle *file_handle, int type, zend_persistent_script **persistent_script_p)
 {
 	zend_persistent_script *persistent_script = NULL;
 	zend_string *key = NULL;
@@ -2004,16 +2011,16 @@ zend_op_array *persistent_compile_file(zend_file_handle *file_handle, int type)
 		if (file_handle->filename
 		 && ZCG(accel_directives).file_cache
 		 && ZCG(enabled) && accel_startup_ok) {
-			return file_cache_compile_file(file_handle, type);
+			return file_cache_compile_file(file_handle, type, persistent_script_p);
 		}
 		return accelerator_orig_compile_file(file_handle, type);
 	} else if (file_cache_only) {
 		ZCG(cache_opline) = NULL;
 		ZCG(cache_persistent_script) = NULL;
-		return file_cache_compile_file(file_handle, type);
+		return file_cache_compile_file(file_handle, type, persistent_script_p);
 	} else if ((ZCSG(restart_in_progress) && accel_restart_is_active())) {
 		if (ZCG(accel_directives).file_cache) {
-			return file_cache_compile_file(file_handle, type);
+			return file_cache_compile_file(file_handle, type, persistent_script_p);
 		}
 		ZCG(cache_opline) = NULL;
 		ZCG(cache_persistent_script) = NULL;
@@ -2105,7 +2112,7 @@ zend_op_array *persistent_compile_file(zend_file_handle *file_handle, int type)
 	if (!ZCG(counted)) {
 		if (accel_activate_add() == FAILURE) {
 			if (ZCG(accel_directives).file_cache) {
-				return file_cache_compile_file(file_handle, type);
+				return file_cache_compile_file(file_handle, type, persistent_script_p);
 			}
 			return accelerator_orig_compile_file(file_handle, type);
 		}
@@ -2156,7 +2163,7 @@ zend_op_array *persistent_compile_file(zend_file_handle *file_handle, int type)
 			SHM_PROTECT();
 			HANDLE_UNBLOCK_INTERRUPTIONS();
 			if (ZCG(accel_directives).file_cache) {
-				return file_cache_compile_file(file_handle, type);
+				return file_cache_compile_file(file_handle, type, persistent_script_p);
 			}
 			return accelerator_orig_compile_file(file_handle, type);
 		}
@@ -2248,7 +2255,15 @@ zend_op_array *persistent_compile_file(zend_file_handle *file_handle, int type)
 		zend_accel_set_auto_globals(persistent_script->ping_auto_globals_mask & ~ZCG(auto_globals_mask));
 	}
 
+	if (persistent_script_p) {
+		*persistent_script_p = persistent_script;
+	}
 	return zend_accel_load_script(persistent_script, from_shared_memory);
+}
+
+zend_op_array *persistent_compile_file(zend_file_handle *file_handle, int type)
+{
+	return persistent_compile_file_ex(file_handle, type, NULL);
 }
 
 static zend_always_inline zend_inheritance_cache_entry* zend_accel_inheritance_cache_find(zend_inheritance_cache_entry *entry, zend_class_entry *ce, zend_class_entry *parent, zend_class_entry **traits_and_interfaces, bool *needs_autoload_ptr)
@@ -2774,12 +2789,12 @@ zend_result accel_activate(INIT_FUNC_ARGS)
 	return SUCCESS;
 }
 
-#ifdef HAVE_JIT
 void accel_deactivate(void)
 {
+#ifdef HAVE_JIT
 	zend_jit_deactivate();
-}
 #endif
+}
 
 zend_result accel_post_deactivate(void)
 {
@@ -4920,11 +4935,7 @@ ZEND_EXT_API zend_extension zend_extension_entry = {
 	accel_startup,					   		/* startup */
 	NULL,									/* shutdown */
 	NULL,									/* per-script activation */
-#ifdef HAVE_JIT
 	accel_deactivate,                       /* per-script deactivation */
-#else
-	NULL,									/* per-script deactivation */
-#endif
 	NULL,									/* message handler */
 	NULL,									/* op_array handler */
 	NULL,									/* extended statement handler */

@@ -24,10 +24,12 @@
 #include "zend_attributes.h"
 #include "zend_compile.h"
 #include "zend_constants.h"
+#include "zend_errors.h"
 #include "zend_llist.h"
 #include "zend_API.h"
 #include "zend_exceptions.h"
 #include "zend_interfaces.h"
+#include "zend_string.h"
 #include "zend_virtual_cwd.h"
 #include "zend_multibyte.h"
 #include "zend_language_scanner.h"
@@ -386,6 +388,12 @@ static void zend_reset_import_tables(void) /* {{{ */
 }
 /* }}} */
 
+static void zend_end_module(void) {
+	ZEND_ASSERT(!FC(in_namespace));
+	FC(in_module) = 0;
+	FC(current_module) = NULL;
+}
+
 static void zend_end_namespace(void) /* {{{ */ {
 	FC(in_namespace) = 0;
 	zend_reset_import_tables();
@@ -413,6 +421,7 @@ void zend_file_context_begin(zend_file_context *prev_context) /* {{{ */
 void zend_file_context_end(zend_file_context *prev_context) /* {{{ */
 {
 	zend_end_namespace();
+	zend_end_module();
 	zend_hash_destroy(&FC(seen_symbols));
 	CG(file_context) = *prev_context;
 }
@@ -2158,6 +2167,7 @@ zend_ast *zend_negate_num_string(zend_ast *ast) /* {{{ */
 
 static void zend_verify_namespace(void) /* {{{ */
 {
+	// TODO: modules
 	if (FC(has_bracketed_namespaces) && !FC(in_namespace)) {
 		zend_error_noreturn(E_COMPILE_ERROR, "No code may exist outside of namespace {}");
 	}
@@ -6824,7 +6834,7 @@ bool zend_handle_encoding_declaration(zend_ast *ast) /* {{{ */
 }
 /* }}} */
 
-/* Check whether this is the first statement, not counting declares. */
+/* Check whether this is the first statement, not counting declares and modules. */
 static zend_result zend_is_first_statement(zend_ast *ast, bool allow_nop) /* {{{ */
 {
 	uint32_t i = 0;
@@ -6837,7 +6847,8 @@ static zend_result zend_is_first_statement(zend_ast *ast, bool allow_nop) /* {{{
 			if (!allow_nop) {
 				return FAILURE;
 			}
-		} else if (file_ast->child[i]->kind != ZEND_AST_DECLARE) {
+		} else if (file_ast->child[i]->kind != ZEND_AST_DECLARE
+				&& file_ast->child[i]->kind != ZEND_AST_MODULE) {
 			return FAILURE;
 		}
 		i++;
@@ -8291,6 +8302,11 @@ static zend_op_array *zend_compile_func_decl_ex(
 
 	op_array->fn_flags |= (orig_op_array->fn_flags & ZEND_ACC_STRICT_TYPES);
 	op_array->fn_flags |= decl->flags;
+	if (CG(active_module)) {
+		op_array->user_module = zend_string_copy(CG(active_module)->desc.lcname);
+	} else {
+		op_array->user_module = NULL;
+	}
 	op_array->line_start = decl->start_lineno;
 	op_array->line_end = decl->end_lineno;
 	if (decl->doc_comment) {
@@ -9104,6 +9120,11 @@ static void zend_compile_class_decl(znode *result, zend_ast *ast, bool toplevel)
 	}
 
 	ce->ce_flags |= decl->flags;
+	if (CG(active_module)) {
+		ce->info.user.user_module = zend_string_copy(CG(active_module)->desc.lcname);
+	} else {
+		ce->info.user.user_module = NULL;
+	}
 	ce->info.user.filename = zend_string_copy(zend_get_compiled_filename());
 	ce->info.user.line_start = decl->start_lineno;
 	ce->info.user.line_end = decl->end_lineno;
@@ -9503,6 +9524,53 @@ static void zend_compile_const_decl(zend_ast *ast) /* {{{ */
 }
 /* }}}*/
 
+static void zend_compile_module(zend_ast *ast)
+{
+	zend_ast *name_ast = ast->child[0];
+	zend_ast *stmt_ast = ast->child[1];
+	zend_string *name;
+
+	// TODO: bracketed modules?
+	if (stmt_ast) {
+		zend_error_noreturn(E_COMPILE_ERROR, "Bracketed modules not supported yet");
+	}
+
+	if (FC(current_module)) {
+		zend_error_noreturn(E_COMPILE_ERROR, "Can not re-declare module");
+	}
+
+	if (FC(current_namespace)) {
+		zend_error_noreturn(E_COMPILE_ERROR, "Can not declare module after namespace");
+	}
+
+	// TODO: empty module name?
+	if (!name_ast) {
+		zend_error_noreturn(E_COMPILE_ERROR, "Unnamed modules not supported yet");
+	}
+
+	name = zend_ast_get_str(name_ast);
+
+	// TODO: may not be the right place for this
+	if (!CG(active_module)) {
+		zend_error_noreturn(E_COMPILE_ERROR,
+				"Can not declare module outside of require_module()");
+	} else if (!zend_string_equals_ci(CG(active_module)->desc.name, name)) {
+		zend_error_noreturn(E_COMPILE_ERROR,
+				"Can not declare module '%s' while loading module '%s'",
+				ZSTR_VAL(name), ZSTR_VAL(CG(active_module)->desc.name));
+	}
+
+	CG(active_op_array)->user_module = zend_string_copy(CG(active_module)->desc.lcname);
+
+	FC(current_module) = CG(active_module);
+	FC(current_namespace) = zend_string_copy(CG(active_module)->desc.name);
+
+	zend_reset_import_tables();
+
+	FC(in_module) = 1;
+	FC(in_namespace) = 1;
+}
+
 static void zend_compile_namespace(zend_ast *ast) /* {{{ */
 {
 	zend_ast *name_ast = ast->child[0];
@@ -9529,7 +9597,7 @@ static void zend_compile_namespace(zend_ast *ast) /* {{{ */
 		}
 	}
 
-	bool is_first_namespace = (!with_bracket && !FC(current_namespace))
+	bool is_first_namespace = (!with_bracket && (!FC(current_namespace) || FC(current_namespace) == FC(current_module)->desc.name))
 		|| (with_bracket && !FC(has_bracketed_namespaces));
 	if (is_first_namespace && FAILURE == zend_is_first_statement(ast, /* allow_nop */ 1)) {
 		zend_error_noreturn(E_COMPILE_ERROR, "Namespace declaration statement has to be "
@@ -9547,7 +9615,13 @@ static void zend_compile_namespace(zend_ast *ast) /* {{{ */
 			zend_error_noreturn(E_COMPILE_ERROR, "Cannot use '%s' as namespace name", ZSTR_VAL(name));
 		}
 
-		FC(current_namespace) = zend_string_copy(name);
+		if (FC(current_module)) {
+			FC(current_namespace) = zend_string_concat3(
+				ZSTR_VAL(FC(current_module)->desc.name), ZSTR_LEN(FC(current_module)->desc.name),
+				"\\", 1, ZSTR_VAL(name), ZSTR_LEN(name));
+		} else {
+			FC(current_namespace) = zend_string_copy(name);
+		}
 	} else {
 		FC(current_namespace) = NULL;
 	}
@@ -9677,6 +9751,13 @@ static bool zend_try_ct_eval_magic_const(zval *zv, zend_ast *ast) /* {{{ */
 		case T_NS_C:
 			if (FC(current_namespace)) {
 				ZVAL_STR_COPY(zv, FC(current_namespace));
+			} else {
+				ZVAL_EMPTY_STRING(zv);
+			}
+			break;
+		case T_MODULE_C:
+			if (FC(current_module)) {
+				ZVAL_STR_COPY(zv, FC(current_module)->desc.name);
 			} else {
 				ZVAL_EMPTY_STRING(zv);
 			}
@@ -11370,7 +11451,9 @@ void zend_compile_top_stmt(zend_ast *ast) /* {{{ */
 	} else {
 		zend_compile_stmt(ast);
 	}
-	if (ast->kind != ZEND_AST_NAMESPACE && ast->kind != ZEND_AST_HALT_COMPILER) {
+	if (ast->kind != ZEND_AST_MODULE
+			&& ast->kind != ZEND_AST_NAMESPACE
+			&& ast->kind != ZEND_AST_HALT_COMPILER) {
 		zend_verify_namespace();
 	}
 }
@@ -11468,6 +11551,9 @@ static void zend_compile_stmt(zend_ast *ast) /* {{{ */
 			break;
 		case ZEND_AST_CONST_DECL:
 			zend_compile_const_decl(ast);
+			break;
+		case ZEND_AST_MODULE:
+			zend_compile_module(ast);
 			break;
 		case ZEND_AST_NAMESPACE:
 			zend_compile_namespace(ast);
