@@ -305,7 +305,13 @@ struct _zend_mm_heap {
 		size_t     (*_gc)(void);
 		void       (*_shutdown)(bool full, bool silent);
 	} custom_heap;
-	HashTable *tracked_allocs;
+	union {
+		HashTable *tracked_allocs;
+		struct {
+			char alloc;
+			char free;
+		} poison;
+	};
 #endif
 	pid_t pid;
 	zend_random_bytes_insecure_state rand_state;
@@ -3021,6 +3027,87 @@ static void tracked_free_all(zend_mm_heap *heap) {
 }
 #endif
 
+static void* poison_malloc(size_t size ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC)
+{
+	zend_mm_heap *heap = AG(mm_heap);
+	void *ptr = zend_mm_alloc_heap(heap, size ZEND_FILE_LINE_RELAY_CC ZEND_FILE_LINE_ORIG_RELAY_CC);
+	if (EXPECTED(ptr)) {
+		memset(ptr, heap->poison.alloc, size);
+	}
+	return ptr;
+}
+
+static void poison_free(void *ptr ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC)
+{
+	zend_mm_heap *heap = AG(mm_heap);
+	if (EXPECTED(ptr)) {
+		/* zend_mm_shutdown() will try to free the heap when custom handlers
+		 * are installed */
+		if (UNEXPECTED(ptr == heap)) {
+			return;
+		}
+		size_t size = zend_mm_size(heap, ptr ZEND_FILE_LINE_RELAY_CC ZEND_FILE_LINE_ORIG_RELAY_CC);
+		memset(ptr, heap->poison.free, size);
+	}
+	zend_mm_free_heap(heap, ptr ZEND_FILE_LINE_RELAY_CC ZEND_FILE_LINE_ORIG_RELAY_CC);
+}
+
+static void* poison_realloc(void *ptr, size_t size ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC)
+{
+	zend_mm_heap *heap = AG(mm_heap);
+	size_t oldsize = ptr ? zend_mm_size(heap, ptr ZEND_FILE_LINE_RELAY_CC ZEND_FILE_LINE_ORIG_RELAY_CC) : 0;
+	if (ptr && oldsize > size) {
+		memset((char*)ptr + size, heap->poison.free, oldsize - size);
+	}
+	ptr = zend_mm_realloc_heap(heap, ptr, size, 0, size ZEND_FILE_LINE_RELAY_CC ZEND_FILE_LINE_ORIG_RELAY_CC);
+	if (EXPECTED(ptr)) {
+		if (size > oldsize) {
+			memset((char*)ptr + oldsize, heap->poison.alloc, size - oldsize);
+		}
+	}
+	return ptr;
+}
+
+static size_t poison_gc(void)
+{
+	zend_mm_heap *heap = AG(mm_heap);
+
+	void* (*_malloc)(size_t ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC);
+	void  (*_free)(void* ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC);
+	void* (*_realloc)(void*, size_t ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC);
+	size_t (*_gc)(void);
+	void   (*_shutdown)(bool, bool);
+
+	zend_mm_get_custom_handlers_ex(heap, &_malloc, &_free, &_realloc, &_gc, &_shutdown);
+	zend_mm_set_custom_handlers_ex(heap, NULL, NULL, NULL, NULL, NULL);
+
+	size_t collected = zend_mm_gc(heap);
+
+	zend_mm_set_custom_handlers_ex(heap, _malloc, _free, _realloc, _gc, _shutdown);
+
+	return collected;
+}
+
+static void poison_shutdown(bool full, bool silent)
+{
+	zend_mm_heap *heap = AG(mm_heap);
+
+	void* (*_malloc)(size_t ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC);
+	void  (*_free)(void* ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC);
+	void* (*_realloc)(void*, size_t ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC);
+	size_t (*_gc)(void);
+	void   (*_shutdown)(bool, bool);
+
+	zend_mm_get_custom_handlers_ex(heap, &_malloc, &_free, &_realloc, &_gc, &_shutdown);
+	zend_mm_set_custom_handlers_ex(heap, NULL, NULL, NULL, NULL, NULL);
+
+	zend_mm_shutdown(heap, full, silent);
+
+	if (!full) {
+		zend_mm_set_custom_handlers_ex(heap, _malloc, _free, _realloc, _gc, _shutdown);
+	}
+}
+
 static void alloc_globals_ctor(zend_alloc_globals *alloc_globals)
 {
 	char *tmp;
@@ -3057,6 +3144,25 @@ static void alloc_globals_ctor(zend_alloc_globals *alloc_globals)
 		zend_mm_use_huge_pages = true;
 	}
 	alloc_globals->mm_heap = zend_mm_init();
+
+#if ZEND_MM_CUSTOM
+	tmp = getenv("ZEND_MM_POISON");
+	if (tmp && tmp[0]) {
+		ZEND_ASSERT(!alloc_globals->mm_heap->tracked_allocs);
+		char *end;
+		long alloc_poison = strtol(tmp, &end, 0);
+		long free_poison;
+		if (end[0] == ',') {
+			free_poison = strtoul(end, NULL, 0);
+		} else {
+			free_poison = alloc_poison;
+		}
+		alloc_globals->mm_heap->poison.alloc = (char) alloc_poison;
+		alloc_globals->mm_heap->poison.free = (char) free_poison;
+		zend_mm_set_custom_handlers_ex(alloc_globals->mm_heap, poison_malloc,
+				poison_free, poison_realloc, poison_gc, poison_shutdown);
+	}
+#endif
 }
 
 #ifdef ZTS
