@@ -1020,6 +1020,15 @@ static zend_always_inline void *zend_hash_get_current_data_ptr_ex(HashTable *ht,
 		for (; _count > 0; _z = ZEND_HASH_NEXT_ELEMENT(_z, _size), _count--) { \
 			if (UNEXPECTED(Z_TYPE_P(_z) == IS_UNDEF)) continue;
 
+#define _ZEND_HASH_FOREACH_VAL_FROM(_ht, _from) do { \
+		const HashTable *__ht = (_ht); \
+		uint32_t _idx = (_from); \
+		size_t _size = ZEND_HASH_ELEMENT_SIZE(__ht); \
+		zval *_z = ZEND_HASH_ELEMENT_EX(__ht, _idx, _size); \
+		uint32_t _count = __ht->nNumUsed - _idx; \
+		for (; _count > 0; _z = ZEND_HASH_NEXT_ELEMENT(_z, _size), _count--) { \
+			if (UNEXPECTED(Z_TYPE_P(_z) == IS_UNDEF)) continue;
+
 #define _ZEND_HASH_REVERSE_FOREACH_VAL(_ht) do { \
 		const HashTable *__ht = (_ht); \
 		uint32_t _idx = __ht->nNumUsed; \
@@ -1103,6 +1112,14 @@ static zend_always_inline void *zend_hash_get_current_data_ptr_ex(HashTable *ht,
 #define ZEND_HASH_FOREACH_VAL(ht, _val) \
 	_ZEND_HASH_FOREACH_VAL(ht); \
 	_val = _z;
+
+#define ZEND_HASH_FOREACH_VAL_FROM(ht, _val, _from) \
+	_ZEND_HASH_FOREACH_VAL_FROM(ht, _from); \
+	_val = _z;
+
+#define ZEND_HASH_FOREACH_PTR_FROM(ht, _ptr, _from) \
+	ZEND_HASH_FOREACH_FROM(ht, 0, _from); \
+	_ptr = Z_PTR_P(_z);
 
 #define ZEND_HASH_REVERSE_FOREACH_VAL(ht, _val) \
 	_ZEND_HASH_REVERSE_FOREACH_VAL(ht); \

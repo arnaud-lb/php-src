@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 3dbc84896823c9aaa9ac8aeef8841266920c3e50 */
+ * Stub hash: f3c8289d0bc70df38414438a898b00327153a27f */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_exit, 0, 0, IS_NEVER, 0)
 	ZEND_ARG_TYPE_MASK(0, status, MAY_BE_STRING|MAY_BE_LONG, "0")
@@ -223,6 +223,10 @@ ZEND_END_ARG_INFO()
 
 #define arginfo_gc_status arginfo_func_get_args
 
+#define arginfo_restore_state arginfo_gc_enabled
+
+#define arginfo_snapshot_state arginfo_gc_enable
+
 
 ZEND_FRAMELESS_FUNCTION(property_exists, 2);
 static const zend_frameless_function_info frameless_function_infos_property_exists[] = {
@@ -297,6 +301,8 @@ ZEND_FUNCTION(gc_enabled);
 ZEND_FUNCTION(gc_enable);
 ZEND_FUNCTION(gc_disable);
 ZEND_FUNCTION(gc_status);
+ZEND_FUNCTION(restore_state);
+ZEND_FUNCTION(snapshot_state);
 
 static const zend_function_entry ext_functions[] = {
 	ZEND_FE(exit, arginfo_exit)
@@ -361,6 +367,8 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_FE(gc_enable, arginfo_gc_enable)
 	ZEND_FE(gc_disable, arginfo_gc_disable)
 	ZEND_FE(gc_status, arginfo_gc_status)
+	ZEND_FE(restore_state, arginfo_restore_state)
+	ZEND_FE(snapshot_state, arginfo_snapshot_state)
 	ZEND_FE_END
 };
 

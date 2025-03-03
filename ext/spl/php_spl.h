@@ -18,6 +18,7 @@
 #define PHP_SPL_H
 
 #include "php.h"
+#include "Zend/zend_snapshot.h"
 
 #define PHP_SPL_VERSION PHP_VERSION
 
@@ -31,5 +32,8 @@ PHP_RSHUTDOWN_FUNCTION(spl);
 PHP_MINFO_FUNCTION(spl);
 
 PHPAPI zend_string *php_spl_object_hash(zend_object *obj);
+
+PHPAPI void *spl_snapshot(void);
+PHPAPI void spl_restore(void *data);
 
 #endif /* PHP_SPL_H */

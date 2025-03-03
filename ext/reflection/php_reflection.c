@@ -22,6 +22,7 @@
 #include "zend_execute.h"
 #include "zend_lazy_objects.h"
 #include "zend_object_handlers.h"
+#include "zend_snapshot.h"
 #include "zend_type_info.h"
 #include "zend_types.h"
 #ifdef HAVE_CONFIG_H
@@ -282,6 +283,11 @@ static void reflection_free_objects_storage(zend_object *object) /* {{{ */
 	zend_object_std_dtor(object);
 }
 /* }}} */
+
+static zend_object *reflection_snapshot_obj(zend_object *obj)
+{
+	return obj;
+}
 
 static HashTable *reflection_get_gc(zend_object *obj, zval **gc_data, int *gc_data_count) /* {{{ */
 {
@@ -7771,6 +7777,7 @@ PHP_MINIT_FUNCTION(reflection) /* {{{ */
 	reflection_object_handlers.clone_obj = NULL;
 	reflection_object_handlers.write_property = _reflection_write_property;
 	reflection_object_handlers.get_gc = reflection_get_gc;
+	reflection_object_handlers.snapshot_obj = reflection_snapshot_obj;
 
 	reflection_exception_ptr = register_class_ReflectionException(zend_ce_exception);
 
