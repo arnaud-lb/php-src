@@ -1735,6 +1735,65 @@ PHPAPI bool append_user_shutdown_function(php_shutdown_function_entry *shutdown_
 }
 /* }}} */
 
+PHPAPI void *php_standard_snapshot(zend_snapshot_builder *sb)
+{
+	if (!BG(user_shutdown_function_names)) {
+		return NULL;
+	}
+
+	zend_array *ht = zend_snapshot_ht(sb, BG(user_shutdown_function_names));
+	zval *zv;
+	ZEND_HASH_FOREACH_VAL(ht, zv) {
+		if (!HT_IS_PACKED(ht)) {
+			Bucket *b = (Bucket*)zv;
+			if (b->key) {
+				b->key = zend_snapshot_str(sb, b->key);
+			}
+		}
+		bool is_new;
+		php_shutdown_function_entry *entry;
+		Z_PTR_P(zv) = entry = zend_snapshot_memdup_ex(sb,
+				Z_PTR_P(zv), sizeof(php_shutdown_function_entry), &is_new);
+		if (!is_new) {
+			continue;
+		}
+		// TODO: check CEs
+		if (!(entry->fci_cache.function_handler->common.fn_flags & ZEND_ACC_CALL_VIA_TRAMPOLINE)) {
+			entry->fci_cache.function_handler = zend_snapshot_memdup(sb, entry->fci_cache.function_handler, sizeof(zend_function));
+			entry->fci_cache.function_handler->common.function_name = zend_snapshot_str(sb, entry->fci_cache.function_handler->common.function_name);
+		}
+		if (entry->fci_cache.object) {
+			entry->fci_cache.object = zend_snapshot_object(sb, entry->fci_cache.object);
+		}
+		if (entry->fci_cache.closure) {
+			entry->fci_cache.closure = zend_snapshot_object(sb, entry->fci_cache.closure);
+		}
+		for (uint32_t i = 0; i < entry->param_count; i++) {
+			entry->params[i] = zend_snapshot_zval(sb, entry->params[i]);
+		}
+	} ZEND_HASH_FOREACH_END();
+
+	return ht;
+}
+
+PHPAPI void php_standard_restore(void *data)
+{
+	if (!data) {
+		return;
+	}
+
+	zend_array *ht = (zend_array*)data;
+	if (BG(user_shutdown_function_names)) {
+		zend_hash_clean(BG(user_shutdown_function_names));
+		zend_hash_copy(BG(user_shutdown_function_names), ht, NULL);
+		ht->pDestructor = NULL;
+		zend_hash_destroy(ht);
+		efree(ht);
+	} else {
+		BG(user_shutdown_function_names) = ht;
+	}
+}
+
 ZEND_API void php_get_highlight_struct(zend_syntax_highlighter_ini *syntax_highlighter_ini) /* {{{ */
 {
 	syntax_highlighter_ini->highlight_comment = INI_STR("highlight.comment");

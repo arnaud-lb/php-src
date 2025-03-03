@@ -27,6 +27,7 @@
 #include "zend_objects_API.h"
 #include "zend_globals.h"
 #include "zend_closures_arginfo.h"
+#include "zend_snapshot.h"
 
 typedef struct _zend_closure {
 	zend_object       std;
@@ -699,6 +700,23 @@ static HashTable *zend_closure_get_gc(zend_object *obj, zval **table, int *n) /*
 }
 /* }}} */
 
+static zend_object *zend_closure_snapshot_obj(zend_snapshot_builder *sb, zend_object *obj)
+{
+	zend_closure *closure = (zend_closure*)obj;
+	zend_closure *new = zend_snapshot_memdup(sb, closure, sizeof(zend_closure));
+
+	new->this_ptr = zend_snapshot_zval(sb, new->this_ptr);
+
+	if (ZEND_MAP_PTR(new->func.op_array.static_variables_ptr)) {
+		ZEND_ASSERT(!ZEND_MAP_PTR_IS_OFFSET(new->func.op_array.static_variables_ptr));
+		ZEND_MAP_PTR(new->func.op_array.static_variables_ptr) = zend_snapshot_array(sb, ZEND_MAP_PTR(new->func.op_array.static_variables_ptr));
+	}
+
+	ZEND_MAP_PTR_INIT(new->func.op_array.run_time_cache, NULL);
+
+	return &new->std;
+}
+
 /* {{{ Private constructor preventing instantiation */
 ZEND_COLD ZEND_METHOD(Closure, __construct)
 {
@@ -721,6 +739,7 @@ void zend_register_closure_ce(void) /* {{{ */
 	closure_handlers.get_debug_info = zend_closure_get_debug_info;
 	closure_handlers.get_closure = zend_closure_get_closure;
 	closure_handlers.get_gc = zend_closure_get_gc;
+	closure_handlers.snapshot_obj = zend_closure_snapshot_obj;
 }
 /* }}} */
 

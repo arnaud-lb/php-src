@@ -17,6 +17,7 @@
 #include "zend.h"
 #include "zend_interfaces.h"
 #include "zend_objects_API.h"
+#include "zend_snapshot.h"
 #include "zend_types.h"
 #include "zend_weakrefs.h"
 #include "zend_weakrefs_arginfo.h"
@@ -54,7 +55,7 @@ typedef struct _zend_weakmap_iterator {
 #define ZEND_WEAKREF_ENCODE(p, t) ((void *) (((uintptr_t) (p)) | (t)))
 
 zend_class_entry *zend_ce_weakref;
-static zend_class_entry *zend_ce_weakmap;
+zend_class_entry *zend_ce_weakmap;
 static zend_object_handlers zend_weakref_handlers;
 static zend_object_handlers zend_weakmap_handlers;
 
@@ -346,6 +347,21 @@ static void zend_weakmap_free_obj(zend_object *object)
 	} ZEND_HASH_FOREACH_END();
 	zend_hash_destroy(&wm->ht);
 	zend_object_std_dtor(&wm->std);
+}
+
+static zend_object *zend_weakmap_snapshot_obj(zend_snapshot_builder *sb, zend_object *object)
+{
+	zend_weakmap *wm = zend_weakmap_from(object);
+	if (wm->ht.nNumOfElements) {
+		zend_throw_error(NULL, "Can not snapshot non-emtpy WeakMap (TODO)");
+		return NULL;
+	}
+
+	wm = zend_snapshot_memdup(sb, wm, sizeof(zend_weakmap) + zend_object_properties_size(object->ce));
+	zend_std_snapshot_obj_ex(sb, &wm->std);
+	zend_snapshot_ht_ex(sb, &wm->ht);
+
+	return &wm->std;
 }
 
 static zval *zend_weakmap_read_dimension(zend_object *object, zval *offset, int type, zval *rv)
@@ -800,6 +816,7 @@ void zend_register_weakref_ce(void) /* {{{ */
 	zend_weakmap_handlers.get_properties_for = zend_weakmap_get_properties_for;
 	zend_weakmap_handlers.get_gc = zend_weakmap_get_gc;
 	zend_weakmap_handlers.clone_obj = zend_weakmap_clone_obj;
+	zend_weakmap_handlers.snapshot_obj = zend_weakmap_snapshot_obj;
 }
 /* }}} */
 

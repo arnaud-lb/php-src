@@ -25,6 +25,7 @@
 #include "zend_exceptions.h"
 #include "lib/timelib.h"
 #include "lib/timelib_private.h"
+#include "zend_snapshot.h"
 #ifndef PHP_WIN32
 #include <time.h>
 #else
@@ -265,7 +266,7 @@ PHP_INI_BEGIN()
 PHP_INI_END()
 /* }}} */
 
-static zend_class_entry *date_ce_date, *date_ce_timezone, *date_ce_interval, *date_ce_period;
+PHPAPI zend_class_entry *date_ce_date, *date_ce_timezone, *date_ce_interval, *date_ce_period;
 static zend_class_entry *date_ce_immutable, *date_ce_interface;
 static zend_class_entry *date_ce_date_error, *date_ce_date_object_error, *date_ce_date_range_error;
 static zend_class_entry *date_ce_date_exception, *date_ce_date_invalid_timezone_exception, *date_ce_date_invalid_operation_exception, *date_ce_date_malformed_string_exception, *date_ce_date_malformed_interval_string_exception, *date_ce_date_malformed_period_string_exception;
@@ -367,6 +368,7 @@ static zval *date_period_get_property_ptr_ptr(zend_object *object, zend_string *
 static void date_period_unset_property(zend_object *object, zend_string *name, void **cache_slot);
 static HashTable *date_period_get_properties_for(zend_object *object, zend_prop_purpose purpose);
 static int date_object_compare_timezone(zval *tz1, zval *tz2);
+static zend_object *date_object_snapshot_timezone(zend_snapshot_builder *sb, zend_object *obj);
 
 /* {{{ Module struct */
 zend_module_entry date_module_entry = {
@@ -1771,6 +1773,7 @@ static void date_register_classes(void) /* {{{ */
 	date_object_handlers_timezone.get_gc = date_object_get_gc_timezone;
 	date_object_handlers_timezone.get_debug_info = date_object_get_debug_info_timezone;
 	date_object_handlers_timezone.compare = date_object_compare_timezone;
+	date_object_handlers_timezone.snapshot_obj = date_object_snapshot_timezone;
 
 	date_ce_interval = register_class_DateInterval();
 	date_ce_interval->create_object = date_object_new_interval;
@@ -2023,6 +2026,80 @@ static int date_object_compare_timezone(zval *tz1, zval *tz2) /* {{{ */
 		EMPTY_SWITCH_DEFAULT_CASE();
 	}
 } /* }}} */
+
+static timelib_tzinfo *date_snapshot_tzinfo(zend_snapshot_builder *sb, timelib_tzinfo *tz)
+{
+	tz = zend_snapshot_memdup(sb, tz, sizeof(timelib_tzinfo));
+
+	tz->name = zend_snapshot_memdup_null(sb, tz->name, strlen(tz->name));
+	tz->trans = zend_snapshot_memdup_null(sb, tz->trans, sizeof(*tz->trans));
+	tz->trans_idx = zend_snapshot_memdup_null(sb, tz->trans_idx, sizeof(*tz->trans_idx));
+	tz->type = zend_snapshot_memdup_null(sb, tz->type, sizeof(*tz->type));
+	tz->timezone_abbr = zend_snapshot_memdup_null(sb, tz->timezone_abbr, sizeof(*tz->timezone_abbr));
+	tz->leap_times = zend_snapshot_memdup_null(sb, tz->leap_times, sizeof(*tz->leap_times));
+	tz->location.comments = zend_snapshot_memdup_null(sb, tz->location.comments, sizeof(*tz->location.comments));
+	tz->posix_string = zend_snapshot_memdup_null(sb, tz->posix_string, sizeof(*tz->posix_string));
+
+	if (tz->posix_info) {
+		timelib_posix_str *ps = tz->posix_info = zend_snapshot_memdup(sb, tz->posix_info, sizeof(timelib_posix_str));
+		ps->std = zend_snapshot_memdup_null(sb, ps->std, sizeof(*ps->std));
+		ps->dst = zend_snapshot_memdup_null(sb, ps->dst, sizeof(*ps->dst));
+		ps->dst_begin = zend_snapshot_memdup_null(sb, ps->dst_begin, sizeof(*ps->dst_begin));
+		ps->std = zend_snapshot_memdup_null(sb, ps->std, sizeof(*ps->std));
+	}
+
+	return tz;
+}
+static zend_object *date_object_snapshot_timezone(zend_snapshot_builder *sb, zend_object *obj)
+{
+	php_timezone_obj *intern = php_timezone_obj_from_obj(obj);
+	intern = zend_snapshot_memdup(sb, intern, sizeof(php_timezone_obj) + zend_object_properties_size(obj->ce));
+	zend_std_snapshot_obj_ex(sb, &intern->std);
+	if (intern->initialized) {
+		switch (intern->type) {
+			case TIMELIB_ZONETYPE_ABBR:
+				intern->tzi.z.abbr = zend_snapshot_memdup(sb, intern->tzi.z.abbr, strlen(intern->tzi.z.abbr)+1);
+				break;
+			case TIMELIB_ZONETYPE_ID:
+				intern->tzi.tz = date_snapshot_tzinfo(sb, intern->tzi.tz);
+				break;
+		}
+	}
+	return &intern->std;
+}
+
+PHPAPI void date_restore(void *data)
+{
+	if (!data) {
+		return;
+	}
+
+	zend_array *snapshot = (zend_array*)data;
+
+	if (DATEG(tzcache)) {
+		zend_throw_error(NULL, "Restoring when DATEG(tzcache) is non-empty is not supported (TODO)");
+		return;
+	}
+
+	DATEG(tzcache) = snapshot;
+}
+
+PHPAPI void *date_snapshot(zend_snapshot_builder *sb)
+{
+	if (!DATEG(tzcache)) {
+		return NULL;
+	}
+
+	zend_array *snapshot = zend_snapshot_ht(sb, DATEG(tzcache));
+	zend_string *key;
+	zval *zv;
+	ZEND_HASH_MAP_FOREACH_STR_KEY_VAL(snapshot, key, zv) {
+		((Bucket*)zv)->key = zend_snapshot_str(sb, key);
+		Z_PTR_P(zv) = date_snapshot_tzinfo(sb, Z_PTR_P(zv));
+	} ZEND_HASH_FOREACH_END();
+
+	return snapshot;
+}
 
 static void php_timezone_to_string(php_timezone_obj *tzobj, zval *zv)
 {

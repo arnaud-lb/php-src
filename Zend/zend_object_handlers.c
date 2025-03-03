@@ -19,8 +19,10 @@
 */
 
 #include "zend.h"
+#include "zend_alloc.h"
 #include "zend_globals.h"
 #include "zend_lazy_objects.h"
+#include "zend_types.h"
 #include "zend_variables.h"
 #include "zend_API.h"
 #include "zend_objects.h"
@@ -33,6 +35,7 @@
 #include "zend_hash.h"
 #include "zend_property_hooks.h"
 #include "zend_observer.h"
+#include "zend_snapshot.h"
 
 #define DEBUG_OBJECT_HANDLERS 0
 
@@ -2447,6 +2450,34 @@ ZEND_API HashTable *zend_get_properties_for(zval *obj, zend_prop_purpose purpose
 	return zend_std_get_properties_for(zobj, purpose);
 }
 
+ZEND_API void zend_std_snapshot_obj_ex(zend_snapshot_builder *sb, zend_object *object) {
+	for (uint32_t i = 0; i < object->ce->default_properties_count; i++) {
+		if (!Z_ISUNDEF(object->properties_table[i])) {
+			object->properties_table[i] = zend_snapshot_zval(sb, object->properties_table[i]);
+		}
+	}
+
+	if (object->properties) {
+		object->properties = zend_snapshot_array(sb, object->properties);
+	}
+}
+
+ZEND_API zend_object *zend_std_snapshot_obj(zend_snapshot_builder *sb, zend_object *object) {
+	ZEND_ASSERT(!zend_object_is_lazy(object) && "TODO");
+
+	if (object->ce->create_object) {
+		zend_throw_error(NULL, "Can not snapshot instance of class %s", ZSTR_VAL(object->ce->name));
+		return NULL;
+	}
+
+	size_t size = sizeof(zend_object) + zend_object_properties_size(object->ce);
+	zend_object *new = zend_snapshot_memdup(sb, object, size);
+
+	zend_std_snapshot_obj_ex(sb, new);
+
+	return new;
+}
+
 ZEND_API const zend_object_handlers std_object_handlers = {
 	0,										/* offset */
 
@@ -2475,4 +2506,5 @@ ZEND_API const zend_object_handlers std_object_handlers = {
 	NULL,									/* do_operation */
 	zend_std_compare_objects,				/* compare */
 	NULL,									/* get_properties_for */
+	zend_std_snapshot_obj,                  /* snapshot_obj */
 };

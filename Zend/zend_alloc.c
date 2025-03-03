@@ -226,7 +226,6 @@ typedef zend_mm_bitset zend_mm_page_map[ZEND_MM_PAGE_MAP_LEN];     /* 64B */
 typedef struct  _zend_mm_page      zend_mm_page;
 typedef struct  _zend_mm_bin       zend_mm_bin;
 typedef struct  _zend_mm_free_slot zend_mm_free_slot;
-typedef struct  _zend_mm_chunk     zend_mm_chunk;
 typedef struct  _zend_mm_huge_list zend_mm_huge_list;
 
 static bool zend_mm_use_huge_pages = false;
@@ -804,7 +803,7 @@ static void *zend_mm_chunk_alloc_int(size_t size, size_t alignment)
 	}
 }
 
-static void *zend_mm_chunk_alloc(zend_mm_heap *heap, size_t size, size_t alignment)
+ZEND_API void *zend_mm_chunk_alloc(zend_mm_heap *heap, size_t size, size_t alignment)
 {
 #if ZEND_MM_STORAGE
 	if (UNEXPECTED(heap->storage)) {
@@ -2193,6 +2192,45 @@ ZEND_API size_t zend_mm_gc(zend_mm_heap *heap)
 	} while (chunk != heap->main_chunk);
 
 	return collected * ZEND_MM_PAGE_SIZE;
+}
+
+ZEND_API zend_mm_chunk *zend_mm_get_chunk_list(zend_mm_heap *heap)
+{
+	return heap->main_chunk;
+}
+
+ZEND_API int zend_mm_get_chunks_count(zend_mm_heap *heap)
+{
+	return heap->chunks_count;
+}
+
+ZEND_API void *zend_mm_get_huge_list(zend_mm_heap *heap)
+{
+	return heap->huge_list;
+}
+
+ZEND_API zend_mm_chunk *zend_mm_get_next_chunk(zend_mm_heap *heap, zend_mm_chunk *chunk)
+{
+	ZEND_ASSERT(chunk->heap == heap);
+	zend_mm_chunk *next = chunk->next;
+	if (next == heap->main_chunk) {
+		return NULL;
+	}
+	return next;
+}
+
+ZEND_API void zend_mm_adopt_chunk(zend_mm_heap *heap, zend_mm_chunk *chunk)
+{
+	/* Do not import free lists, as the chunk may have been created with a
+	 * different key. However, free blocks can be used. */
+	chunk->heap = heap;
+	chunk->next = heap->main_chunk;
+	chunk->prev = heap->main_chunk->prev;
+	chunk->prev->next = chunk;
+	chunk->next->prev = chunk;
+	chunk->num = chunk->prev->num + 1;
+	heap->chunks_count++;
+	heap->peak_chunks_count++;
 }
 
 #if ZEND_DEBUG

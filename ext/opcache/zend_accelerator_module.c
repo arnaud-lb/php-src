@@ -23,17 +23,35 @@
 
 #include "php.h"
 #include "ZendAccelerator.h"
+#include "zend.h"
 #include "zend_API.h"
+#include "zend_alloc.h"
+#include "zend_alloc_sizes.h"
 #include "zend_closures.h"
+#include "zend_compile.h"
+#include "zend_constants.h"
+#include "zend_hash.h"
+#include "zend_objects_API.h"
+#include "zend_portability.h"
 #include "zend_shared_alloc.h"
 #include "zend_accelerator_blacklist.h"
 #include "php_ini.h"
 #include "SAPI.h"
+#include "zend_smart_str.h"
+#include "zend_snapshot.h"
+#include "zend_string.h"
+#include "zend_types.h"
 #include "zend_virtual_cwd.h"
 #include "ext/standard/info.h"
 #include "ext/standard/php_filestat.h"
 #include "ext/date/php_date.h"
 #include "opcache_arginfo.h"
+#include "zend_weakrefs.h"
+#include "zend_iterators.h"
+// TODO: do not depend on these directly
+#include "ext/spl/php_spl.h"
+#include "ext/standard/basic_functions.h"
+#include "ext/date/php_date.h"
 
 #ifdef HAVE_JIT
 #include "jit/zend_jit.h"
@@ -997,4 +1015,772 @@ ZEND_FUNCTION(opcache_is_script_cached)
 	}
 
 	RETURN_BOOL(filename_is_in_cache(script_name));
+}
+
+#if 0
+static void snapshot_check_value(zval *zv, smart_str *path);
+
+static bool snapshot_is_internal_class(zend_class_entry *ce, zend_class_entry **internal_ce)
+{
+	if (ce->type == ZEND_INTERNAL_CLASS) {
+		*internal_ce = ce;
+		return true;
+	}
+	if (ce->parent) {
+		return snapshot_is_internal_class(ce->parent, internal_ce);
+	}
+	return false;
+}
+
+static void snapshot_check_func(const zend_function *func, smart_str *path)
+{
+	if (!ZEND_USER_CODE(func->type)) {
+		return;
+	}
+
+	zend_array *ht = ZEND_MAP_PTR_GET(func->op_array.static_variables_ptr);
+	if (!ht) {
+		return;
+	}
+
+	zval *zv;
+	zend_string *key;
+	size_t plen = ZSTR_LEN(path->s);
+	smart_str_appends(path, " $");
+	ZEND_HASH_MAP_FOREACH_STR_KEY_VAL(ht, key, zv) {
+		smart_str_append_escaped(path, ZSTR_VAL(key), ZSTR_LEN(key));
+		snapshot_check_value(zv, path);
+		ZSTR_LEN(path->s) = plen + strlen(" $");
+	} ZEND_HASH_FOREACH_END();
+	ZSTR_LEN(path->s) = plen;
+}
+
+static void snapshot_check_ce(zend_class_entry *ce, smart_str *path)
+{
+	if (ce->type != ZEND_USER_CLASS) {
+		return;
+	}
+
+	// TODO: constants
+	// TODO: default props
+
+	/*
+	zval *table = ZEND_MAP_PTR_GET(ce->static_members_table);
+	size_t plen = ZSTR_LEN(path->s);
+	smart_str_appends(path, "::$");
+	for (uint32_t i = 0; i < ce->default_
+	for (int i = 0; i < ce->default_static_members_count; i++) {
+		smart_str_append_escaped(
+		snapshot_check_value(&table[i], path);
+	}
+	*/
+}
+// TODO
+extern zend_class_entry *date_ce_timezone;
+
+/* Check that value 'zv' can be snapshotted.
+ * Internal classes and resources can not. */
+// TODO: this may visit objects multiple times
+static void snapshot_check_value(zval *zv, smart_str *path) {
+	uint8_t type = Z_TYPE_P(zv);
+	if (type < IS_STRING) {
+		return;
+	}
+
+	switch(type) {
+		case IS_STRING:
+			if (ZSTR_IS_INTERNED(Z_STR_P(zv))) {
+				return;
+			}
+			if (GC_FLAGS(Z_STR_P(zv)) & IS_STR_PERSISTENT) {
+				smart_str_0(path);
+				fprintf(stderr, "%s: persistent string\n", ZSTR_VAL(path->s));
+				return;
+			}
+			break;
+		case IS_ARRAY: {
+			if (GC_IS_RECURSIVE(Z_ARR_P(zv))) {
+				/* We are checking this array already */
+				break;
+			}
+			// TODO: immutable/persistent arrays?
+			GC_TRY_PROTECT_RECURSION(Z_ARR_P(zv));
+
+			zend_long h;
+			zend_string *key;
+			zval *v;
+			size_t plen = ZSTR_LEN(path->s);
+			smart_str_appends(path, "[\"");
+			ZEND_HASH_FOREACH_KEY_VAL(Z_ARR_P(zv), h, key, v) {
+				if (key) {
+					smart_str_append_escaped(path, ZSTR_VAL(key), ZSTR_LEN(key));
+				} else {
+					smart_str_append_long(path, h);
+				}
+				smart_str_appends(path, "\"]");
+				snapshot_check_value(v, path);
+				ZSTR_LEN(path->s) = plen + strlen("[\"");
+			} ZEND_HASH_FOREACH_END();
+			ZSTR_LEN(path->s) = plen;
+			GC_TRY_UNPROTECT_RECURSION(Z_ARR_P(zv));
+			break;
+		}
+		case IS_OBJECT: {
+			zend_class_entry *ce;
+			if (snapshot_is_internal_class(Z_OBJCE_P(zv), &ce)) {
+				// TODO: Add a new object handler
+				/* Closures can not have extra properties, but can be scoped to
+				 * a class, and have static variables */
+				if (ce == zend_ce_closure) {
+					size_t plen = ZSTR_LEN(path->s);
+
+					zval *this_ptr = zend_get_closure_this_ptr(zv);
+					smart_str_appends(path, " $this");
+					snapshot_check_value(this_ptr, path);
+					ZSTR_LEN(path->s) = plen;
+
+					const zend_function *func = zend_get_closure_method_def(Z_OBJ_P(zv));
+					snapshot_check_func(func, path);
+				/* WeakMap can not have properties, but can reference objects */
+				} else if (ce == zend_ce_weakmap) {
+					zend_object_iterator *it = ce->get_iterator(ce, zv, 0);
+					size_t plen = ZSTR_LEN(path->s);
+					smart_str_appends(path, "[object #");
+					while (it->funcs->valid(it) == SUCCESS) {
+						zval key;
+						it->funcs->get_current_key(it, &key);
+						zval *value = it->funcs->get_current_data(it);
+						smart_str_append_long(path, Z_OBJ(key)->handle);
+						smart_str_appendc(path, ']');
+						snapshot_check_value(&key, path);
+						if (value) {
+							snapshot_check_value(value, path);
+						}
+						it->funcs->move_forward(it);
+						ZSTR_LEN(path->s) = plen + strlen("[object #");
+					}
+					zend_object_release(&it->std);
+					ZSTR_LEN(path->s) = plen;
+				/* ArrayIterator only uses heap memory, but can have properties */
+				} else if (ce == spl_ce_ArrayIterator) {
+					goto check_obj;
+				/* DateTimeZone only uses heap memory, but can have properties */
+				} else if (ce == date_ce_timezone) {
+					goto check_obj;
+				} else {
+					smart_str_0(path);
+					fprintf(stderr, "%s: internal class %s\n", ZSTR_VAL(path->s), ZSTR_VAL(ce->name));
+				}
+				return;
+			}
+
+check_obj:
+			if (GC_IS_RECURSIVE(Z_ARR_P(zv))) {
+				/* We are checking this object already */
+				break;
+			}
+			GC_TRY_PROTECT_RECURSION(Z_ARR_P(zv));
+
+			zend_object *obj = Z_OBJ_P(zv);
+			ZEND_ASSERT(!zend_object_is_lazy(obj) && "TODO: lazy object support");
+
+			size_t plen = ZSTR_LEN(path->s);
+			smart_str_appends(path, "->");
+
+			if (obj->properties) {
+				zend_long h;
+				zend_string *key;
+				zval *v;
+				ZEND_HASH_FOREACH_KEY_VAL(Z_ARR_P(zv), h, key, v) {
+					if (key) {
+						smart_str_append_escaped(path, ZSTR_VAL(key), ZSTR_LEN(key));
+					} else {
+						smart_str_append_long(path, h);
+					}
+					snapshot_check_value(v, path);
+					ZSTR_LEN(path->s) = plen + strlen("->");
+				} ZEND_HASH_FOREACH_END();
+			} else {
+				smart_str_appends(path, "->");
+				for (uint32_t i = 0; i < obj->ce->default_properties_count; i++) {
+					zval *v = &obj->properties_table[i];
+					zend_property_info *prop_info = zend_get_property_info_for_slot_self(obj, v);
+					if (!prop_info) {
+						continue;
+					}
+					smart_str_append_escaped(path, ZSTR_VAL(prop_info->name), ZSTR_LEN(prop_info->name));
+					snapshot_check_value(v, path);
+					ZSTR_LEN(path->s) = plen + strlen("->");
+				}
+			}
+			ZSTR_LEN(path->s) = plen;
+			GC_TRY_UNPROTECT_RECURSION(Z_ARR_P(zv));
+			break;
+		}
+		case IS_RESOURCE:
+			smart_str_0(path);
+			fprintf(stderr, "%s: resource\n", ZSTR_VAL(path->s));
+			break;
+		case IS_REFERENCE:
+			snapshot_check_value(&Z_REF_P(zv)->val, path);
+			break;
+		case IS_CONSTANT_AST:
+			break;
+		case IS_INDIRECT:
+			snapshot_check_value(Z_INDIRECT_P(zv), path);
+			break;
+		EMPTY_SWITCH_DEFAULT_CASE();
+	}
+}
+#endif
+
+static zend_always_inline void zend_snapshot_class_table_copy(zend_array *target, zend_array *source, void *map_ptr_snapshot, bool call_observers)
+{
+	Bucket *p, *end;
+	zval *t;
+
+	intptr_t map_ptr_snapshot_base = (intptr_t)map_ptr_snapshot + zend_map_ptr_static_size * sizeof(void *) - 1;
+
+	zend_hash_extend(target, target->nNumUsed + source->nNumUsed, 0);
+	p = source->arData;
+	end = p + source->nNumUsed;
+	for (; p != end; p++) {
+		ZEND_ASSERT(Z_TYPE(p->val) != IS_UNDEF);
+		ZEND_ASSERT(p->key);
+		t = zend_hash_find_known_hash(target, p->key);
+		if (UNEXPECTED(t != NULL)) {
+			zend_class_entry *ce1 = Z_PTR(p->val);
+			CG(in_compilation) = 1;
+			zend_set_compiled_filename(ce1->info.user.filename);
+			CG(zend_lineno) = ce1->info.user.line_start;
+			zend_class_redeclaration_error(E_ERROR, Z_PTR_P(t));
+			return;
+		} else {
+			zend_class_entry *ce = Z_PTR(p->val);
+			_zend_hash_append_ptr_ex(target, p->key, Z_PTR(p->val), 1);
+			if ((ce->ce_flags & ZEND_ACC_LINKED) && ZSTR_VAL(p->key)[0]) {
+				if (ZSTR_HAS_CE_CACHE(ce->name)) {
+					ZSTR_SET_CE_CACHE_EX(ce->name, ce, 0);
+				}
+				if (UNEXPECTED(call_observers)) {
+					// TODO _zend_observer_class_linked_notify(ce, p->key);
+				}
+			}
+			if (ce->default_static_members_count) {
+				ZEND_ASSERT(ZEND_MAP_PTR_IS_OFFSET(ce->static_members_table));
+				zval *src = *(zval**)(map_ptr_snapshot_base + (intptr_t)ZEND_MAP_PTR(ce->static_members_table));
+				zval **dst = (zval**)((char*)CG(map_ptr_base) + (intptr_t)ZEND_MAP_PTR(ce->static_members_table));
+				if (src) {
+					*dst = src;
+				} else {
+					ZEND_ASSERT(!*dst);
+				}
+			}
+			// TODO: default ast props
+			if (ZEND_MAP_PTR(ce->mutable_data)) {
+				ZEND_ASSERT(ZEND_MAP_PTR_IS_OFFSET(ce->mutable_data));
+				zval *src = *(zval**)(map_ptr_snapshot_base + (intptr_t)ZEND_MAP_PTR(ce->mutable_data));
+				zval **dst = (zval**)((char*)CG(map_ptr_base) + (intptr_t)ZEND_MAP_PTR(ce->mutable_data));
+				if (src) {
+					*dst = src;
+				} else {
+					ZEND_ASSERT(!*dst);
+				}
+			}
+		}
+	}
+	target->nInternalPointer = 0;
+}
+
+static zend_always_inline void zend_snapshot_function_table_copy(HashTable *target, HashTable *source, bool call_observers)
+{
+	zend_function *function1, *function2;
+	Bucket *p, *end;
+	zval *t;
+
+	zend_hash_extend(target, target->nNumUsed + source->nNumUsed, 0);
+	p = source->arData;
+	end = p + source->nNumUsed;
+	for (; p != end; p++) {
+		ZEND_ASSERT(Z_TYPE(p->val) != IS_UNDEF);
+		ZEND_ASSERT(p->key);
+		t = zend_hash_find_known_hash(target, p->key);
+		if (UNEXPECTED(t != NULL)) {
+			goto failure;
+		}
+		_zend_hash_append_ptr_ex(target, p->key, Z_PTR(p->val), 1);
+		if (UNEXPECTED(call_observers) && *ZSTR_VAL(p->key)) { // if not rtd key
+			// TODO
+			// _zend_observer_function_declared_notify(Z_PTR(p->val), p->key);
+		}
+	}
+	target->nInternalPointer = 0;
+
+	return;
+
+failure:
+	function1 = Z_PTR(p->val);
+	function2 = Z_PTR_P(t);
+	CG(in_compilation) = 1;
+	zend_set_compiled_filename(function1->op_array.filename);
+	CG(zend_lineno) = function1->op_array.line_start;
+	if (function2->type == ZEND_USER_FUNCTION
+		&& function2->op_array.last > 0) {
+		zend_error_noreturn(E_ERROR, "Cannot redeclare function %s() (previously declared in %s:%d)",
+				   ZSTR_VAL(function1->common.function_name),
+				   ZSTR_VAL(function2->op_array.filename),
+				   (int)function2->op_array.line_start);
+	} else {
+		zend_error_noreturn(E_ERROR, "Cannot redeclare function %s()", ZSTR_VAL(function1->common.function_name));
+	}
+}
+
+static zend_always_inline void zend_snapshot_constants_table_copy(HashTable *target, HashTable *source)
+{
+	zend_constant *c1, *c2;
+	Bucket *p, *end;
+	zval *t;
+
+	zend_hash_extend(target, target->nNumUsed + source->nNumUsed, 0);
+	p = source->arData;
+	end = p + source->nNumUsed;
+	for (; p != end; p++) {
+		ZEND_ASSERT(Z_TYPE(p->val) != IS_UNDEF);
+		ZEND_ASSERT(p->key);
+		t = zend_hash_find_known_hash(target, p->key);
+		if (UNEXPECTED(t != NULL)) {
+			goto failure;
+		}
+		_zend_hash_append_ptr_ex(target, p->key, Z_PTR(p->val), 1);
+	}
+	target->nInternalPointer = 0;
+
+	return;
+
+failure:
+	c1 = Z_PTR(p->val);
+	c2 = Z_PTR_P(t);
+	CG(in_compilation) = 1;
+	zend_set_compiled_filename(c1->filename);
+	CG(zend_lineno) = 0;
+	zend_error_noreturn(E_ERROR, "Cannot redeclare constant %s (previously declared in %s)",
+			   ZSTR_VAL(c1->name),
+			   ZSTR_VAL(c2->filename));
+}
+
+ZEND_FUNCTION(opcache_restore)
+{
+	zend_execute_data *ex = EG(current_execute_data);
+	if (ex->prev_execute_data->prev_execute_data) {
+		zend_throw_error(NULL, "opcache_restore() must be called from the initial script");
+		RETURN_THROWS();
+	}
+
+	zend_snapshot *s = EG(snapshot);
+
+	if (!s) {
+		RETURN_FALSE;
+	}
+
+	zend_mm_heap *heap = zend_mm_get_heap();
+	char *src = s->copy;
+	for (int i = 0; i < s->chunks_count; i++) {
+		zend_mm_chunk *chunk = s->chunks[i];
+		memcpy(chunk, src, ZEND_MM_CHUNK_SIZE);
+		src += ZEND_MM_CHUNK_SIZE;
+		zend_mm_adopt_chunk(heap, chunk);
+	}
+
+	zend_snapshot_class_table_copy(EG(class_table), &s->class_table, s->map_ptr_real_base, 0);
+	zend_snapshot_function_table_copy(EG(function_table), &s->function_table, 0);
+	zend_snapshot_constants_table_copy(EG(zend_constants), &s->constant_table);
+	// TODO: function/method static vars
+
+	if (s->objects_count > 0) {
+		for (zend_object **p = s->objects, **end = p + s->objects_count; p < end; p++) {
+			zend_objects_store_put(*p);
+		}
+	}
+
+	EG(user_error_handler_error_reporting) = s->user_error_handler_error_reporting;
+	EG(user_error_handler) = s->user_error_handler;
+	EG(user_exception_handler) = s->user_exception_handler;
+
+	zend_stack_destroy(&EG(user_error_handlers_error_reporting));
+	EG(user_error_handlers_error_reporting) = s->user_error_handlers_error_reporting;
+
+	ZEND_ASSERT(EG(user_error_handlers).size == sizeof(zval));
+	for (int i = 0, l = EG(user_error_handlers).top; i < l; i++) {
+		zval *zv = &((zval*)EG(user_error_handlers).elements)[i];
+		zval_ptr_dtor(zv);
+	}
+	zend_stack_destroy(&EG(user_error_handlers));
+	EG(user_error_handlers) = s->user_error_handlers;
+
+	ZEND_ASSERT(EG(user_exception_handlers).size == sizeof(zval));
+	for (int i = 0, l = EG(user_exception_handlers).top; i < l; i++) {
+		zval *zv = &((zval*)EG(user_exception_handlers).elements)[i];
+		zval_ptr_dtor(zv);
+	}
+	zend_stack_destroy(&EG(user_exception_handlers));
+	EG(user_exception_handlers) = s->user_exception_handlers;
+
+	// TODO: call via extension handlers?
+	php_standard_restore(s->standard_snapshot);
+	spl_restore(s->spl_snapshot);
+	date_restore(s->date_snapshot);
+
+	zend_array *current_symbol_table = zend_rebuild_symbol_table();
+	zend_array *garbage = zend_new_array(current_symbol_table->nNumUsed);
+
+	zend_string *key;
+	zval *zv;
+	ZEND_HASH_MAP_FOREACH_STR_KEY_VAL(&s->symbol_table, key, zv) {
+		zval *entry = zend_hash_lookup(current_symbol_table, key);
+		if (Z_TYPE_P(entry) == IS_INDIRECT) {
+			entry = Z_INDIRECT_P(entry);
+		}
+		if (Z_REFCOUNTED_P(entry)) {
+			zend_hash_next_index_insert(garbage, entry);
+		}
+		ZVAL_COPY_VALUE(entry, zv);
+	} ZEND_HASH_FOREACH_END();
+
+	zend_array_destroy(garbage);
+
+	efree(s->map_ptr_real_base);
+
+	RETURN_TRUE;
+}
+
+ZEND_FUNCTION(opcache_snapshot)
+{
+	if (EG(snapshot)) {
+		zend_throw_error(NULL, "Can not use opcache_snapshot() when a snapshot already exists (yet)");
+		RETURN_THROWS();
+	}
+
+	zend_execute_data *ex = EG(current_execute_data);
+	if (ex->prev_execute_data->prev_execute_data) {
+		zend_throw_error(NULL, "opcache_snapshot() must be called from the initial script");
+		RETURN_THROWS();
+	}
+
+	zend_array *ht = zend_rebuild_symbol_table();
+
+	zval *zv;
+	zend_string *key;
+#if 0
+	smart_str path = {0};
+	ZEND_HASH_MAP_FOREACH_STR_KEY_VAL(ht, key, zv) {
+		smart_str_appendc(&path, '$');
+		smart_str_append_escaped(&path, ZSTR_VAL(key), ZSTR_LEN(key));
+		snapshot_check_value(zv, &path);
+		ZSTR_LEN(path.s) = 0;
+	} ZEND_HASH_FOREACH_END();
+
+	ZEND_HASH_MAP_FOREACH_STR_KEY_VAL_FROM(EG(function_table), key, zv, EG(persistent_functions_count)) {
+		zend_function *func = Z_FUNC_P(zv);
+		if (!ZEND_USER_CODE(func->type)) {
+			continue;
+		}
+		smart_str_append_escaped(&path, ZSTR_VAL(func->common.function_name), ZSTR_LEN(func->common.function_name));
+		smart_str_appends(&path, "()");
+		snapshot_check_func(func, &path);
+		ZSTR_LEN(path.s) = 0;
+	} ZEND_HASH_FOREACH_END();
+
+	ZEND_HASH_MAP_FOREACH_STR_KEY_VAL_FROM(EG(class_table), key, zv, EG(persistent_classes_count)) {
+		zend_class_entry *ce = Z_CE_P(zv);
+		if (ce->type != ZEND_USER_CLASS) {
+			continue;
+		}
+		smart_str_append_escaped(&path, ZSTR_VAL(ce->name), ZSTR_LEN(ce->name));
+		snapshot_check_ce(ce, &path);
+		ZSTR_LEN(path.s) = 0;
+	} ZEND_HASH_FOREACH_END();
+
+	ZEND_HASH_MAP_FOREACH_STR_KEY_VAL_FROM(EG(zend_constants), key, zv, EG(persistent_constants_count)) {
+		zend_constant *c = (zend_constant*)Z_PTR_P(zv);
+		smart_str_append_escaped(&path, ZSTR_VAL(c->name), ZSTR_LEN(c->name));
+		snapshot_check_value(&c->value, &path);
+		ZSTR_LEN(path.s) = 0;
+	} ZEND_HASH_FOREACH_END();
+	smart_str_free(&path);
+#endif
+
+	// Snapshot:
+	// - Add opcache setting: opcache.snapshot_memory
+	// - Creates a private memory mapping when opcache starts. The ensures that
+	//   every process will have a block at the same address. Why not re-use
+	//   SHM? Because it's executable, and it would also break
+	//   opcache.protect_memory.
+	// - When SHM restarts, also restart snapshot_memory, because it points to
+	//   SHM (e.g. classes)
+	// - Re-alloc/move everything to a new heap
+	//   - Make the heap adopt snapshot memory as blocks
+	//   - Update addresses so they point to snapshot memory
+	//   - This includes the symbol tables, declared
+	//     variables, arrays, objects; and any state like error handlers,
+	//     autoloaders.
+	// - Copy heap blocks to snapshot memory
+	// - When restoring snapshot:
+	//   - Make the heap adopt the snapshot memory blocks
+	//   - Update class/func/constant tables
+	//   - Update declared vars
+	//   - Update global state (error handlers, autoloaders)
+	// - Need to copy map ptr buffer at some point
+	// - We can not snapshot references to non-immutable classes/functions.
+	//   Persist those?
+	//
+	// snapshot object handler:
+	//
+	// zend_object *snapshot(zend_object *obj, zend_mm_heap *heap) {
+	//     obj = zend_mm_alloc(heap, ...);
+	//     // for each property:
+	//     //     prop = snapshot_value(prop)
+	//     // Don't snapshot static props, constants
+	// }
+	//
+	// Helpers:
+	// zval *snapshot_value(zval *value);
+	//
+	// In theory, we can even snapshot just one variable:
+	// opcache_snapshot($var).
+	// Semantic would be:
+	// - Restores all classes/funcs used by the var. Fails if already declared.
+	// - Will not restore classes/funcs not used by the var.
+	// - User has to restore error handler, class loader, etc by themself.
+
+
+	zend_mm_heap *snapshot_heap = zend_mm_startup();
+	zend_snapshot_builder *sb = zend_snapshot_builder_new(snapshot_heap);
+
+	zend_array new_ht;
+	zend_hash_init(&new_ht, ht->nNumUsed, NULL, NULL, 1);
+	zend_hash_copy(&new_ht, ht, NULL);
+
+	ZEND_HASH_MAP_FOREACH_STR_KEY_VAL(&new_ht, key, zv) {
+		if (strcmp(ZSTR_VAL(key), "_GET") == 0
+				|| strcmp(ZSTR_VAL(key), "_POST") == 0
+				|| strcmp(ZSTR_VAL(key), "_COOKIE") == 0
+				|| strcmp(ZSTR_VAL(key), "_FILES") == 0
+				|| strcmp(ZSTR_VAL(key), "_SERVER") == 0
+				|| strcmp(ZSTR_VAL(key), "_ENV") == 0
+				|| strcmp(ZSTR_VAL(key), "argv") == 0
+				|| strcmp(ZSTR_VAL(key), "argc") == 0) {
+			zend_hash_del(&new_ht, key);
+			continue;
+		}
+		zval *dest = zv;
+		if (Z_TYPE_P(zv) == IS_INDIRECT) {
+			zv = Z_INDIRECT_P(zv);
+		}
+		*dest = zend_snapshot_zval(sb, *zv);
+	} ZEND_HASH_FOREACH_END();
+
+	if (EG(exception)) {
+		zend_snapshot_builder_dtor(sb);
+		RETURN_THROWS();
+	}
+
+	zend_array constants;
+	zend_hash_init(&constants, 0, NULL, NULL, 1);
+	zend_constant *c;
+	ZEND_HASH_MAP_FOREACH_STR_KEY_PTR(EG(zend_constants), key, c) {
+		if (ZEND_CONSTANT_MODULE_NUMBER(c) == PHP_USER_CONSTANT) {
+			key = zend_snapshot_str(sb, key);
+			bool is_new;
+			zend_constant *dup = zend_snapshot_memdup_ex(sb, c, sizeof(zend_constant), &is_new);
+			ZEND_ASSERT(is_new);
+			dup->value = zend_snapshot_zval(sb, c->value);
+			ZEND_ASSERT(ZEND_CONSTANT_MODULE_NUMBER(dup) == PHP_USER_CONSTANT);
+			dup->name = zend_snapshot_str(sb, c->name);
+			dup->filename = zend_snapshot_str(sb, c->filename);
+			zend_hash_add_ptr(&constants, key, dup);
+		}
+	} ZEND_HASH_FOREACH_END();
+
+	if (EG(exception)) {
+		zend_snapshot_builder_dtor(sb);
+		RETURN_THROWS();
+	}
+
+	// TODO: call via extension handlers?
+	void *date = date_snapshot(sb);
+	void *spl = spl_snapshot(sb);
+	void *standard = php_standard_snapshot(sb);
+
+	if (EG(exception)) {
+		zend_snapshot_builder_dtor(sb);
+		RETURN_THROWS();
+	}
+
+	zend_snapshot *s = malloc(sizeof(zend_snapshot));
+	s->map_ptr_real_base = zend_snapshot_memdup(sb, CG(map_ptr_real_base), (zend_map_ptr_static_size + CG(map_ptr_size)) * sizeof(void*));
+	s->symbol_table = new_ht;
+	s->constant_table = constants;
+	s->date_snapshot = date;
+	s->spl_snapshot = spl;
+	s->standard_snapshot = standard;
+
+	s->user_error_handlers_error_reporting = zend_snapshot_stack(sb, EG(user_error_handlers_error_reporting));
+	s->user_error_handler_error_reporting = EG(user_error_handler_error_reporting);
+
+	s->user_error_handlers = zend_snapshot_stack(sb, EG(user_error_handlers));
+	s->user_error_handler = zend_snapshot_zval(sb, EG(user_error_handler));
+
+	s->user_exception_handlers = zend_snapshot_stack(sb, EG(user_exception_handlers));
+	s->user_exception_handler = zend_snapshot_zval(sb, EG(user_exception_handler));
+
+	ZEND_ASSERT(s->user_error_handlers.size == sizeof(zval));
+	for (int i = 0, l = s->user_error_handlers.top; i < l; i++) {
+		zval *zv = &((zval*)s->user_error_handlers.elements)[i];
+		*zv = zend_snapshot_zval(sb, *zv);
+	}
+
+	ZEND_ASSERT(s->user_exception_handlers.size == sizeof(zval));
+	for (int i = 0, l = s->user_exception_handlers.top; i < l; i++) {
+		zval *zv = &((zval*)s->user_exception_handlers.elements)[i];
+		*zv = zend_snapshot_zval(sb, *zv);
+	}
+
+	if (zend_mm_get_huge_list(snapshot_heap)) {
+		zend_snapshot_builder_dtor(sb);
+		free(s);
+		zend_throw_error(NULL, "TODO: support zend mm huge blocks");
+		RETURN_THROWS();
+	}
+
+	zend_hash_init(&s->class_table, EG(class_table)->nNumUsed - EG(persistent_classes_count), NULL, NULL, 1);
+	zend_hash_real_init_mixed(&s->class_table);
+	ZEND_HASH_FOREACH_STR_KEY_VAL_FROM(EG(class_table), key, zv, EG(persistent_classes_count)) {
+		zend_class_entry *ce = Z_CE_P(zv);
+		if (ce->type != ZEND_USER_CLASS) {
+			zend_throw_error(NULL, "Can not snapshot class loaded by dl(): %s",
+					ZSTR_VAL(Z_CE_P(zv)->name));
+			RETURN_THROWS();
+		}
+		if (!(ce->ce_flags & ZEND_ACC_IMMUTABLE)) {
+			zend_throw_error(NULL, "Can not snapshot non-cached class: %s",
+					ZSTR_VAL(Z_CE_P(zv)->name));
+			RETURN_THROWS();
+		}
+
+		/* Snapshot static props */
+		if (ce->default_static_members_count) {
+			ZEND_ASSERT(ZEND_MAP_PTR_IS_OFFSET(ce->static_members_table));
+			zval **table_p = (zval**)((char*)ZEND_MAP_PTR_BIASED_BASE(s->map_ptr_real_base) + (intptr_t)ZEND_MAP_PTR(ce->static_members_table));
+			if (*table_p) {
+				*table_p = zend_snapshot_memdup(sb, *table_p, sizeof(zval) * ce->default_static_members_count);
+				zval *table = *table_p;
+				for (int i = 0; i < ce->default_static_members_count; i++) {
+					table[i] = zend_snapshot_zval(sb, table[i]);
+					if (EG(exception)) {
+						RETURN_THROWS();
+					}
+				}
+			}
+		}
+
+		/* Snapshot mutable data */
+		if (ZEND_MAP_PTR(ce->mutable_data)) {
+			ZEND_ASSERT(ZEND_MAP_PTR_IS_OFFSET(ce->mutable_data));
+			zend_class_mutable_data **mutable_data_p = (zend_class_mutable_data**)((char*)ZEND_MAP_PTR_BIASED_BASE(s->map_ptr_real_base) + (intptr_t)ZEND_MAP_PTR(ce->mutable_data));
+			if (*mutable_data_p) {
+				*mutable_data_p = zend_snapshot_memdup(sb, *mutable_data_p, sizeof(zend_class_mutable_data));
+				zend_class_mutable_data *mutable_data = *mutable_data_p;
+				if (mutable_data->default_properties_table) {
+					mutable_data->default_properties_table = zend_snapshot_memdup(sb, mutable_data->default_properties_table, ce->default_properties_count * sizeof(zval));
+					for (int i = 0; i < ce->default_properties_count; i++) {
+						mutable_data->default_properties_table[i] = zend_snapshot_zval(sb, mutable_data->default_properties_table[i]);
+					}
+				}
+				if (mutable_data->constants_table) {
+					mutable_data->constants_table = zend_snapshot_ht(sb, mutable_data->constants_table);
+					zend_string *key;
+					zval *zv;
+					ZEND_HASH_MAP_FOREACH_STR_KEY_VAL(mutable_data->constants_table, key, zv) {
+						((Bucket*)zv)->key = zend_snapshot_str(sb, key);
+						zend_class_constant *c = Z_PTR_P(zv);
+						bool is_new;
+						c = zend_snapshot_memdup_ex(sb, c, sizeof(zend_class_constant), &is_new);
+						if (is_new) {
+							c->value = zend_snapshot_zval(sb, c->value);
+							if (c->doc_comment) {
+								c->doc_comment = zend_snapshot_str(sb, c->doc_comment);
+							}
+						}
+						Z_PTR_P(zv) = c;
+					} ZEND_HASH_FOREACH_END();
+				}
+				if (mutable_data->backed_enum_table) {
+					mutable_data->backed_enum_table = zend_snapshot_array(sb, mutable_data->backed_enum_table);
+				}
+			}
+		}
+
+		key = zend_snapshot_str(sb, key);
+		zend_hash_add(&s->class_table, key, zv);
+	} ZEND_HASH_FOREACH_END();
+
+	zend_hash_init(&s->function_table, EG(function_table)->nNumUsed - EG(persistent_functions_count), NULL, NULL, 1);
+	zend_hash_real_init_mixed(&s->function_table);
+	ZEND_HASH_FOREACH_STR_KEY_VAL_FROM(EG(function_table), key, zv, EG(persistent_functions_count)) {
+		zend_function *func = Z_FUNC_P(zv);
+		if (!ZEND_USER_CODE(func->type)) {
+			zend_throw_error(NULL, "Can not snapshot function loaded by dl(): %s",
+					ZSTR_VAL(func->common.function_name));
+			RETURN_THROWS();
+		}
+		if (!(func->common.fn_flags & ZEND_ACC_IMMUTABLE)) {
+			zend_throw_error(NULL,
+					"Can not snapshot non-cached function %s (TODO)",
+					ZSTR_VAL(func->common.function_name));
+			RETURN_THROWS();
+		}
+		key = zend_snapshot_str(sb, key);
+		zend_hash_add(&s->function_table, key, zv);
+	} ZEND_HASH_FOREACH_END();
+
+	zend_objects_store *objects_store = &EG(objects_store);
+	s->objects_count = 0;
+	for (uint32_t i = 1; i < objects_store->top; i++) {
+		zend_object *obj = objects_store->object_buckets[i];
+		if (IS_OBJ_VALID(obj)) {
+			s->objects_count++;
+		}
+	}
+	if (s->objects_count > 0) {
+		s->objects = malloc(s->objects_count * sizeof(zend_object*));
+		zend_object **obj_dest = s->objects;
+		for (uint32_t i = 1; i < objects_store->top; i++) {
+			zend_object *obj = objects_store->object_buckets[i];
+			if (IS_OBJ_VALID(obj)) {
+				obj = zend_snapshot_xlat_get_entry(sb, obj);
+				ZEND_ASSERT(obj);
+				*obj_dest = obj;
+				obj_dest++;
+			}
+		}
+	}
+
+	EG(snapshot) = s;
+
+	zend_mm_chunk *chunk = zend_mm_get_chunk_list(snapshot_heap);
+	s->chunks_count = zend_mm_get_chunks_count(snapshot_heap);
+	s->chunks = malloc(s->chunks_count * sizeof(void*));
+	s->copy = malloc(s->chunks_count * ZEND_MM_CHUNK_SIZE);
+	void **chunk_dest = s->chunks;
+	void *copy_dest = s->copy;
+	do {
+		copy_dest = mempcpy(copy_dest, chunk, ZEND_MM_CHUNK_SIZE);
+		*chunk_dest = chunk;
+		chunk_dest++;
+		chunk = zend_mm_get_next_chunk(snapshot_heap, chunk);
+	} while (chunk);
+
+	zend_snapshot_builder_dtor(sb);
+
+	RETURN_NULL();
 }

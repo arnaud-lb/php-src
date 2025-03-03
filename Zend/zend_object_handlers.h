@@ -23,6 +23,7 @@
 #include <stdint.h>
 
 #include "zend_hash.h"
+#include "zend_snapshot.h"
 #include "zend_types.h"
 #include "zend_property_hooks.h"
 #include "zend_lazy_objects.h"
@@ -202,6 +203,8 @@ typedef HashTable *(*zend_object_get_gc_t)(zend_object *object, zval **table, in
 
 typedef zend_result (*zend_object_do_operation_t)(uint8_t opcode, zval *result, zval *op1, zval *op2);
 
+typedef zend_object *(*zend_object_snapshot_t)(zend_snapshot_builder *sb, zend_object *object);
+
 struct _zend_object_handlers {
 	/* offset of real object header (usually zero) */
 	int										offset;
@@ -230,6 +233,7 @@ struct _zend_object_handlers {
 	zend_object_do_operation_t				do_operation;         /* optional */
 	zend_object_compare_t					compare;              /* required */
 	zend_object_get_properties_for_t		get_properties_for;   /* optional */
+	zend_object_snapshot_t		            snapshot_obj;         /* optional */
 };
 
 BEGIN_EXTERN_C()
@@ -274,6 +278,7 @@ ZEND_API zend_result zend_std_get_closure(zend_object *obj, zend_class_entry **c
 ZEND_API HashTable *rebuild_object_properties_internal(zend_object *zobj);
 ZEND_API ZEND_COLD zend_never_inline void zend_bad_method_call(zend_function *fbc, zend_string *method_name, zend_class_entry *scope);
 ZEND_API ZEND_COLD zend_never_inline void zend_abstract_method_call(zend_function *fbc);
+ZEND_API void zend_std_snapshot_obj_ex(zend_snapshot_builder *sb, zend_object *object);
 
 static zend_always_inline HashTable *zend_std_get_properties_ex(zend_object *object)
 {

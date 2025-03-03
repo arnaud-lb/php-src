@@ -14,6 +14,7 @@
    +----------------------------------------------------------------------+
 */
 
+#include "zend_snapshot.h"
 #ifdef HAVE_CONFIG_H
 # include "config.h"
 #endif
@@ -152,6 +153,22 @@ static void spl_array_object_free_storage(zend_object *object)
 	zval_ptr_dtor(&intern->array);
 }
 /* }}} */
+
+static zend_object *spl_array_snapshot_obj(zend_snapshot_builder *sb, zend_object *object)
+{
+	spl_array_object *intern = spl_array_from_obj(object);
+	intern = zend_snapshot_memdup(sb, intern, sizeof(spl_array_object) + zend_object_properties_size(object->ce));
+	zend_std_snapshot_obj_ex(sb, &intern->std);
+
+	intern->ht_iter = -1; // TODO
+	if (intern->sentinel_array) {
+		intern->sentinel_array = zend_snapshot_array(sb, intern->sentinel_array);
+	}
+
+	intern->array = zend_snapshot_zval(sb, intern->array);
+
+	return &intern->std;
+}
 
 /* {{{ spl_array_object_new_ex */
 static zend_object *spl_array_object_new_ex(zend_class_entry *class_type, zend_object *orig, int clone_orig)
@@ -1930,6 +1947,8 @@ PHP_MINIT_FUNCTION(spl_array)
 
 	spl_handler_ArrayObject.compare = spl_array_compare_objects;
 	spl_handler_ArrayObject.free_obj = spl_array_object_free_storage;
+
+	spl_handler_ArrayObject.snapshot_obj = spl_array_snapshot_obj;
 
 	spl_ce_ArrayIterator = register_class_ArrayIterator(spl_ce_SeekableIterator, zend_ce_arrayaccess, zend_ce_serializable, zend_ce_countable);
 	spl_ce_ArrayIterator->create_object = spl_array_object_new;

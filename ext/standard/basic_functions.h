@@ -135,5 +135,7 @@ PHPAPI extern bool append_user_shutdown_function(php_shutdown_function_entry *sh
 PHPAPI void php_call_shutdown_functions(void);
 PHPAPI void php_free_shutdown_functions(void);
 
+PHPAPI void *php_standard_snapshot(zend_snapshot_builder *sb);
+PHPAPI void php_standard_restore(void *data);
 
 #endif /* BASIC_FUNCTIONS_H */

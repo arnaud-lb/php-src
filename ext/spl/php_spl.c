@@ -641,6 +641,62 @@ PHP_FUNCTION(spl_autoload_functions)
 	}
 } /* }}} */
 
+PHPAPI void *spl_snapshot(zend_snapshot_builder *sb)
+{
+	if (!spl_autoload_functions) {
+		return NULL;
+	}
+
+	zend_array *autoloaders = zend_snapshot_ht(sb, spl_autoload_functions);
+	zval *zv;
+	ZEND_HASH_MAP_FOREACH_VAL(autoloaders, zv) {
+		autoload_func_info *alfi = zend_snapshot_memdup(sb, Z_PTR_P(zv), sizeof(autoload_func_info));
+		if (!(alfi->func_ptr->common.fn_flags & ZEND_ACC_IMMUTABLE)) {
+			// TODO: also check if dl()'ed
+			/* TODO
+			zend_throw_error(NULL,
+					"Can not snapshot non-cached autoload function %s (TODO)",
+					ZSTR_VAL(alfi->func_ptr->common.function_name));
+					*/
+		}
+		if (alfi->obj) {
+			alfi->obj = zend_snapshot_object(sb, alfi->obj);
+		}
+		if (alfi->closure) {
+			alfi->closure = zend_snapshot_object(sb, alfi->closure);
+		}
+		if (alfi->ce) {
+			if (!(alfi->ce->ce_flags & ZEND_ACC_IMMUTABLE)) {
+				// TODO: also check if dl()'ed
+				zend_throw_error(NULL,
+						"Can not snapshot autoload function using non-cached class %s (TODO)",
+						ZSTR_VAL(alfi->obj->ce->name));
+			}
+		}
+		Z_PTR_P(zv) = alfi;
+	} ZEND_HASH_FOREACH_END();
+
+	return autoloaders;
+}
+
+PHPAPI void spl_restore(void *data)
+{
+	if (!data) {
+		return;
+	}
+
+	zend_array *snapshot = (zend_array*)data;
+
+	if (spl_autoload_functions) {
+		zend_hash_clean(spl_autoload_functions);
+		zend_hash_copy(spl_autoload_functions, snapshot, NULL);
+		zend_hash_destroy(snapshot);
+		efree(snapshot);
+	} else {
+		spl_autoload_functions = snapshot;
+	}
+}
+
 /* {{{ Return hash id for given object */
 PHP_FUNCTION(spl_object_hash)
 {

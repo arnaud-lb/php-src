@@ -22,6 +22,7 @@
 #include "zend_execute.h"
 #include "zend_lazy_objects.h"
 #include "zend_object_handlers.h"
+#include "zend_snapshot.h"
 #include "zend_type_info.h"
 #include "zend_types.h"
 #ifdef HAVE_CONFIG_H
@@ -282,6 +283,29 @@ static void reflection_free_objects_storage(zend_object *object) /* {{{ */
 	zend_object_std_dtor(object);
 }
 /* }}} */
+
+static zend_object *reflection_snapshot_obj(zend_snapshot_builder *sb, zend_object *obj)
+{
+	reflection_object *intern = reflection_object_from_obj(obj);
+	intern = zend_snapshot_memdup(sb, intern, sizeof(reflection_object) + zend_object_properties_size(obj->ce));
+	zend_std_snapshot_obj_ex(sb, &intern->zo);
+
+	if (intern->ptr) {
+		switch (intern->ref_type) {
+		case REF_TYPE_PROPERTY: {
+			property_reference *ref = intern->ptr;
+			ref = intern->ptr = zend_snapshot_memdup(sb, ref, sizeof(property_reference));
+			ref->unmangled_name = zend_snapshot_str(sb, ref->unmangled_name);
+			break;
+		}
+		default:
+			zend_throw_error(NULL, "Can not snapshot instance of %s (TODO)", ZSTR_VAL(obj->ce->name));
+			break;
+		}
+	}
+
+	return &intern->zo;
+}
 
 static HashTable *reflection_get_gc(zend_object *obj, zval **gc_data, int *gc_data_count) /* {{{ */
 {
@@ -7771,6 +7795,7 @@ PHP_MINIT_FUNCTION(reflection) /* {{{ */
 	reflection_object_handlers.clone_obj = NULL;
 	reflection_object_handlers.write_property = _reflection_write_property;
 	reflection_object_handlers.get_gc = reflection_get_gc;
+	reflection_object_handlers.snapshot_obj = reflection_snapshot_obj;
 
 	reflection_exception_ptr = register_class_ReflectionException(zend_ce_exception);
 
