@@ -19,8 +19,10 @@
 */
 
 #include "zend.h"
+#include "zend_alloc.h"
 #include "zend_globals.h"
 #include "zend_lazy_objects.h"
+#include "zend_types.h"
 #include "zend_variables.h"
 #include "zend_API.h"
 #include "zend_objects.h"
@@ -33,6 +35,7 @@
 #include "zend_hash.h"
 #include "zend_property_hooks.h"
 #include "zend_observer.h"
+#include "zend_snapshot.h"
 
 #define DEBUG_OBJECT_HANDLERS 0
 
@@ -2447,6 +2450,19 @@ ZEND_API HashTable *zend_get_properties_for(zval *obj, zend_prop_purpose purpose
 	return zend_std_get_properties_for(zobj, purpose);
 }
 
+ZEND_API zend_object *zend_std_snapshot_obj(zend_object *object) {
+	if (object->ce->create_object) {
+		zend_throw_error(NULL, "Can not snapshot instance of class %s", ZSTR_VAL(object->ce->name));
+		return NULL;
+	}
+
+	return object;
+}
+
+ZEND_API zend_object *zend_internal_object_snapshottable(zend_object *object) {
+	return object;
+}
+
 ZEND_API const zend_object_handlers std_object_handlers = {
 	0,										/* offset */
 
@@ -2475,4 +2491,5 @@ ZEND_API const zend_object_handlers std_object_handlers = {
 	NULL,									/* do_operation */
 	zend_std_compare_objects,				/* compare */
 	NULL,									/* get_properties_for */
+	zend_std_snapshot_obj,                  /* snapshot_obj */
 };

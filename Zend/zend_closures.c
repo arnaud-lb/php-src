@@ -27,6 +27,7 @@
 #include "zend_objects_API.h"
 #include "zend_globals.h"
 #include "zend_closures_arginfo.h"
+#include "zend_snapshot.h"
 
 typedef struct _zend_closure {
 	zend_object       std;
@@ -721,6 +722,7 @@ void zend_register_closure_ce(void) /* {{{ */
 	closure_handlers.get_debug_info = zend_closure_get_debug_info;
 	closure_handlers.get_closure = zend_closure_get_closure;
 	closure_handlers.get_gc = zend_closure_get_gc;
+	closure_handlers.snapshot_obj = zend_internal_object_snapshottable;
 }
 /* }}} */
 

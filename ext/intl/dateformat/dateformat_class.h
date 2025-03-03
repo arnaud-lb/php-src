@@ -27,6 +27,7 @@ typedef struct {
 	int				time_type;
 	int				calendar;
 	char			*requested_locale;
+	bool preserve; // TODO hack
 	zend_object		zo;
 } IntlDateFormatter_object;
 

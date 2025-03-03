@@ -25,6 +25,7 @@
 #include "zend_exceptions.h"
 #include "lib/timelib.h"
 #include "lib/timelib_private.h"
+#include "zend_snapshot.h"
 #ifndef PHP_WIN32
 #include <time.h>
 #else
@@ -265,7 +266,7 @@ PHP_INI_BEGIN()
 PHP_INI_END()
 /* }}} */
 
-static zend_class_entry *date_ce_date, *date_ce_timezone, *date_ce_interval, *date_ce_period;
+PHPAPI zend_class_entry *date_ce_date, *date_ce_timezone, *date_ce_interval, *date_ce_period;
 static zend_class_entry *date_ce_immutable, *date_ce_interface;
 static zend_class_entry *date_ce_date_error, *date_ce_date_object_error, *date_ce_date_range_error;
 static zend_class_entry *date_ce_date_exception, *date_ce_date_invalid_timezone_exception, *date_ce_date_invalid_operation_exception, *date_ce_date_malformed_string_exception, *date_ce_date_malformed_interval_string_exception, *date_ce_date_malformed_period_string_exception;
@@ -1750,6 +1751,7 @@ static void date_register_classes(void) /* {{{ */
 	date_object_handlers_date.compare = date_object_compare_date;
 	date_object_handlers_date.get_properties_for = date_object_get_properties_for;
 	date_object_handlers_date.get_gc = date_object_get_gc;
+	date_object_handlers_date.snapshot_obj = zend_internal_object_snapshottable;
 
 	date_ce_immutable = register_class_DateTimeImmutable(date_ce_interface);
 	date_ce_immutable->create_object = date_object_new_date;
@@ -1759,6 +1761,7 @@ static void date_register_classes(void) /* {{{ */
 	date_object_handlers_immutable.compare = date_object_compare_date;
 	date_object_handlers_immutable.get_properties_for = date_object_get_properties_for;
 	date_object_handlers_immutable.get_gc = date_object_get_gc;
+	date_object_handlers_immutable.snapshot_obj = zend_internal_object_snapshottable;
 
 	date_ce_timezone = register_class_DateTimeZone();
 	date_ce_timezone->create_object = date_object_new_timezone;
@@ -1771,6 +1774,7 @@ static void date_register_classes(void) /* {{{ */
 	date_object_handlers_timezone.get_gc = date_object_get_gc_timezone;
 	date_object_handlers_timezone.get_debug_info = date_object_get_debug_info_timezone;
 	date_object_handlers_timezone.compare = date_object_compare_timezone;
+	date_object_handlers_timezone.snapshot_obj = zend_internal_object_snapshottable;
 
 	date_ce_interval = register_class_DateInterval();
 	date_ce_interval->create_object = date_object_new_interval;
@@ -2023,6 +2027,27 @@ static int date_object_compare_timezone(zval *tz1, zval *tz2) /* {{{ */
 		EMPTY_SWITCH_DEFAULT_CASE();
 	}
 } /* }}} */
+
+PHPAPI void date_restore(void *data)
+{
+	if (!data) {
+		return;
+	}
+
+	zend_array *snapshot = (zend_array*)data;
+
+	if (DATEG(tzcache)) {
+		zend_throw_error(NULL, "Restoring when DATEG(tzcache) is non-empty is not supported (TODO)");
+		return;
+	}
+
+	DATEG(tzcache) = snapshot;
+}
+
+PHPAPI void *date_snapshot(void)
+{
+	return DATEG(tzcache);
+}
 
 static void php_timezone_to_string(php_timezone_obj *tzobj, zval *zv)
 {

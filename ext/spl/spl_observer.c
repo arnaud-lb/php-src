@@ -15,6 +15,8 @@
    +----------------------------------------------------------------------+
  */
 
+#include "zend.h"
+#include "zend_hash.h"
 #ifdef HAVE_CONFIG_H
 # include "config.h"
 #endif
@@ -498,6 +500,36 @@ static void spl_object_storage_unset_dimension(zend_object *object, zval *offset
 	}
 	zend_hash_index_del(&intern->storage, Z_OBJ_HANDLE_P(offset));
 }
+
+static zend_object *spl_object_storage_snapshot_obj(zend_object *object)
+{
+	return object;
+}
+
+#if 0
+static zend_object *spl_object_storage_restore_obj(zend_object *object)
+{
+	spl_SplObjectStorage *intern = spl_object_storage_from_obj(object);
+	if (intern->storage.nNumOfElements) {
+		zend_array new_storage;
+		zend_hash_init(&new_storage, intern->storage.nNumOfElements,
+				NULL, intern->storage.pDestructor, 0);
+
+		// TODO: Use a variant of zend_hash_set_bucket_key
+		zval *zv;
+		ZEND_HASH_FOREACH_VAL(&intern->storage, zv) {
+			spl_SplObjectStorageElement *element = Z_PTR_P(zv);
+			zend_hash_index_add(&new_storage, element->obj->handle, zv);
+		} ZEND_HASH_FOREACH_END();
+
+		intern->storage.pDestructor = NULL;
+		zend_hash_destroy(&intern->storage);
+		intern->storage = new_storage;
+	}
+
+	return object;
+}
+#endif
 
 /* {{{ Detaches an object from the storage */
 PHP_METHOD(SplObjectStorage, detach)
@@ -1390,6 +1422,7 @@ PHP_MINIT_FUNCTION(spl_observer)
 	spl_handler_SplObjectStorage.write_dimension = spl_object_storage_write_dimension;
 	spl_handler_SplObjectStorage.has_dimension   = spl_object_storage_has_dimension;
 	spl_handler_SplObjectStorage.unset_dimension = spl_object_storage_unset_dimension;
+	spl_handler_SplObjectStorage.snapshot_obj    = spl_object_storage_snapshot_obj;
 
 	spl_ce_MultipleIterator = register_class_MultipleIterator(zend_ce_iterator);
 	spl_ce_MultipleIterator->create_object = spl_SplObjectStorage_new;

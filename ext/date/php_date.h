@@ -163,4 +163,8 @@ PHPAPI bool php_date_initialize(php_date_obj *dateobj, const char *time_str, siz
 PHPAPI void php_date_initialize_from_ts_long(php_date_obj *dateobj, zend_long sec, int usec);
 PHPAPI bool php_date_initialize_from_ts_double(php_date_obj *dateobj, double ts);
 
+PHPAPI void date_restore(void *data);
+PHPAPI void *date_snapshot(void);
+
+
 #endif /* PHP_DATE_H */
