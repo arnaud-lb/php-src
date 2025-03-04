@@ -308,11 +308,12 @@ struct _zend_mm_heap {
 	union {
 		HashTable *tracked_allocs;
 		struct {
-			char alloc;
-			char free;
+			uint8_t alloc;
+			uint8_t free;
 		} poison;
 	};
 #endif
+	bool check_freelists_on_shutdown;
 	pid_t pid;
 	zend_random_bytes_insecure_state rand_state;
 };
@@ -2395,7 +2396,18 @@ static void zend_mm_check_leaks(zend_mm_heap *heap)
 #if ZEND_MM_CUSTOM
 static void *tracked_malloc(size_t size ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC);
 static void tracked_free_all(zend_mm_heap *heap);
+static void *poison_malloc(size_t size ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC);
 #endif
+
+static void zend_mm_check_freelists(zend_mm_heap *heap)
+{
+	for (int bin_num = 0; bin_num < ZEND_MM_BINS; bin_num++) {
+		zend_mm_free_slot *slot = heap->free_slot[bin_num];
+		while (slot) {
+			slot = zend_mm_get_next_free_slot(heap, bin_num, slot);
+		}
+	}
+}
 
 ZEND_API void zend_mm_shutdown(zend_mm_heap *heap, bool full, bool silent)
 {
@@ -2440,6 +2452,10 @@ ZEND_API void zend_mm_shutdown(zend_mm_heap *heap, bool full, bool silent)
 		}
 	}
 #endif
+
+	if (heap->check_freelists_on_shutdown) {
+		zend_mm_check_freelists(heap);
+	}
 
 	/* free huge blocks */
 	list = heap->huge_list;
@@ -2561,8 +2577,9 @@ ZEND_API size_t ZEND_FASTCALL _zend_mm_block_size(zend_mm_heap *heap, void *ptr 
 			if  (size_zv) {
 				return Z_LVAL_P(size_zv);
 			}
+		} else if (heap->custom_heap._malloc != poison_malloc) {
+			return 0;
 		}
-		return 0;
 	}
 #endif
 	return zend_mm_size(heap, ptr ZEND_FILE_LINE_RELAY_CC ZEND_FILE_LINE_ORIG_RELAY_CC);
@@ -3146,19 +3163,21 @@ static void alloc_globals_ctor(zend_alloc_globals *alloc_globals)
 	alloc_globals->mm_heap = zend_mm_init();
 
 #if ZEND_MM_CUSTOM
-	tmp = getenv("ZEND_MM_POISON");
+	tmp = getenv("ZEND_MM_DEBUG");
 	if (tmp && tmp[0]) {
 		ZEND_ASSERT(!alloc_globals->mm_heap->tracked_allocs);
-		char *end;
-		long alloc_poison = strtol(tmp, &end, 0);
-		long free_poison;
-		if (end[0] == ',') {
-			free_poison = strtoul(end+1, NULL, 0);
-		} else {
-			free_poison = alloc_poison;
+		long alloc_poison = strtol(tmp, &tmp, 0);
+		long free_poison = alloc_poison;
+		long check_freelists = false;
+		if (tmp[0] == ',') {
+			free_poison = strtoul(tmp+1, &tmp, 0);
+			if (tmp[0] == ',') {
+				check_freelists = strtoul(tmp+1, &tmp, 0);
+			}
 		}
-		alloc_globals->mm_heap->poison.alloc = (char) alloc_poison;
-		alloc_globals->mm_heap->poison.free = (char) free_poison;
+		alloc_globals->mm_heap->poison.alloc = (uint8_t) alloc_poison;
+		alloc_globals->mm_heap->poison.free = (uint8_t) free_poison;
+		alloc_globals->mm_heap->check_freelists_on_shutdown = (bool) check_freelists;
 		zend_mm_set_custom_handlers_ex(alloc_globals->mm_heap, poison_malloc,
 				poison_free, poison_realloc, poison_gc, poison_shutdown);
 	}
