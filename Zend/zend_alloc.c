@@ -3153,7 +3153,7 @@ static void alloc_globals_ctor(zend_alloc_globals *alloc_globals)
 		long alloc_poison = strtol(tmp, &end, 0);
 		long free_poison;
 		if (end[0] == ',') {
-			free_poison = strtoul(end, NULL, 0);
+			free_poison = strtoul(end+1, NULL, 0);
 		} else {
 			free_poison = alloc_poison;
 		}
