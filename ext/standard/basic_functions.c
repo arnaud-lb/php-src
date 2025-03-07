@@ -1735,6 +1735,29 @@ PHPAPI bool append_user_shutdown_function(php_shutdown_function_entry *shutdown_
 }
 /* }}} */
 
+PHPAPI void *php_standard_snapshot(void)
+{
+	return BG(user_shutdown_function_names);
+}
+
+PHPAPI void php_standard_restore(void *data)
+{
+	if (!data) {
+		return;
+	}
+
+	zend_array *ht = (zend_array*)data;
+	if (BG(user_shutdown_function_names)) {
+		zend_hash_clean(BG(user_shutdown_function_names));
+		zend_hash_copy(BG(user_shutdown_function_names), ht, NULL);
+		ht->pDestructor = NULL;
+		zend_hash_destroy(ht);
+		efree(ht);
+	} else {
+		BG(user_shutdown_function_names) = ht;
+	}
+}
+
 ZEND_API void php_get_highlight_struct(zend_syntax_highlighter_ini *syntax_highlighter_ini) /* {{{ */
 {
 	syntax_highlighter_ini->highlight_comment = INI_STR("highlight.comment");

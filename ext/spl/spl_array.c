@@ -153,6 +153,11 @@ static void spl_array_object_free_storage(zend_object *object)
 }
 /* }}} */
 
+static zend_object *spl_array_snapshot_obj(zend_object *object)
+{
+	return object;
+}
+
 /* {{{ spl_array_object_new_ex */
 static zend_object *spl_array_object_new_ex(zend_class_entry *class_type, zend_object *orig, int clone_orig)
 {
@@ -1932,6 +1937,8 @@ PHP_MINIT_FUNCTION(spl_array)
 
 	spl_handler_ArrayObject.compare = spl_array_compare_objects;
 	spl_handler_ArrayObject.free_obj = spl_array_object_free_storage;
+
+	spl_handler_ArrayObject.snapshot_obj = spl_array_snapshot_obj;
 
 	spl_ce_ArrayIterator = register_class_ArrayIterator(spl_ce_SeekableIterator, zend_ce_arrayaccess, zend_ce_serializable, zend_ce_countable);
 	spl_ce_ArrayIterator->create_object = spl_array_object_new;

@@ -25,6 +25,7 @@
 #include "zend_exceptions.h"
 #include "lib/timelib.h"
 #include "lib/timelib_private.h"
+#include "zend_snapshot.h"
 #ifndef PHP_WIN32
 #include <time.h>
 #else
@@ -265,7 +266,7 @@ PHP_INI_BEGIN()
 PHP_INI_END()
 /* }}} */
 
-static zend_class_entry *date_ce_date, *date_ce_timezone, *date_ce_interval, *date_ce_period;
+PHPAPI zend_class_entry *date_ce_date, *date_ce_timezone, *date_ce_interval, *date_ce_period;
 static zend_class_entry *date_ce_immutable, *date_ce_interface;
 static zend_class_entry *date_ce_date_error, *date_ce_date_object_error, *date_ce_date_range_error;
 static zend_class_entry *date_ce_date_exception, *date_ce_date_invalid_timezone_exception, *date_ce_date_invalid_operation_exception, *date_ce_date_malformed_string_exception, *date_ce_date_malformed_interval_string_exception, *date_ce_date_malformed_period_string_exception;
@@ -367,6 +368,7 @@ static zval *date_period_get_property_ptr_ptr(zend_object *object, zend_string *
 static void date_period_unset_property(zend_object *object, zend_string *name, void **cache_slot);
 static HashTable *date_period_get_properties_for(zend_object *object, zend_prop_purpose purpose);
 static int date_object_compare_timezone(zval *tz1, zval *tz2);
+static zend_object *date_object_snapshot_timezone(zend_object *obj);
 
 /* {{{ Module struct */
 zend_module_entry date_module_entry = {
@@ -1771,6 +1773,7 @@ static void date_register_classes(void) /* {{{ */
 	date_object_handlers_timezone.get_gc = date_object_get_gc_timezone;
 	date_object_handlers_timezone.get_debug_info = date_object_get_debug_info_timezone;
 	date_object_handlers_timezone.compare = date_object_compare_timezone;
+	date_object_handlers_timezone.snapshot_obj = date_object_snapshot_timezone;
 
 	date_ce_interval = register_class_DateInterval();
 	date_ce_interval->create_object = date_object_new_interval;
@@ -2023,6 +2026,32 @@ static int date_object_compare_timezone(zval *tz1, zval *tz2) /* {{{ */
 		EMPTY_SWITCH_DEFAULT_CASE();
 	}
 } /* }}} */
+
+static zend_object *date_object_snapshot_timezone(zend_object *obj)
+{
+	return obj;
+}
+
+PHPAPI void date_restore(void *data)
+{
+	if (!data) {
+		return;
+	}
+
+	zend_array *snapshot = (zend_array*)data;
+
+	if (DATEG(tzcache)) {
+		zend_throw_error(NULL, "Restoring when DATEG(tzcache) is non-empty is not supported (TODO)");
+		return;
+	}
+
+	DATEG(tzcache) = snapshot;
+}
+
+PHPAPI void *date_snapshot(void)
+{
+	return DATEG(tzcache);
+}
 
 static void php_timezone_to_string(php_timezone_obj *tzobj, zval *zv)
 {

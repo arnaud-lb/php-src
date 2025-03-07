@@ -27,6 +27,7 @@
 #include "zend_objects_API.h"
 #include "zend_globals.h"
 #include "zend_closures_arginfo.h"
+#include "zend_snapshot.h"
 
 typedef struct _zend_closure {
 	zend_object       std;
@@ -699,6 +700,11 @@ static HashTable *zend_closure_get_gc(zend_object *obj, zval **table, int *n) /*
 }
 /* }}} */
 
+static zend_object *zend_closure_snapshot_obj(zend_object *obj)
+{
+	return obj;
+}
+
 /* {{{ Private constructor preventing instantiation */
 ZEND_COLD ZEND_METHOD(Closure, __construct)
 {
@@ -721,6 +727,7 @@ void zend_register_closure_ce(void) /* {{{ */
 	closure_handlers.get_debug_info = zend_closure_get_debug_info;
 	closure_handlers.get_closure = zend_closure_get_closure;
 	closure_handlers.get_gc = zend_closure_get_gc;
+	closure_handlers.snapshot_obj = zend_closure_snapshot_obj;
 }
 /* }}} */
 

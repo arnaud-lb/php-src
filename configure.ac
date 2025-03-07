@@ -1760,6 +1760,7 @@ PHP_ADD_SOURCES([Zend], m4_normalize([
     zend_ptr_stack.c
     zend_signal.c
     zend_smart_str.c
+    zend_snapshot.c
     zend_sort.c
     zend_stack.c
     zend_stream.c
