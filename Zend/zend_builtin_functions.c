@@ -41,6 +41,8 @@
 #include "ext/date/php_date.h"
 #include "zend_string.h"
 
+#include <sys/mman.h>
+
 ZEND_MINIT_FUNCTION(core) { /* {{{ */
 	zend_register_default_classes();
 
@@ -2327,6 +2329,8 @@ ZEND_FUNCTION(snapshot_state)
 		if (Z_TYPE_P(zv) == IS_INDIRECT) {
 			*zv = *Z_INDIRECT_P(zv);
 		}
+		/* Prevent page-faulting */
+		Z_TRY_ADDREF_P(zv);
 	} ZEND_HASH_FOREACH_END();
 
 	// TODO: call via a new extension handlers and store in a ht
@@ -2410,16 +2414,41 @@ ZEND_FUNCTION(snapshot_state)
 		zend_hash_add(&s->function_table, key, zv);
 	} ZEND_HASH_FOREACH_END();
 
-	s->objects_store = EG(objects_store);
+	uint32_t *objects_with_dtor = NULL;
+	uint32_t num_objects_with_dtor = 0;
+	uint32_t objects_with_dtor_cap = 0;
 
-	for (uint32_t i = 1; i < s->objects_store.top; i++) {
-		zend_object *obj = s->objects_store.object_buckets[i];
+	for (uint32_t i = 1; i < EG(objects_store).top; i++) {
+		zend_object *obj = EG(objects_store).object_buckets[i];
 		if (IS_OBJ_VALID(obj)) {
 			if (!obj->handlers->snapshot_obj(obj)) {
 				RETURN_THROWS();
 			}
+			/* Prevent page-faulting */
+			GC_ADDREF(obj);
+			if ((obj->handlers->dtor_obj != zend_objects_destroy_object
+					|| obj->ce->destructor
+					|| obj->handlers->free_obj != zend_object_std_dtor)
+					&& obj->ce != zend_ce_closure) {
+				if (objects_with_dtor_cap == num_objects_with_dtor) {
+					if (objects_with_dtor_cap == 0) {
+						objects_with_dtor_cap = 16;
+					} else {
+						objects_with_dtor_cap *= 1.5;
+					}
+					objects_with_dtor = erealloc(objects_with_dtor, objects_with_dtor_cap * sizeof(uint32_t));
+				}
+				objects_with_dtor[num_objects_with_dtor++] = obj->handle;
+			}
 		}
 	}
+
+	objects_with_dtor = erealloc(objects_with_dtor, num_objects_with_dtor * sizeof(uint32_t));
+	EG(objects_store).snapshot_objects_with_dtor = objects_with_dtor;
+	EG(objects_store).num_snapshot_objects_with_dtor = num_objects_with_dtor;
+	EG(objects_store).snapshot_top = EG(objects_store).top;
+
+	s->objects_store = EG(objects_store);
 
 	s->map_ptr_real_base = malloc((zend_map_ptr_static_size + CG(map_ptr_size)) * sizeof(void*));
 	s->map_ptr_base = ZEND_MAP_PTR_BIASED_BASE(s->map_ptr_real_base);
@@ -2441,14 +2470,38 @@ ZEND_FUNCTION(snapshot_state)
 	zend_mm_chunk *chunk = zend_mm_get_chunk_list(heap);
 	s->chunks_count = zend_mm_get_chunks_count(heap);
 	s->chunks = malloc(s->chunks_count * sizeof(void*));
+#if 0
 	s->copy = malloc(s->chunks_count * ZEND_MM_CHUNK_SIZE);
-	void **chunk_dest = s->chunks;
 	void *copy_dest = s->copy;
+#else
+	s->memfd = memfd_create("zend_mm shapshot", MFD_CLOEXEC);
+	if (ftruncate(s->memfd, (off_t)s->chunks_count * ZEND_MM_CHUNK_SIZE) == -1) {
+		zend_throw_error(NULL, "Snapshot failed: %s", strerror(errno));
+		RETURN_THROWS();
+	}
+#endif
+	void **chunk_dest = s->chunks;
 	do {
 		zend_mm_preserve_chunk(heap, chunk);
-		copy_dest = mempcpy(copy_dest, chunk, ZEND_MM_CHUNK_SIZE);
 		*chunk_dest = chunk;
 		chunk_dest++;
+#if 0
+		copy_dest = mempcpy(copy_dest, chunk, ZEND_MM_CHUNK_SIZE);
+#else
+		ssize_t written = 0;
+		do {
+			ssize_t ret = write(s->memfd, (char*)chunk + written, ZEND_MM_CHUNK_SIZE - written);
+			if (ret < 0) {
+				if (ret == EINTR) {
+					continue;
+				}
+				zend_throw_error(NULL, "Failed to snapshot: %s", strerror(errno));
+				RETURN_THROWS();
+			} else {
+				written += ret;
+			}
+		} while (written < ZEND_MM_CHUNK_SIZE);
+#endif
 		chunk = zend_mm_get_next_chunk(heap, chunk);
 	} while (chunk);
 
@@ -2535,11 +2588,21 @@ ZEND_FUNCTION(restore_state)
 	}
 
 	zend_mm_heap *heap = zend_mm_get_heap();
+#if 0
 	char *src = s->copy;
+#endif
 	for (int i = 0; i < s->chunks_count; i++) {
 		zend_mm_chunk *chunk = s->chunks[i];
+#if 0
 		memcpy(chunk, src, ZEND_MM_CHUNK_SIZE);
 		src += ZEND_MM_CHUNK_SIZE;
+#else
+		void *ret = mmap(chunk, ZEND_MM_CHUNK_SIZE, PROT_READ | PROT_WRITE, MAP_FIXED | MAP_PRIVATE, s->memfd, i * ZEND_MM_CHUNK_SIZE);
+		if (ret == MAP_FAILED) {
+			zend_throw_error(NULL, "Failed to restore state: %s", strerror(errno));
+			RETURN_THROWS();
+		}
+#endif
 		zend_mm_adopt_chunk(heap, chunk);
 	}
 

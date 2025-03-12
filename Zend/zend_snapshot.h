@@ -14,6 +14,7 @@ typedef struct _zend_snapshot {
 	int             chunks_count;
 	void          **chunks;
 	void           *copy;
+	int             memfd;
 	void           *map_ptr_real_base;
 	void           *map_ptr_base;
 	size_t          map_ptr_static_size;

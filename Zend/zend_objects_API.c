@@ -31,6 +31,9 @@ ZEND_API void ZEND_FASTCALL zend_objects_store_init(zend_objects_store *objects,
 	objects->top = 1; /* Skip 0 so that handles are true */
 	objects->size = init_size;
 	objects->free_list_head = -1;
+	objects->snapshot_top = 1;
+	objects->snapshot_objects_with_dtor = NULL;
+	objects->num_snapshot_objects_with_dtor = 0;
 	memset(&objects->object_buckets[0], 0, sizeof(zend_object*));
 }
 
@@ -45,8 +48,26 @@ ZEND_API void ZEND_FASTCALL zend_objects_store_call_destructors(zend_objects_sto
 	EG(flags) |= EG_FLAGS_OBJECT_STORE_NO_REUSE;
 	if (objects->top > 1) {
 		uint32_t i;
-		for (i = 1; i < objects->top; i++) {
+		for (i = objects->snapshot_top; i < objects->top; i++) {
 			zend_object *obj = objects->object_buckets[i];
+			if (IS_OBJ_VALID(obj)) {
+				if (!(OBJ_FLAGS(obj) & IS_OBJ_DESTRUCTOR_CALLED)) {
+					GC_ADD_FLAGS(obj, IS_OBJ_DESTRUCTOR_CALLED);
+
+					if (obj->handlers->dtor_obj != zend_objects_destroy_object
+							|| obj->ce->destructor) {
+						GC_ADDREF(obj);
+						obj->handlers->dtor_obj(obj);
+						GC_DELREF(obj);
+					}
+				}
+			}
+		}
+	}
+	if (objects->num_snapshot_objects_with_dtor > 0) {
+		for (uint32_t i = objects->num_snapshot_objects_with_dtor; i > 0; i--) {
+			uint32_t handle = objects->snapshot_objects_with_dtor[i-1];
+			zend_object *obj = objects->object_buckets[handle];
 			if (IS_OBJ_VALID(obj)) {
 				if (!(OBJ_FLAGS(obj) & IS_OBJ_DESTRUCTOR_CALLED)) {
 					GC_ADD_FLAGS(obj, IS_OBJ_DESTRUCTOR_CALLED);
@@ -66,7 +87,7 @@ ZEND_API void ZEND_FASTCALL zend_objects_store_call_destructors(zend_objects_sto
 ZEND_API void ZEND_FASTCALL zend_objects_store_mark_destructed(zend_objects_store *objects)
 {
 	if (objects->object_buckets && objects->top > 1) {
-		zend_object **obj_ptr = objects->object_buckets + 1;
+		zend_object **obj_ptr = objects->object_buckets + objects->snapshot_top;
 		zend_object **end = objects->object_buckets + objects->top;
 
 		do {
@@ -90,7 +111,7 @@ ZEND_API void ZEND_FASTCALL zend_objects_store_free_object_storage(zend_objects_
 
 	/* Free object contents, but don't free objects themselves, so they show up as leaks.
 	 * Also add a ref to all objects, so the object can't be freed by something else later. */
-	end = objects->object_buckets + 1;
+	end = objects->object_buckets + objects->snapshot_top;
 	obj_ptr = objects->object_buckets + objects->top;
 
 	if (fast_shutdown) {
