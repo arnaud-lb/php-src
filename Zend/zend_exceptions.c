@@ -759,6 +759,7 @@ void zend_register_default_exception(void) /* {{{ */
 
 	memcpy(&default_exception_handlers, &std_object_handlers, sizeof(zend_object_handlers));
 	default_exception_handlers.clone_obj = NULL;
+	default_exception_handlers.snapshot_obj = zend_internal_object_snapshottable;
 
 	zend_ce_exception = register_class_Exception(zend_ce_throwable);
 	zend_init_exception_class_entry(zend_ce_exception);

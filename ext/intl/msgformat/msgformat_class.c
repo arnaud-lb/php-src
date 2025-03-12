@@ -35,9 +35,21 @@ void MessageFormatter_object_free( zend_object *object )
 
 	zend_object_std_dtor( &mfo->zo );
 
-	msgformat_data_free( &mfo->mf_data );
+	if (!mfo->preserve ) {
+		msgformat_data_free( &mfo->mf_data );
+	}
 }
 /* }}} */
+
+zend_object *MessageFormatter_object_snapshot( zend_object *object )
+{
+	MessageFormatter_object* mfo = php_intl_messageformatter_fetch_object(object);
+
+	// TODO: see IntlDateFormatter_object_snapshot
+	mfo->preserve = true;
+
+	return object;
+}
 
 /* {{{ MessageFormatter_object_create */
 zend_object *MessageFormatter_object_create(zend_class_entry *ce)
@@ -97,5 +109,6 @@ void msgformat_register_class( void )
 	MessageFormatter_handlers.offset = XtOffsetOf(MessageFormatter_object, zo);
 	MessageFormatter_handlers.clone_obj = MessageFormatter_object_clone;
 	MessageFormatter_handlers.free_obj = MessageFormatter_object_free;
+	MessageFormatter_handlers.snapshot_obj = MessageFormatter_object_snapshot;
 }
 /* }}} */

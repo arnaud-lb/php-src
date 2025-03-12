@@ -27,6 +27,7 @@
 
 typedef struct {
 	msgformat_data  mf_data;
+	bool preserve;
 	zend_object     zo;
 } MessageFormatter_object;
 

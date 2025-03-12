@@ -226,7 +226,6 @@ typedef zend_mm_bitset zend_mm_page_map[ZEND_MM_PAGE_MAP_LEN];     /* 64B */
 typedef struct  _zend_mm_page      zend_mm_page;
 typedef struct  _zend_mm_bin       zend_mm_bin;
 typedef struct  _zend_mm_free_slot zend_mm_free_slot;
-typedef struct  _zend_mm_chunk     zend_mm_chunk;
 typedef struct  _zend_mm_huge_list zend_mm_huge_list;
 
 static bool zend_mm_use_huge_pages = false;
@@ -322,6 +321,9 @@ struct _zend_mm_chunk {
 	zend_mm_heap       heap_slot;               /* used only in main chunk */
 	zend_mm_page_map   free_map;                /* 512 bits or 64 bytes */
 	zend_mm_page_info  map[ZEND_MM_PAGES];      /* 2 KB = 512 * 4 */
+	bool               preserve;                /* Never free this chunk.
+												   Ensures the address space can
+												   not be re-used. */
 };
 
 struct _zend_mm_page {
@@ -804,7 +806,7 @@ static void *zend_mm_chunk_alloc_int(size_t size, size_t alignment)
 	}
 }
 
-static void *zend_mm_chunk_alloc(zend_mm_heap *heap, size_t size, size_t alignment)
+ZEND_API void *zend_mm_chunk_alloc(zend_mm_heap *heap, size_t size, size_t alignment)
 {
 #if ZEND_MM_STORAGE
 	if (UNEXPECTED(heap->storage)) {
@@ -1172,11 +1174,15 @@ static zend_always_inline void zend_mm_delete_chunk(zend_mm_heap *heap, zend_mm_
 			}
 		}
 		if (!heap->cached_chunks || chunk->num > heap->cached_chunks->num) {
-			zend_mm_chunk_free(heap, chunk, ZEND_MM_CHUNK_SIZE);
+			if (!chunk->preserve) {
+				zend_mm_chunk_free(heap, chunk, ZEND_MM_CHUNK_SIZE);
+			}
 		} else {
 //TODO: select the best chunk to delete???
 			chunk->next = heap->cached_chunks->next;
-			zend_mm_chunk_free(heap, heap->cached_chunks, ZEND_MM_CHUNK_SIZE);
+			if (!heap->cached_chunks->preserve) {
+				zend_mm_chunk_free(heap, heap->cached_chunks, ZEND_MM_CHUNK_SIZE);
+			}
 			heap->cached_chunks = chunk;
 		}
 	}
@@ -2195,6 +2201,53 @@ ZEND_API size_t zend_mm_gc(zend_mm_heap *heap)
 	return collected * ZEND_MM_PAGE_SIZE;
 }
 
+ZEND_API zend_mm_chunk *zend_mm_get_chunk_list(zend_mm_heap *heap)
+{
+	return heap->main_chunk;
+}
+
+ZEND_API int zend_mm_get_chunks_count(zend_mm_heap *heap)
+{
+	return heap->chunks_count;
+}
+
+ZEND_API void *zend_mm_get_huge_list(zend_mm_heap *heap)
+{
+	return heap->huge_list;
+}
+
+ZEND_API zend_mm_chunk *zend_mm_get_next_chunk(zend_mm_heap *heap, zend_mm_chunk *chunk)
+{
+	ZEND_ASSERT(chunk->heap == heap);
+	zend_mm_chunk *next = chunk->next;
+	if (next == heap->main_chunk) {
+		return NULL;
+	}
+	return next;
+}
+
+/* Adds the given chunk to the heap. The chunk is not initialized, and can have
+ * allocated slots and pages. */
+ZEND_API void zend_mm_adopt_chunk(zend_mm_heap *heap, zend_mm_chunk *chunk)
+{
+	/* Do not import free lists, as the chunk may have been created with a
+	 * different key. However, free pages can be allocated. */
+	chunk->heap = heap;
+	chunk->next = heap->main_chunk;
+	chunk->prev = heap->main_chunk->prev;
+	chunk->prev->next = chunk;
+	chunk->next->prev = chunk;
+	chunk->num = chunk->prev->num + 1;
+	heap->chunks_count++;
+	heap->peak_chunks_count++;
+}
+
+ZEND_API void zend_mm_preserve_chunk(zend_mm_heap *heap, zend_mm_chunk *chunk)
+{
+	ZEND_ASSERT(chunk->heap == heap);
+	chunk->preserve = true;
+}
+
 #if ZEND_DEBUG
 /******************/
 /* Leak detection */
@@ -2460,23 +2513,44 @@ ZEND_API void zend_mm_shutdown(zend_mm_heap *heap, bool full, bool silent)
 		while (heap->cached_chunks) {
 			p = heap->cached_chunks;
 			heap->cached_chunks = p->next;
-			zend_mm_chunk_free(heap, p, ZEND_MM_CHUNK_SIZE);
+			if (!p->preserve) {
+				zend_mm_chunk_free(heap, p, ZEND_MM_CHUNK_SIZE);
+			}
 		}
 		/* free the first chunk */
-		zend_mm_chunk_free(heap, heap->main_chunk, ZEND_MM_CHUNK_SIZE);
+		if (!heap->main_chunk->preserve) {
+			zend_mm_chunk_free(heap, heap->main_chunk, ZEND_MM_CHUNK_SIZE);
+		}
 	} else {
+		/* unlink preserved chunks from the cache */
+		p = heap->cached_chunks;
+		while (p) {
+			zend_mm_chunk *q = p->next;
+			while (q && q->preserve) {
+				p->next = q = q->next;
+				heap->cached_chunks_count--;
+			}
+			p = q;
+		}
+		if (heap->cached_chunks && heap->cached_chunks->preserve) {
+			heap->cached_chunks_count--;
+			heap->cached_chunks = heap->cached_chunks->next;
+		}
+
 		/* free some cached chunks to keep average count */
 		heap->avg_chunks_count = (heap->avg_chunks_count + (double)heap->peak_chunks_count) / 2.0;
 		while ((double)heap->cached_chunks_count + 0.9 > heap->avg_chunks_count &&
 		       heap->cached_chunks) {
 			p = heap->cached_chunks;
 			heap->cached_chunks = p->next;
+			ZEND_ASSERT(!p->preserve);
 			zend_mm_chunk_free(heap, p, ZEND_MM_CHUNK_SIZE);
 			heap->cached_chunks_count--;
 		}
 		/* clear cached chunks */
 		p = heap->cached_chunks;
 		while (p != NULL) {
+			ZEND_ASSERT(!p->preserve);
 			zend_mm_chunk *q = p->next;
 			memset(p, 0, sizeof(zend_mm_chunk));
 			p->next = q;
@@ -2864,7 +2938,9 @@ ZEND_API zend_result zend_set_memory_limit(size_t memory_limit)
 			do {
 				zend_mm_chunk *p = heap->cached_chunks;
 				heap->cached_chunks = p->next;
-				zend_mm_chunk_free(heap, p, ZEND_MM_CHUNK_SIZE);
+				if (!p->preserve) {
+					zend_mm_chunk_free(heap, p, ZEND_MM_CHUNK_SIZE);
+				}
 				heap->cached_chunks_count--;
 				heap->real_size -= ZEND_MM_CHUNK_SIZE;
 			} while (memory_limit < heap->real_size);
@@ -2919,8 +2995,22 @@ ZEND_API void zend_memory_reset_peak_usage(void)
 #endif
 }
 
+static void alloc_globals_ctor(zend_alloc_globals *alloc_globals);
+
 ZEND_API void shutdown_memory_manager(bool silent, bool full_shutdown)
 {
+	if (!full_shutdown) {
+		zend_mm_heap *heap = AG(mm_heap);
+		if (heap->main_chunk->preserve) {
+			/* The main chunk is preserved, so we can not re-use it in the next
+			 * request: We have to full shutdown and start a new heap.
+			 * This happens when snapshot_state() was called during the request.
+			 */
+			zend_mm_shutdown(AG(mm_heap), 1, silent);
+			alloc_globals_ctor(&alloc_globals);
+			return;
+		}
+	}
 	zend_mm_shutdown(AG(mm_heap), full_shutdown, silent);
 }
 

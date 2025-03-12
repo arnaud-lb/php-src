@@ -39,9 +39,23 @@ void IntlDateFormatter_object_free( zend_object *object )
 		efree( dfo->requested_locale );
 	}
 
-	dateformat_data_free( &dfo->datef_data );
+	if (!dfo->preserve) {
+		dateformat_data_free( &dfo->datef_data );
+	}
 }
 /* }}} */
+
+zend_object *IntlDateFormatter_object_snapshot( zend_object *object )
+{
+	IntlDateFormatter_object* dfo = php_intl_dateformatter_fetch_object(object);
+
+	// TODO: this is a quick way to make IntlDateFormatter snapshottable, but
+	// a proper way would ensure that any state in dfo->datef_data is not
+	// changed after that.
+	dfo->preserve = true;
+
+	return object;
+}
 
 /* {{{ IntlDateFormatter_object_create */
 zend_object *IntlDateFormatter_object_create(zend_class_entry *ce)
@@ -105,5 +119,6 @@ void dateformat_register_IntlDateFormatter_class( void )
 	IntlDateFormatter_handlers.offset = XtOffsetOf(IntlDateFormatter_object, zo);
 	IntlDateFormatter_handlers.clone_obj = IntlDateFormatter_object_clone;
 	IntlDateFormatter_handlers.free_obj = IntlDateFormatter_object_free;
+	IntlDateFormatter_handlers.snapshot_obj = IntlDateFormatter_object_snapshot;
 }
 /* }}} */

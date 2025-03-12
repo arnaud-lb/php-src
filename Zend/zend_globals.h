@@ -318,6 +318,8 @@ struct _zend_executor_globals {
 
 	zend_strtod_state strtod_state;
 
+	struct _zend_snapshot *snapshot;
+
 	void *reserved[ZEND_MAX_RESERVED_RESOURCES];
 };
 

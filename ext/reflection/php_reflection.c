@@ -22,6 +22,7 @@
 #include "zend_execute.h"
 #include "zend_lazy_objects.h"
 #include "zend_object_handlers.h"
+#include "zend_snapshot.h"
 #include "zend_type_info.h"
 #include "zend_types.h"
 #ifdef HAVE_CONFIG_H
@@ -7771,6 +7772,7 @@ PHP_MINIT_FUNCTION(reflection) /* {{{ */
 	reflection_object_handlers.clone_obj = NULL;
 	reflection_object_handlers.write_property = _reflection_write_property;
 	reflection_object_handlers.get_gc = reflection_get_gc;
+	reflection_object_handlers.snapshot_obj = zend_internal_object_snapshottable;
 
 	reflection_exception_ptr = register_class_ReflectionException(zend_ce_exception);
 

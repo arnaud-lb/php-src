@@ -49,6 +49,9 @@ typedef struct _zend_objects_store {
 	uint32_t top;
 	uint32_t size;
 	int free_list_head;
+	uint32_t snapshot_top;
+	uint32_t *snapshot_objects_with_dtor; /* handles */
+	uint32_t num_snapshot_objects_with_dtor;
 } zend_objects_store;
 
 /* Global store handling functions */

@@ -1933,6 +1933,8 @@ PHP_MINIT_FUNCTION(spl_array)
 	spl_handler_ArrayObject.compare = spl_array_compare_objects;
 	spl_handler_ArrayObject.free_obj = spl_array_object_free_storage;
 
+	spl_handler_ArrayObject.snapshot_obj = zend_internal_object_snapshottable;
+
 	spl_ce_ArrayIterator = register_class_ArrayIterator(spl_ce_SeekableIterator, zend_ce_arrayaccess, zend_ce_serializable, zend_ce_countable);
 	spl_ce_ArrayIterator->create_object = spl_array_object_new;
 	spl_ce_ArrayIterator->default_object_handlers = &spl_handler_ArrayObject;

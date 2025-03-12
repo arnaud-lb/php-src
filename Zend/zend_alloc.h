@@ -241,7 +241,8 @@ ZEND_API void zend_memory_reset_peak_usage(void);
 	efree_size_rel(ht, sizeof(HashTable))
 
 /* Heap functions */
-typedef struct _zend_mm_heap zend_mm_heap;
+typedef struct _zend_mm_heap  zend_mm_heap;
+typedef struct _zend_mm_chunk zend_mm_chunk;
 
 ZEND_API zend_mm_heap *zend_mm_startup(void);
 ZEND_API void zend_mm_shutdown(zend_mm_heap *heap, bool full_shutdown, bool silent);
@@ -315,6 +316,14 @@ struct _zend_mm_storage {
 
 ZEND_API zend_mm_storage *zend_mm_get_storage(zend_mm_heap *heap);
 ZEND_API zend_mm_heap *zend_mm_startup_ex(const zend_mm_handlers *handlers, void *data, size_t data_size);
+
+ZEND_API zend_mm_chunk *zend_mm_get_chunk_list(zend_mm_heap *heap);
+ZEND_API zend_mm_chunk *zend_mm_get_next_chunk(zend_mm_heap *heap, zend_mm_chunk *chunk);
+ZEND_API int zend_mm_get_chunks_count(zend_mm_heap *heap);
+ZEND_API void zend_mm_adopt_chunk(zend_mm_heap *heap, zend_mm_chunk *chunk);
+ZEND_API void *zend_mm_chunk_alloc(zend_mm_heap *heap, size_t size, size_t alignment);
+ZEND_API void *zend_mm_get_huge_list(zend_mm_heap *heap);
+ZEND_API void zend_mm_preserve_chunk(zend_mm_heap *heap, zend_mm_chunk *chunk);
 
 /*
 

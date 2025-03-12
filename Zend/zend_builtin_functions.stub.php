@@ -210,3 +210,7 @@ function gc_disable(): void {}
  * @refcount 1
  */
 function gc_status(): array {}
+
+function restore_state(): false|int {}
+function snapshot_state(): void {}
+function snapshot_run_time_caches(): void {}

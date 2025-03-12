@@ -641,6 +641,29 @@ PHP_FUNCTION(spl_autoload_functions)
 	}
 } /* }}} */
 
+PHPAPI void *spl_snapshot(void)
+{
+	return spl_autoload_functions;
+}
+
+PHPAPI void spl_restore(void *data)
+{
+	if (!data) {
+		return;
+	}
+
+	zend_array *snapshot = (zend_array*)data;
+
+	if (spl_autoload_functions) {
+		zend_hash_clean(spl_autoload_functions);
+		zend_hash_copy(spl_autoload_functions, snapshot, NULL);
+		zend_hash_destroy(snapshot);
+		efree(snapshot);
+	} else {
+		spl_autoload_functions = snapshot;
+	}
+}
+
 /* {{{ Return hash id for given object */
 PHP_FUNCTION(spl_object_hash)
 {

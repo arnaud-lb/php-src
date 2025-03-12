@@ -35,7 +35,7 @@ void dateformat_data_init( dateformat_data* datef_data )
  */
 void dateformat_data_free( dateformat_data* datef_data )
 {
-	if( !datef_data )
+	if( !datef_data  )
 		return;
 
 	if( datef_data->udatf )
