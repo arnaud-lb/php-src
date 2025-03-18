@@ -1905,11 +1905,7 @@ function gen_executor($f, $skl, $spec, $kind, $executor_name, $initializer_name)
                             out($f,"# define ZEND_OPCODE_HANDLER_RET const zend_op *\n");
                             out($f,"# define ZEND_VM_TAIL_CALL(call) return call\n");
                             out($f,"# define ZEND_VM_CONTINUE()      return opline\n");
-                            out($f,"# ifdef ZEND_HIGH_HALF_KERNEL\n");
-                            out($f,"#  define ZEND_VM_RETURN()        return NULL\n");
-                            out($f,"# else\n");
-                            out($f,"#  define ZEND_VM_RETURN()        return (const zend_op*)ZEND_VM_ENTER_BIT\n");
-                            out($f,"# endif\n");
+                            out($f,"# define ZEND_VM_RETURN()        return (const zend_op*)-1\n");
                             if ($kind == ZEND_VM_KIND_HYBRID) {
                                 out($f,"# define ZEND_VM_HOT\n");
                             }
@@ -1933,7 +1929,7 @@ function gen_executor($f, $skl, $spec, $kind, $executor_name, $initializer_name)
                             out($f,"# define USE_OPLINE\n");
                             out($f,"# define LOAD_OPLINE() opline = EX(opline)\n");
                             out($f,"# define LOAD_OPLINE_EX() opline = EX(opline)\n");
-                            out($f,"# define LOAD_NEXT_OPLINE() opline = EX(opline) + 1\n");
+                            out($f,"# define LOAD_NEXT_OPLINE() opline = ++EX(opline)\n");
                             out($f,"# define SAVE_OPLINE() EX(opline) = opline\n");
                             out($f,"# define SAVE_OPLINE_EX()\n");
                             out($f,"#endif\n");
@@ -1948,14 +1944,9 @@ function gen_executor($f, $skl, $spec, $kind, $executor_name, $initializer_name)
                             out($f,"# define ZEND_VM_ENTER()           opline = EG(current_execute_data)->opline; ZEND_VM_ENTER_EX()\n");
                             out($f,"# define ZEND_VM_LEAVE()           return  2\n");
                             out($f,"#else\n");
-                            out($f,"# ifdef ZEND_HIGH_HALF_KERNEL\n");
-                            out($f,"#  define ZEND_VM_ENTER_BIT        (1ULL<<(UINTPTR_WIDTH-1))\n");
-                            out($f,"# else\n");
-                            out($f,"#  define ZEND_VM_ENTER_BIT        1ULL\n");
-                            out($f,"# endif\n");
-                            out($f,"# define ZEND_VM_ENTER_EX()        return (zend_op*)((uintptr_t)opline | ZEND_VM_ENTER_BIT)\n");
-                            out($f,"# define ZEND_VM_ENTER()           execute_data = EG(current_execute_data); LOAD_OPLINE(); ZEND_VM_ENTER_EX()\n");
-                            out($f,"# define ZEND_VM_LEAVE()           return (zend_op*)((uintptr_t)opline | ZEND_VM_ENTER_BIT)\n");
+                            out($f,"# define ZEND_VM_ENTER_EX()        return NULL\n");
+                            out($f,"# define ZEND_VM_ENTER()           ZEND_VM_ENTER_EX()\n");
+                            out($f,"# define ZEND_VM_LEAVE()           return NULL\n");
                             out($f,"#endif\n");
                             out($f,"#define ZEND_VM_INTERRUPT()      ZEND_VM_TAIL_CALL(zend_interrupt_helper".($spec?"_SPEC":"")."(ZEND_OPCODE_HANDLER_ARGS_PASSTHRU));\n");
                             out($f,"#define ZEND_VM_LOOP_INTERRUPT() zend_interrupt_helper".($spec?"_SPEC":"")."(ZEND_OPCODE_HANDLER_ARGS_PASSTHRU);\n");
@@ -2155,11 +2146,7 @@ function gen_executor($f, $skl, $spec, $kind, $executor_name, $initializer_name)
                             out($f, $m[1]."if (UNEXPECTED(!OPLINE))".$m[3]."\n");
                             out($f,"#else\n");
                             out($f, $m[1]."opline = ((opcode_handler_t)opline->handler)(ZEND_OPCODE_HANDLER_ARGS_PASSTHRU);\n");
-                            out($f, "# ifdef ZEND_HIGH_HALF_KERNEL\n");
                             out($f, $m[1]."if (UNEXPECTED((intptr_t)opline <= 0))".$m[3]."\n");
-                            out($f, "# else\n");
-                            out($f, $m[1]."if (UNEXPECTED(((uintptr_t)opline & ZEND_VM_ENTER_BIT)))".$m[3]."\n");
-                            out($f, "# endif\n");
                             out($f,"#endif\n");
                             if ($kind == ZEND_VM_KIND_HYBRID) {
                                 out($f,"#endif /* ZEND_VM_KIND != ZEND_VM_KIND_HYBRID */\n");
@@ -2188,15 +2175,15 @@ function gen_executor($f, $skl, $spec, $kind, $executor_name, $initializer_name)
                                 "# endif\n" .
                                 $m[1]."return;\n" .
                                 "#else\n" .
-                                $m[1]."opline = (const zend_op*)((uintptr_t)opline & ~ZEND_VM_ENTER_BIT);\n".
-                                $m[1]."if (EXPECTED(opline != NULL)) {\n" .
-                                $m[1]."\texecute_data = EG(current_execute_data);\n".
-                                $m[1]."\tZEND_VM_LOOP_INTERRUPT_CHECK();\n".
-                                $m[1]."} else {\n" .
+                                $m[1]."if (UNEXPECTED(opline == (const zend_op*)-1)) {\n".
                                 "# ifdef ZEND_VM_IP_GLOBAL_REG\n" .
                                 $m[1]."\topline = vm_stack_data.orig_opline;\n" .
                                 "# endif\n" .
                                 $m[1]."\treturn;\n".
+                                $m[1]."} else {\n" .
+                                $m[1]."\texecute_data = EG(current_execute_data);\n".
+                                $m[1]."\topline = EX(opline);\n".
+                                $m[1]."\tZEND_VM_LOOP_INTERRUPT_CHECK();\n".
                                 $m[1]."}\n".
                                 "#endif\n");
                         if ($kind == ZEND_VM_KIND_HYBRID) {
@@ -3011,26 +2998,21 @@ function gen_vm($def, $skel) {
         out($f, "#else\n");
         out($f, "\topline = ((opcode_handler_t)OPLINE->handler)(ZEND_OPCODE_HANDLER_ARGS_PASSTHRU);\n");
 
-        out($f, "# ifdef ZEND_HIGH_HALF_KERNEL\n");
-        out($f, "\tif (UNEXPECTED((intptr_t)opline <= 0)) {\n");
-        out($f, "# else\n");
-        out($f, "\tif (UNEXPECTED(((uintptr_t)opline & ZEND_VM_ENTER_BIT))) {\n");
-        out($f, "# endif\n");
-        out($f, "\t\topline = (const zend_op*)((uintptr_t)opline & ~ZEND_VM_ENTER_BIT);\n");
-        out($f, "\t\tif (EXPECTED(opline)) {\n");
-        out($f, "\t\t\t/* ZEND_VM_ENTER() or ZEND_VM_LEAVE() */\n");
-        out($f, "\t\t\tret = EG(current_execute_data) != ex ? (int)(EG(current_execute_data)->prev_execute_data != ex) + 1 : 0;\n");
-        out($f, "\t\t\texecute_data = EG(current_execute_data);\n");
-        out($f, "\t\t\tSAVE_OPLINE();\n");
-        out($f, "\t\t} else {\n");
-        out($f, "\t\t\t/* ZEND_VM_RETURN() */\n");
-        out($f, "\t\t\tret = -1;\n");
-        out($f, "\t\t}\n");
+        out($f, "if (UNEXPECTED((intptr_t)opline <= 0)) {\n");
+        out($f, "\texecute_data = EG(current_execute_data);\n");
+        out($f, "\topline = EX(opline);\n");
+        out($f, "\tif (EXPECTED(opline)) {\n");
+        out($f, "\t\t/* ZEND_VM_ENTER() or ZEND_VM_LEAVE() */\n");
+        out($f, "\t\tret = EG(current_execute_data) != ex ? (int)(EG(current_execute_data)->prev_execute_data != ex) + 1 : 0;\n");
         out($f, "\t} else {\n");
-        out($f, "\t\t/* ZEND_VM_CONTINUE() */\n");
-        out($f, "\t\tSAVE_OPLINE();\n");
-        out($f, "\t\tret = 0;\n");
+        out($f, "\t\t/* ZEND_VM_RETURN() */\n");
+        out($f, "\t\tret = -1;\n");
         out($f, "\t}\n");
+        out($f, "} else {\n");
+        out($f, "\t/* ZEND_VM_CONTINUE() */\n");
+        out($f, "\tSAVE_OPLINE();\n");
+        out($f, "\tret = 0;\n");
+        out($f, "}\n");
         out($f, "#endif\n");
         out($f, "#ifdef ZEND_VM_FP_GLOBAL_REG\n");
         out($f, "\texecute_data = orig_execute_data;\n");
