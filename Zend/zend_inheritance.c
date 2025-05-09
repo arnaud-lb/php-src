@@ -1085,10 +1085,7 @@ static void ZEND_COLD emit_incompatible_method_error(
 				"Return type of %s should either be compatible with %s, "
 				"or the #[\\ReturnTypeWillChange] attribute should be used to temporarily suppress the notice",
 				ZSTR_VAL(child_prototype), ZSTR_VAL(parent_prototype));
-			if (EG(exception)) {
-				zend_exception_uncaught_error(
-					"During inheritance of %s", ZSTR_VAL(parent_scope->name));
-			}
+			ZEND_ASSERT(!EG(exception));
 		}
 	} else {
 		zend_error_at(E_COMPILE_ERROR, func_filename(child), func_lineno(child),
@@ -3710,6 +3707,7 @@ ZEND_API zend_class_entry *zend_do_link_class(zend_class_entry *ce, zend_string 
 		/* Do not leak recorded errors to the next linked class. */
 		if (!orig_record_errors) {
 			EG(record_errors) = false;
+			zend_emit_recorded_errors();
 			zend_free_recorded_errors();
 		}
 		zend_bailout();
@@ -3759,8 +3757,10 @@ ZEND_API zend_class_entry *zend_do_link_class(zend_class_entry *ce, zend_string 
 	}
 
 	if (!orig_record_errors) {
+		zend_emit_recorded_errors();
 		zend_free_recorded_errors();
 	}
+
 	if (traits_and_interfaces) {
 		free_alloca(traits_and_interfaces, use_heap);
 	}

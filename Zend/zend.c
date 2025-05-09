@@ -1464,6 +1464,29 @@ ZEND_API ZEND_COLD void zend_error_zstr_at(
 		EG(num_errors)++;
 		EG(errors) = erealloc(EG(errors), sizeof(zend_error_info*) * EG(num_errors));
 		EG(errors)[EG(num_errors)-1] = info;
+
+		/* Fatal errors must be process immediately */
+		if ((type & E_FATAL_ERRORS) && !(type & E_DONT_BAIL)) {
+			EG(record_errors) = false;
+
+			/* Disable user error handler before emitting recorded errors, as
+			 * it's unsafe to execute user code after a fatal error. */
+			int orig_user_error_handler_error_reporting = EG(user_error_handler_error_reporting);
+			EG(user_error_handler_error_reporting) = 0;
+
+			zend_try {
+				zend_emit_recorded_errors();
+			} zend_catch {
+			} zend_end_try();
+
+			zend_free_recorded_errors();
+			EG(user_error_handler_error_reporting) = orig_user_error_handler_error_reporting;
+
+			zend_bailout();
+		}
+
+		/* Do not process recorded error */
+		return;
 	}
 
 	// Always clear the last backtrace.
