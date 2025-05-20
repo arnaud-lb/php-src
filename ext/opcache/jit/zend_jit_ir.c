@@ -3418,13 +3418,19 @@ static void zend_jit_setup(bool reattached)
 			: "=r" (ret));
 		tsrm_ls_cache_tcb_offset = ret;
 #elif defined(__MUSL__)
+# if __PIC__
+		size_t ret;
+		asm ("movq _tsrm_ls_cache@gottpoff(%%rip),%0"
+			: "=r" (ret));
+		tsrm_ls_cache_tcb_offset = ret;
+# else
 		size_t *ti;
-
 		__asm__(
 			"leaq _tsrm_ls_cache@tlsgd(%%rip), %0\n"
 			: "=a" (ti));
 		tsrm_tls_offset = ti[1];
 		tsrm_tls_index = ti[0] * 8;
+# endif
 #elif defined(__FreeBSD__)
 		size_t *ti;
 
