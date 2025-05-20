@@ -336,6 +336,11 @@ zend_string* ZEND_FASTCALL accel_new_interned_string(zend_string *str);
 
 uint32_t zend_accel_get_class_name_map_ptr(zend_string *type_name);
 
+#ifndef COMPILE_DL_OPCACHE
+extern zend_extension opcache_zend_extension_entry;
+#define phpext_opcache_ptr &opcache_zend_extension_entry
+#endif
+
 END_EXTERN_C()
 
 /* memory write protection */

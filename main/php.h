@@ -334,6 +334,7 @@ END_EXTERN_C()
 BEGIN_EXTERN_C()
 PHPAPI extern int (*php_register_internal_extensions_func)(void);
 PHPAPI int php_register_internal_extensions(void);
+PHPAPI int php_register_internal_zend_extensions(void);
 PHPAPI void php_register_pre_request_shutdown(void (*func)(void *), void *userdata);
 PHPAPI void php_com_initialize(void);
 PHPAPI char *php_get_current_user(void);

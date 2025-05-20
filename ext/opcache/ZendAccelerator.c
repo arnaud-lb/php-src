@@ -100,7 +100,9 @@ typedef int gid_t;
 
 #include "zend_simd.h"
 
+#ifdef COMPILE_DL_OPCACHE
 ZEND_EXTENSION();
+#endif
 
 #ifndef ZTS
 zend_accel_globals accel_globals;
@@ -4975,7 +4977,11 @@ static void accel_activate(void) {
 	}
 }
 
+#ifdef COMPILE_DL_OPCACHE
 ZEND_EXT_API zend_extension zend_extension_entry = {
+#else
+zend_extension opcache_zend_extension_entry = {
+#endif
 	ACCELERATOR_PRODUCT_NAME,               /* name */
 	PHP_VERSION,							/* version */
 	"Zend Technologies",					/* author */

@@ -21,7 +21,17 @@
 AWK=${AWK:-awk}
 template=$1
 shift
-extensions="$@"
+
+extensions=
+zend_extensions=
+for ext in $@; do
+  is_zend=$(echo "$ext" | cut -d ';' -f 3)
+  if test "$is_zend" = "yes"; then
+    zend_extensions="$zend_extensions $ext"
+  else
+    extensions="$extensions $ext"
+  fi
+done
 
 if test -z "$template"; then
   echo "Please supply template." >&2
@@ -35,8 +45,9 @@ olddir=$(pwd)
 cd "$(CDPATH='' cd -- "$(dirname -- "$0")/../" && pwd -P)" || exit
 
 module_ptrs="$(echo $extensions | $AWK -f ./build/order_by_dep.awk)"
+zend_ext_ptrs="$(echo $zend_extensions | $AWK -f ./build/order_by_dep.awk)"
 
-for ext in $extensions; do
+for ext in $extensions $zend_extensions; do
   ext_dir=$(echo "$ext" | cut -d ';' -f 2)
   header_list="$header_list $ext_dir/*.h*"
 done
@@ -49,5 +60,6 @@ cat $template | \
   sed \
     -e "s'@EXT_INCLUDE_CODE@'$includes'" \
     -e "s'@EXT_MODULE_PTRS@'$module_ptrs'" \
+    -e "s'@ZEND_EXT_PTRS@'$zend_ext_ptrs'" \
     -e 's/@NEWLINE@/\
 /g'

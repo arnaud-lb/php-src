@@ -958,9 +958,9 @@ AC_DEFUN([PHP_NEW_EXTENSION],[
 dnl ---------------------------------------------- Static module
     [PHP_]translit($1,a-z_-,A-Z__)[_SHARED]=no
     PHP_ADD_SOURCES($ext_dir,$2,$ac_extra,)
-    EXT_STATIC="$EXT_STATIC $1;$ext_dir"
+    EXT_STATIC="$EXT_STATIC $1;$ext_dir;$7"
     if test "$3" != "nocli"; then
-      EXT_CLI_STATIC="$EXT_CLI_STATIC $1;$ext_dir"
+      EXT_CLI_STATIC="$EXT_CLI_STATIC $1;$ext_dir;$7"
     fi
   else
     if test "$3" = "shared" || test "$3" = "yes"; then
@@ -979,7 +979,7 @@ dnl ---------------------------------------------- CLI static module
     case "$PHP_SAPI" in
       cgi|embed|phpdbg[)]
         PHP_ADD_SOURCES($ext_dir,$2,$ac_extra,)
-        EXT_STATIC="$EXT_STATIC $1;$ext_dir"
+        EXT_STATIC="$EXT_STATIC $1;$ext_dir;$7"
         ;;
       *[)]
         PHP_ADD_SOURCES($ext_dir,$2,$ac_extra,cli)

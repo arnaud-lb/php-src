@@ -18,6 +18,7 @@
 #include "php.h"
 #include "php_main.h"
 #include "zend_modules.h"
+#include "zend_extensions.h"
 #include "zend_compile.h"
 #include <stdarg.h>
 #include <stdlib.h>
@@ -29,9 +30,20 @@ static zend_module_entry * const php_builtin_extensions[] = {
 @EXT_MODULE_PTRS@
 };
 
+static zend_extension * const php_builtin_zend_extensions[] = {
+@ZEND_EXT_PTRS@
+};
+
 #define EXTCOUNT (sizeof(php_builtin_extensions)/sizeof(zend_module_entry *))
+#define ZENDEXTCOUNT (sizeof(php_builtin_zend_extensions)/sizeof(zend_extension *))
 
 PHPAPI int php_register_internal_extensions(void)
 {
 	return php_register_extensions(php_builtin_extensions, EXTCOUNT);
+}
+
+PHPAPI int php_register_internal_zend_extensions(void)
+{
+	zend_register_extensions(php_builtin_zend_extensions, ZENDEXTCOUNT);
+	return SUCCESS;
 }

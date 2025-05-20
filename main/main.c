@@ -2285,7 +2285,8 @@ zend_result php_module_startup(sapi_module_struct *sf, zend_module_entry *additi
 	zend_startup_system_id();
 
 	/* startup extensions statically compiled in */
-	if (php_register_internal_extensions_func() == FAILURE) {
+	if (php_register_internal_zend_extensions() == FAILURE
+			|| php_register_internal_extensions_func() == FAILURE) {
 		fprintf(stderr, "Unable to start builtin modules\n");
 		return FAILURE;
 	}

@@ -178,6 +178,19 @@ void zend_register_extension(zend_extension *new_extension, DL_HANDLE handle)
 #endif
 }
 
+ZEND_API void zend_register_extensions(zend_extension * const * ptr, int count)
+{
+#if ZEND_EXTENSIONS_SUPPORT
+	zend_extension * const * end = ptr + count;
+
+	while (ptr < end) {
+		if (*ptr) {
+			zend_register_extension(*ptr, NULL);
+		}
+		ptr++;
+	}
+#endif
+}
 
 static void zend_extension_shutdown(zend_extension *extension)
 {
