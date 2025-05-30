@@ -517,6 +517,9 @@ extern "C" {
 #define ir_CALL_6(type, func, a, b, c, d, e, f)    _ir_CALL_6(_ir_CTX, type, func, a, b, c, d, e, f)
 #define ir_CALL_N(type, func, count, args)         _ir_CALL_N(_ir_CTX, type, func, count, args)
 
+//#define ir_RET2(type, _op1)                 ir_fold1(_ir_CTX, IR_OPT(IR_RET2, type), (_op1))
+//#define ir_RET2_A(_op1)                     ir_RET2(IR_ADDR, op1)
+
 #define ir_TAILCALL(type, func)                       _ir_TAILCALL(_ir_CTX, type, func)
 #define ir_TAILCALL_1(type, func, a1)                 _ir_TAILCALL_1(_ir_CTX, type, func, a1)
 #define ir_TAILCALL_2(type, func, a1, a2)             _ir_TAILCALL_2(_ir_CTX, type, func, a1, a2)

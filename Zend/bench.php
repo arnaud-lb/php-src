@@ -382,6 +382,7 @@ function total()
 }
 
 $t0 = $t = start_test();
+/*
 simple();
 $t = end_test($t, "simple");
 simplecall();
@@ -397,6 +398,7 @@ $t = end_test($t, "mandel2");
 ackermann(7);
 $t = end_test($t, "ackermann(7)");
 ary(50000);
+ */
 $t = end_test($t, "ary(50000)");
 ary2(50000);
 $t = end_test($t, "ary2(50000)");
@@ -418,5 +420,7 @@ sieve(30);
 $t = end_test($t, "sieve(30)");
 strcat(200000);
 $t = end_test($t, "strcat(200000)");
+/*
+ */
 total();
 ?>

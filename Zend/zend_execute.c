@@ -69,6 +69,27 @@
 #  define ZEND_VM_FP_GLOBAL_REG "x18"
 #  define ZEND_VM_IP_GLOBAL_REG "x19"
 # endif
+#elif ZEND_VM_TAIL_CALL_DISPATCH
+/* We use the arg1 and arg2 registers of the preserve_none calling convention */
+# if defined(i386)
+#  define ZEND_VM_FP_LOCAL_REG "%esi"
+#  define ZEND_VM_IP_LOCAL_REG "%edi"
+# elif defined(__x86_64__)
+#  define ZEND_VM_FP_LOCAL_REG "%r12"
+#  define ZEND_VM_IP_LOCAL_REG "%r13"
+# elif defined(__powerpc64__)
+#  define ZEND_VM_FP_LOCAL_REG "r14"
+#  define ZEND_VM_IP_LOCAL_REG "r15"
+# elif defined(__powerpc64__)
+#  define ZEND_VM_FP_LOCAL_REG "r14"
+#  define ZEND_VM_IP_LOCAL_REG "r15"
+# elif defined(__aarch64__)
+#  define ZEND_VM_FP_LOCAL_REG "x27"
+#  define ZEND_VM_IP_LOCAL_REG "x28"
+#elif defined(__riscv) && __riscv_xlen == 64
+#  define ZEND_VM_FP_LOCAL_REG "x18"
+#  define ZEND_VM_IP_LOCAL_REG "x19"
+# endif
 #endif
 
 #if defined(ZEND_VM_FP_GLOBAL_REG) && ((ZEND_VM_KIND == ZEND_VM_KIND_CALL) || (ZEND_VM_KIND == ZEND_VM_KIND_HYBRID))

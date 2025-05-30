@@ -29,18 +29,47 @@
 #define ZEND_VM_KIND_SWITCH	2
 #define ZEND_VM_KIND_GOTO	3
 #define ZEND_VM_KIND_HYBRID	4
-/* HYBRID requires support for computed GOTO and global register variables*/
-#if (defined(__GNUC__) && defined(HAVE_GCC_GLOBAL_REGS))
+/* HYBRID requires support for computed GOTO and global register variables, or musttail and preserve_none*/
+#if (defined(__GNUC__) && defined(HAVE_GCC_GLOBAL_REGS)) || (defined(HAVE_MUSTTAIL) && defined(HAVE_PRESERVE_NONE))
 # define ZEND_VM_KIND		ZEND_VM_KIND_HYBRID
+# if !(defined(__GNUC__) && defined(HAVE_GCC_GLOBAL_REGS))
+#  define ZEND_VM_TAIL_CALL_DISPATCH 1
+# else
+#  define ZEND_VM_TAIL_CALL_DISPATCH 0
+# endif
 #else
 # define ZEND_VM_KIND		ZEND_VM_KIND_CALL
+# define ZEND_VM_TAIL_CALL_DISPATCH 0
 #endif
 
-#if (ZEND_VM_KIND == ZEND_VM_KIND_HYBRID) && !defined(__SANITIZE_ADDRESS__)
+#if (ZEND_VM_KIND == ZEND_VM_KIND_HYBRID) && !defined(__SANITIZE_ADDRESS__) && !ZEND_VM_TAIL_CALL_DISPATCH
 # if ((defined(i386) && !defined(__PIC__)) || defined(__x86_64__) || defined(_M_X64))
 #  define ZEND_VM_HYBRID_JIT_RED_ZONE_SIZE 48
 # endif
 #endif
+
+#if (ZEND_VM_KIND == ZEND_VM_KIND_HYBRID)
+# ifdef HAVE_GCC_GLOBAL_REGS
+#  define ZEND_OPCODE_HANDLER_RET   void
+#  define ZEND_OPCODE_HANDLER_ARGS  void
+#  define ZEND_OPCODE_HANDLER_CCONV ZEND_FASTCALL
+# elif ZEND_VM_TAIL_CALL_DISPATCH
+#  define ZEND_OPCODE_HANDLER_RET   zend_vm_opcode_handler_ret
+#  define ZEND_OPCODE_HANDLER_ARGS  struct _zend_execute_data *execute_data, const struct _zend_op *opline
+#  define ZEND_OPCODE_HANDLER_CCONV ZEND_PRESERVE_NONE
+typedef struct _zend_vm_opcode_handler_ret {
+  const struct _zend_op *opline;
+  struct _zend_execute_data *execute_data;
+} zend_vm_opcode_handler_ret;
+# else
+#  error
+# endif
+#else
+# define ZEND_OPCODE_HANDLER_RET   const zend_op *
+# define ZEND_OPCODE_HANDLER_ARGS  struct _zend_execute_data *execute_data, const struct _zend_op *opline
+# define ZEND_OPCODE_HANDLER_CCONV ZEND_FASTCALL
+#endif
+typedef ZEND_OPCODE_HANDLER_RET (ZEND_OPCODE_HANDLER_CCONV *zend_vm_opcode_handler_t)(ZEND_OPCODE_HANDLER_ARGS);
 
 #define ZEND_VM_OP_SPEC          0x00000001
 #define ZEND_VM_OP_CONST         0x00000002

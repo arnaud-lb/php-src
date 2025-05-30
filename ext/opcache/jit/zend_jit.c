@@ -29,6 +29,7 @@
 #include "Zend/zend_ini.h"
 #include "Zend/zend_observer.h"
 #include "zend_smart_str.h"
+#include "zend_vm_opcodes.h"
 #include "jit/zend_jit.h"
 
 #ifdef HAVE_JIT
@@ -98,7 +99,7 @@ static const void *zend_jit_func_trace_counter_handler = NULL;
 static const void *zend_jit_ret_trace_counter_handler = NULL;
 static const void *zend_jit_loop_trace_counter_handler = NULL;
 
-static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL zend_runtime_jit(ZEND_OPCODE_HANDLER_ARGS);
+static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV zend_runtime_jit(ZEND_OPCODE_HANDLER_ARGS);
 
 static int zend_jit_trace_op_len(const zend_op *opline);
 static int zend_jit_trace_may_exit(const zend_op_array *op_array, const zend_op *opline);
@@ -2870,6 +2871,8 @@ static int zend_jit(const zend_op_array *op_array, zend_ssa *ssa, const zend_op 
 							ir_IF_FALSE(if_hook_enter);
 							if (GCC_GLOBAL_REGS) {
 								ir_TAILCALL(IR_VOID, ir_LOAD_A(jit_IP(jit)));
+							} else if (ZEND_VM_TAIL_CALL_DISPATCH) {
+								ir_TAILCALL_2(IR_ADDR, ir_LOAD_A(jit_IP(jit)), jit_FP(jit), jit_IP(jit));
 							} else {
 								zend_jit_vm_enter(jit, jit_IP(jit));
 							}
@@ -3074,7 +3077,7 @@ jit_failure:
 }
 
 /* Run-time JIT handler */
-static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL zend_runtime_jit(ZEND_OPCODE_HANDLER_ARGS)
+static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV zend_runtime_jit(ZEND_OPCODE_HANDLER_ARGS)
 {
 #if GCC_GLOBAL_REGS
 	zend_execute_data *execute_data;
@@ -3125,6 +3128,8 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL zend_runtime_jit(ZEND_OPCODE_HANDLE
 	/* JIT-ed code is going to be called by VM */
 #if GCC_GLOBAL_REGS
 	return; // ZEND_VM_CONTINUE
+#elif ZEND_VM_TAIL_CALL_DISPATCH
+	ZEND_MUSTTAIL return orig_opline->handler(EG(current_execute_data), orig_opline);
 #else
 	return orig_opline; // ZEND_VM_CONTINUE
 #endif
@@ -3539,7 +3544,15 @@ void zend_jit_protect(void)
 
 static void zend_jit_init_handlers(void)
 {
-	if (zend_jit_vm_kind == ZEND_VM_KIND_HYBRID) {
+	if (ZEND_VM_TAIL_CALL_DISPATCH) {
+		zend_jit_runtime_jit_handler = (const void*)zend_runtime_jit;
+		zend_jit_profile_jit_handler = (const void*)zend_jit_profile_helper;
+		zend_jit_func_hot_counter_handler = (const void*)zend_jit_func_counter_helper;
+		zend_jit_loop_hot_counter_handler = (const void*)zend_jit_loop_counter_helper;
+		zend_jit_func_trace_counter_handler = zend_jit_stub_handlers[jit_stub_tailcall_func_trace_counter];
+		zend_jit_ret_trace_counter_handler = zend_jit_stub_handlers[jit_stub_tailcall_ret_trace_counter];
+		zend_jit_loop_trace_counter_handler = zend_jit_stub_handlers[jit_stub_tailcall_loop_trace_counter];
+	} else if (zend_jit_vm_kind == ZEND_VM_KIND_HYBRID) {
 		zend_jit_runtime_jit_handler = zend_jit_stub_handlers[jit_stub_hybrid_runtime_jit];
 		zend_jit_profile_jit_handler = zend_jit_stub_handlers[jit_stub_hybrid_profile_jit];
 		zend_jit_func_hot_counter_handler = zend_jit_stub_handlers[jit_stub_hybrid_func_hot_counter];

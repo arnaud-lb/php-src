@@ -558,6 +558,20 @@ static void ir_gcm_schedule_late(ir_ctx *ctx, ir_ref ref, uint32_t b)
 				}
 			}
 		}
+
+		/* RET2 is a projection of CALL and must be scheduled into the same block */
+		if (ctx->ir_base[ref].op == IR_CALL) {
+			ir_use_list *use_list = &ctx->use_lists[ref];
+			ir_ref n, *p, use;
+
+			for (n = use_list->count, p = &ctx->use_edges[use_list->refs]; n < 0; p++, n--) {
+				use = *p;
+				if (ctx->ir_base[use].op == IR_RET2) {
+					ctx->cfg_map[use] = b;
+					break;
+				}
+			}
+		}
 	}
 }
 
