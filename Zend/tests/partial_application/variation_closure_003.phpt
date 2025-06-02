@@ -21,7 +21,8 @@ echo (string) new ReflectionFunction($function);
 var_dump($function(10));
 ?>
 --EXPECTF--
-Method [ <internal, prototype Closure> partial public method __invoke ] {
+Partial [ <user, prototype Closure> public method __invoke ] {
+  @@ %svariation_closure_003.php 14 - 14
 
   - Parameters [1] {
     Parameter #0 [ <required> $b ]

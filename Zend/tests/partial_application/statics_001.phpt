@@ -2,17 +2,17 @@
 Partial application static variables shared
 --FILE--
 <?php
-function foo() {
+function foo($a) {
     static $var = 0;
-    
+
     ++$var;
 
     return $var;
 }
 
-foo();
+foo(new stdClass);
 
-$foo = foo(...);
+$foo = foo(new stdClass, ...);
 
 if ($foo() == 2) {
     echo "OK";

@@ -23,14 +23,14 @@ $foo = foo(?, ?, ?);
 echo (string) new ReflectionFunction($foo);
 ?>
 --EXPECTF--
-Function [ <user> partial function foo ] {
+Partial [ <user> function foo ] {
   @@ %s 6 - 6
 
   - Parameters [1] {
     Parameter #0 [ <required> $a ]
   }
 }
-Function [ <user> partial function foo ] {
+Partial [ <user> function foo ] {
   @@ %s 10 - 10
 
   - Parameters [2] {
@@ -38,7 +38,7 @@ Function [ <user> partial function foo ] {
     Parameter #1 [ <optional> ...$b ]
   }
 }
-Function [ <user> partial function foo ] {
+Partial [ <user> function foo ] {
   @@ %s 14 - 14
 
   - Parameters [2] {
@@ -46,7 +46,7 @@ Function [ <user> partial function foo ] {
     Parameter #1 [ <required> $b ]
   }
 }
-Function [ <user> partial function foo ] {
+Partial [ <user> function foo ] {
   @@ %s 18 - 18
 
   - Parameters [3] {

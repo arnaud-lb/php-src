@@ -24,6 +24,8 @@
 
 BEGIN_EXTERN_C()
 
+#define ZEND_CLOSURE_PARTIAL (1<<0)
+
 /* This macro depends on zend_closure structure layout */
 #define ZEND_CLOSURE_OBJECT(op_array) \
 	((zend_object*)((char*)(op_array) - sizeof(zend_object)))

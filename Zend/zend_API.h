@@ -849,7 +849,8 @@ static zend_always_inline void zend_call_known_fcc(
 {
 	zend_function *func = fcc->function_handler;
 	/* Need to copy trampolines as they get released after they are called */
-	if (UNEXPECTED(func->common.fn_flags & ZEND_ACC_CALL_VIA_TRAMPOLINE)) {
+	if (UNEXPECTED((func->common.fn_flags & ZEND_ACC_CALL_VIA_TRAMPOLINE)
+			&& !(func->common.fn_flags & ZEND_ACC_TRAMPOLINE_PERMANENT))) {
 		func = (zend_function*) emalloc(sizeof(zend_function));
 		memcpy(func, fcc->function_handler, sizeof(zend_function));
 		zend_string_addref(func->op_array.function_name);

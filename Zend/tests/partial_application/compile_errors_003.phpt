@@ -5,5 +5,5 @@ Partial application compile errors: named arguments must come after placeholder
 foo(n: 5, ?);
 ?>
 --EXPECTF--
-Fatal error: Named arguments must come after all placeholders in %s on line %d
+Fatal error: Cannot use positional argument after named argument in %s on line %d
 

@@ -18,14 +18,18 @@
 #ifndef ZEND_PARTIAL_H
 #define ZEND_PARTIAL_H
 
+#include "zend_types.h"
+#include "zend_API.h"
+
 BEGIN_EXTERN_C()
+
+typedef struct _zend_partial zend_partial;
 
 void zend_partial_startup(void);
 
-#define ZEND_APPLY_NORMAL   (1<<16)
-#define ZEND_APPLY_FACTORY  (1<<17)
-#define ZEND_APPLY_PASS     (1<<18)
-#define ZEND_APPLY_VARIADIC (1<<19)
+#define ZEND_APPLY_VARIADIC (1<<16)
+#define ZEND_APPLY_UNDEF    (1<<17) /* Some arguments maybe undef, default value needs to be fetched */
+#define ZEND_APPLY_BYREF    (1<<18) /* Some arguments should be sent by ref */
 
 void zend_partial_create(zval *result, uint32_t info, zval *this_ptr, zend_function *function, uint32_t argc, zval *argv, zend_array *extra_named_params);
 
@@ -35,7 +39,9 @@ void zend_partial_args_check(zend_execute_data *call);
 
 zend_function *zend_partial_get_trampoline(zend_object *object);
 
-ZEND_NAMED_FUNCTION(zend_partial_call_magic);
+zend_result zend_partial_init_call(zend_execute_data *call);
+
+bool zend_is_partial_function(zend_function *function);
 
 END_EXTERN_C()
 

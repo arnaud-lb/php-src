@@ -3,10 +3,10 @@ Partial application variation no call order of destruction
 --FILE--
 <?php
 class Foo {
-    function method() {}
+    function method($a, $b) {}
 }
 $foo = new Foo;
-$foo->method(...)(...);
+$foo->method(new stdClass, ...)(new stdClass, ...);
 
 echo "OK";
 ?>

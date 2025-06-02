@@ -11,7 +11,7 @@ class Param {
 
 class Foo {
     public static function method($a, $b) {
-        printf("%s: %s, %s\n", get_called_class(), $a, $b);    
+        printf("%s: %s, %s\n", get_called_class(), $a, $b);
     }
 }
 
@@ -33,7 +33,13 @@ var_dump($bound);
 ?>
 --EXPECTF--
 Bar: 1, Param
-object(Closure)#%d (2) {
+object(Closure)#%d (5) {
+  ["name"]=>
+  string(6) "method"
+  ["file"]=>
+  string(82) "%svariation_bind_002.php"
+  ["line"]=>
+  int(19)
   ["parameter"]=>
   array(1) {
     ["$a"]=>
@@ -49,7 +55,13 @@ object(Closure)#%d (2) {
   }
 }
 Foo: 1, Param
-object(Closure)#%d (2) {
+object(Closure)#%d (5) {
+  ["name"]=>
+  string(6) "method"
+  ["file"]=>
+  string(82) "%svariation_bind_002.php"
+  ["line"]=>
+  int(25)
   ["parameter"]=>
   array(1) {
     ["$a"]=>
@@ -64,4 +76,3 @@ object(Closure)#%d (2) {
     }
   }
 }
-

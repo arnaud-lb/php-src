@@ -5,7 +5,7 @@ Partial application magic: __call
 class Foo {
     public function __call($method, $args) {
         printf("%s::%s\n", __CLASS__, $method);
-        
+
         var_dump(...$args);
     }
 }
@@ -36,14 +36,14 @@ echo (string) new ReflectionFunction($bar);
 
 $bar(10);
 
-$bar = $foo->method(...);
+$bar = $foo->method(new Foo, ...);
 
 echo (string) new ReflectionFunction($bar);
 
 $bar(100);
 ?>
 --EXPECTF--
-Method [ <user, prototype Foo> partial public method method ] {
+Partial [ <user, prototype Foo> public method method ] {
   @@ %s 12 - 12
 
   - Parameters [1] {
@@ -54,7 +54,7 @@ not enough arguments for application of Foo::method, 0 given and exactly 1 expec
 too many arguments for application of Foo::method, 2 given and a maximum of 1 expected, declared in %s on line 12
 Foo::method
 int(1)
-Method [ <user, prototype Foo> partial public method method ] {
+Partial [ <user, prototype Foo> public method method ] {
   @@ %s 30 - 30
 
   - Parameters [2] {
@@ -64,7 +64,7 @@ Method [ <user, prototype Foo> partial public method method ] {
 }
 Foo::method
 int(10)
-Method [ <user, prototype Foo> partial public method method ] {
+Partial [ <user, prototype Foo> public method method ] {
   @@ %s 36 - 36
 
   - Parameters [1] {
@@ -72,5 +72,7 @@ Method [ <user, prototype Foo> partial public method method ] {
   }
 }
 Foo::method
+object(Foo)#%d (0) {
+}
 int(100)
 

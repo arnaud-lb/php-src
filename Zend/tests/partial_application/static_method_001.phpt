@@ -3,14 +3,14 @@ Partial application static method
 --FILE--
 <?php
 class Foo {
-    public static function method() {
+    public static function method($a, $b) {
         printf("%s\n", __METHOD__);
     }
 }
 
-$foo = Foo::method(...);
+$foo = Foo::method(new stdClass, ...);
 
-$bar = $foo(...);
+$bar = $foo(new stdClass, ...);
 
 $bar();
 ?>

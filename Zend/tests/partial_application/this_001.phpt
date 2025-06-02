@@ -3,16 +3,16 @@ Partial application this
 --FILE--
 <?php
 class Foo {
-    public function method() {
+    public function method($a, $b) {
         return $this;
     }
 }
 
 $foo = new Foo;
 
-$bar = $foo->method(...);
+$bar = $foo->method(new stdClass, ...);
 
-$baz = $bar(...);
+$baz = $bar(new stdClass, ...);
 
 var_dump($baz());
 ?>

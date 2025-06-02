@@ -19,7 +19,7 @@ try {
 $foo = foo(?, ?);
 
 try {
-    $foo(1);    
+    $foo(1);
 } catch (Error $ex) {
     printf("%s\n", $ex->getMessage());
 }
@@ -46,10 +46,10 @@ try {
     printf("%s\n", $ex->getMessage());
 }
 
-$usleep = usleep(...);
+$repeat = str_repeat('a', ...);
 
 try {
-    $usleep();
+    $repeat();
 } catch (Error $ex) {
     printf("%s\n", $ex->getMessage());
 }
@@ -71,8 +71,8 @@ try {
 --EXPECTF--
 not enough arguments for application of foo, 0 given and exactly 1 expected, declared in %s on line 8
 not enough arguments for application of foo, 1 given and exactly 2 expected, declared in %s on line 16
-not enough arguments for application of bar, 1 given and at least 2 expected, declared in %s on line 24
+not enough arguments for application of bar, 1 given and at least 3 expected, declared in %s on line 24
 not enough arguments for application of Foo::bar, 0 given and exactly 1 expected, declared in %s on line 38
-not enough arguments for implementation of usleep, 0 given and exactly 1 expected
-not enough arguments for application of usleep, 0 given and exactly 1 expected
-too many arguments for application of usleep, 2 given and a maximum of 1 expected
+not enough arguments for application of str_repeat, 0 given and at least 1 expected, declared in %s on line 46
+not enough arguments for application of usleep, 0 given and exactly 1 expected, declared in %s on line 54
+too many arguments for application of usleep, 2 given and a maximum of 1 expected, declared in %s on line 54

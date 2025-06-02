@@ -2,12 +2,12 @@
 Partial application return type
 --FILE--
 <?php
-function foo() : array {}
+function foo($a) : array {}
 
-echo (string) new ReflectionFunction(foo(...));
+echo (string) new ReflectionFunction(foo(new stdClass, ...));
 ?>
 --EXPECTF--
-Function [ <user> partial function foo ] {
+Partial [ <user> function foo ] {
   @@ %s 4 - 4
 
   - Parameters [0] {

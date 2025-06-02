@@ -15,14 +15,16 @@ $foo = sprintf(?, ?);
 echo (string) new ReflectionFunction($foo);
 ?>
 --EXPECTF--
-Function [ <internal:standard> partial function sprintf ] {
+Partial [ <user> function sprintf ] {
+  @@ %sreflection_003.php 2 - 2
 
   - Parameters [1] {
     Parameter #0 [ <required> string $format ]
   }
   - Return [ string ]
 }
-Function [ <internal:standard> partial function sprintf ] {
+Partial [ <user> function sprintf ] {
+  @@ %sreflection_003.php 6 - 6
 
   - Parameters [2] {
     Parameter #0 [ <required> string $format ]
@@ -30,7 +32,8 @@ Function [ <internal:standard> partial function sprintf ] {
   }
   - Return [ string ]
 }
-Function [ <internal:standard> partial function sprintf ] {
+Partial [ <user> function sprintf ] {
+  @@ %sreflection_003.php 10 - 10
 
   - Parameters [2] {
     Parameter #0 [ <required> string $format ]
@@ -38,4 +41,3 @@ Function [ <internal:standard> partial function sprintf ] {
   }
   - Return [ string ]
 }
-

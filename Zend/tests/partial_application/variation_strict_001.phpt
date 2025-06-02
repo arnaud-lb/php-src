@@ -16,6 +16,6 @@ try {
     printf("%s\n", $ex->getMessage());
 }
 ?>
---EXPECT--
-foo(): Argument #1 ($int) must be of type int, string given
+--EXPECTF--
+foo(): Argument #1 ($int) must be of type int, string given, called in %s on line %d
 

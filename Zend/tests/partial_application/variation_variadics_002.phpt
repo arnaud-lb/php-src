@@ -9,7 +9,8 @@ echo (string) new ReflectionFunction($sprintf);
 echo $sprintf(1000, 10000);
 ?>
 --EXPECTF--
-Function [ <internal:standard> partial function sprintf ] {
+Partial [ <user> function sprintf ] {
+  @@ %svariation_variadics_002.php 2 - 2
 
   - Parameters [1] {
     Parameter #0 [ <optional> mixed ...$values ]

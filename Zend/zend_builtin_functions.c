@@ -1695,6 +1695,10 @@ static void debug_backtrace_get_args(zend_execute_data *call, zval *arg_array) /
 		ZEND_HASH_FILL_PACKED(Z_ARRVAL_P(arg_array)) {
 			if (call->func->type == ZEND_USER_FUNCTION) {
 				uint32_t first_extra_arg = MIN(num_args, call->func->op_array.num_args);
+				if (ZEND_CALL_INFO(call) & ZEND_CALL_TRAMPOLINE) {
+					/* Trampolines use a contiguous layout */
+					first_extra_arg = num_args;
+				}
 
 				if (UNEXPECTED(ZEND_CALL_INFO(call) & ZEND_CALL_HAS_SYMBOL_TABLE)) {
 					/* In case of attached symbol_table, values on stack may be invalid

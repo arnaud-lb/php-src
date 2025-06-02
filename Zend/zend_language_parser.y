@@ -259,7 +259,7 @@ static YYSIZE_T zend_yytnamerr(char*, const char*);
 %type <ast> unprefixed_use_declarations const_decl inner_statement
 %type <ast> expr optional_expr while_statement for_statement foreach_variable
 %type <ast> foreach_statement declare_statement finally_statement unset_variable variable
-%type <ast> extends_from parameter optional_type_without_static argument global_var
+%type <ast> extends_from parameter optional_type_without_static argument argument_or_ellipsis ellipsis_argument global_var
 %type <ast> static_var class_statement trait_adaptation trait_precedence trait_alias
 %type <ast> absolute_trait_method_reference trait_method_reference property echo_expr
 %type <ast> new_dereferenceable new_non_dereferenceable anonymous_class class_name class_name_reference simple_variable
@@ -907,10 +907,15 @@ argument_list:
 	|	'(' T_ELLIPSIS ')' { $$ = zend_ast_create_fcc(); }
 ;
 
+/* TODO: unify FCC and PFA ASTs. For now we produce a dedicated AST for FCCs,
+ * which requires to disambiguate '(...)' vs arg lists that include '...' but
+ * have more than one arg. */
 non_empty_argument_list:
 		argument
 			{ $$ = zend_ast_create_list(1, ZEND_AST_ARG_LIST, $1); }
-	|	non_empty_argument_list ',' argument
+	|	ellipsis_argument ',' argument_or_ellipsis
+			{ $$ = zend_ast_create_list(1, ZEND_AST_ARG_LIST, $1, $3); }
+	|	non_empty_argument_list ',' argument_or_ellipsis
 			{ $$ = zend_ast_list_add($1, $3); }
 ;
 
@@ -919,9 +924,17 @@ argument:
 	|	identifier ':' expr
 			{ $$ = zend_ast_create(ZEND_AST_NAMED_ARG, $1, $3); }
 	|	'?' { $$ = zend_ast_create_ex(ZEND_AST_PLACEHOLDER_ARG, _IS_PLACEHOLDER_ARG); }
-	|	T_ELLIPSIS { $$ = zend_ast_create_ex(ZEND_AST_PLACEHOLDER_ARG, _IS_PLACEHOLDER_VARIADIC); }
+	|	identifier ':' '?' { $$ = zend_ast_create(ZEND_AST_NAMED_ARG, $1, zend_ast_create_ex(ZEND_AST_PLACEHOLDER_ARG, _IS_PLACEHOLDER_ARG)); }
 	|	T_ELLIPSIS expr	{ $$ = zend_ast_create(ZEND_AST_UNPACK, $2); }
 ;
+
+argument_or_ellipsis:
+		argument				{ $$ = $1; }
+	|	ellipsis_argument       { $$ = $1; }
+;
+
+ellipsis_argument:
+		T_ELLIPSIS { $$ = zend_ast_create_ex(ZEND_AST_PLACEHOLDER_ARG, _IS_PLACEHOLDER_VARIADIC); }
 
 global_var_list:
 		global_var_list ',' global_var { $$ = zend_ast_list_add($1, $3); }

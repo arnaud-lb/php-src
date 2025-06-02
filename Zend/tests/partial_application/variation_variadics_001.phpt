@@ -13,7 +13,7 @@ echo (string) new ReflectionFunction($foo);
 $foo(1000, 10000);
 ?>
 --EXPECTF--
-Function [ <user> partial function foo ] {
+Partial [ <user> function foo ] {
   @@ %s 6 - 6
 
   - Parameters [1] {

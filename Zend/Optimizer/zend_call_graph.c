@@ -128,7 +128,7 @@ ZEND_API void zend_analyze_calls(zend_arena **arena, zend_script *script, uint32
 			case ZEND_DO_UCALL:
 			case ZEND_DO_FCALL_BY_NAME:
 			case ZEND_CALLABLE_CONVERT:
-			case ZEND_DO_FCALL_PARTIAL:
+			case ZEND_CALLABLE_CONVERT_PARTIAL:
 				func_info->flags |= ZEND_FUNC_HAS_CALLS;
 				if (call_info) {
 					call_info->caller_call_opline = opline;

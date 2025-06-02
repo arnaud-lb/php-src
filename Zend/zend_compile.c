@@ -3752,47 +3752,6 @@ static uint32_t zend_compile_args(
 			continue;
 		}
 
-		if (arg->kind == ZEND_AST_PLACEHOLDER_ARG) {
-			if (uses_arg_unpack) {
-				zend_error_noreturn(E_COMPILE_ERROR,
-					"Cannot combine partial application and unpacking");
-			}
-
-			if (arg->attr == _IS_PLACEHOLDER_VARIADIC) {
-				if (uses_named_args) {
-					zend_error_noreturn(E_COMPILE_ERROR,
-						"Named arguments must come after all placeholders");
-				}
-
-				if (uses_variadic_placeholder) {
-					zend_error_noreturn(E_COMPILE_ERROR,
-						"Variadic placeholder may only appear once");
-				}
-
-				uses_variadic_placeholder = true;
-			} else if (arg->attr == _IS_PLACEHOLDER_ARG) {
-				if (uses_named_args) {
-					zend_error_noreturn(E_COMPILE_ERROR,
-						"Named arguments must come after all placeholders");
-				}
-
-				if (uses_variadic_placeholder) {
-					zend_error_noreturn(E_COMPILE_ERROR,
-						"Only named arguments may follow variadic placeholder");
-				}
-			}
-
-			fbc = NULL;
-
-			opline = zend_emit_op(NULL, ZEND_SEND_PLACEHOLDER, NULL, NULL);
-			opline->op1.num = arg->attr;
-			opline->op2.num = arg_num;
-
-			*is_call_partial = true;
-			arg_count++;
-			continue;
-		}
-
 		if (arg->kind == ZEND_AST_NAMED_ARG) {
 			uses_named_args = 1;
 			arg_name = zval_make_interned_string(zend_ast_get_zval(arg->child[0]));
@@ -3828,11 +3787,45 @@ static uint32_t zend_compile_args(
 			}
 
 			if (uses_variadic_placeholder) {
-				zend_error_noreturn(E_COMPILE_ERROR,
-					"Only named arguments may follow variadic placeholder");
+				if (arg->kind == ZEND_AST_PLACEHOLDER_ARG
+						&& arg->attr == _IS_PLACEHOLDER_VARIADIC) {
+					zend_error_noreturn(E_COMPILE_ERROR,
+						"Variadic placeholder may only appear once");
+				} else {
+					zend_error_noreturn(E_COMPILE_ERROR,
+						"Only named arguments may follow variadic placeholder");
+				}
 			}
 
 			arg_count++;
+		}
+
+		if (arg->kind == ZEND_AST_PLACEHOLDER_ARG) {
+			if (uses_arg_unpack) {
+				zend_error_noreturn(E_COMPILE_ERROR,
+					"Cannot combine partial application and unpacking");
+			}
+
+			if (arg->attr == _IS_PLACEHOLDER_VARIADIC) {
+				uses_variadic_placeholder = true;
+			}
+
+			fbc = NULL;
+
+			opline = zend_emit_op(NULL, ZEND_SEND_PLACEHOLDER, NULL, NULL);
+			opline->op1.num = arg->attr;
+			if (arg_name) {
+				opline->op2_type = IS_CONST;
+				zend_string_addref(arg_name);
+				opline->op2.constant = zend_add_literal_string(&arg_name);
+				opline->result.num = zend_alloc_cache_slots(2);
+			} else {
+				opline->op2.opline_num = arg_num;
+				opline->result.var = EX_NUM_TO_VAR(arg_num - 1);
+			}
+
+			*is_call_partial = true;
+			continue;
 		}
 
 		/* Treat passing of $GLOBALS the same as passing a call.
@@ -3950,6 +3943,7 @@ static uint32_t zend_compile_args(
 			zend_emit_op(NULL, ZEND_CHECK_UNDEF_ARGS, NULL, NULL);
 		}
 	} else {
+		// TODO: merge this opcode with ZEND_CALLABLE_CONVERT_PARTIAL?
 		zend_emit_op(NULL, ZEND_CHECK_PARTIAL_ARGS, NULL, NULL);
 	}
 
@@ -3996,13 +3990,15 @@ void zend_compile_call_partial(znode *result, uint32_t arg_count, bool may_have_
 
 	opline->extended_value = arg_count;
 
-	if (opline->opcode == ZEND_INIT_FCALL) {
-		opline->op1.num = zend_vm_calc_used_stack(arg_count, fbc);
-	} else if (opline->opcode == ZEND_NEW) {
-		GET_NODE(&op1, opline->result);
+	if (opline->opcode == ZEND_NEW) {
+		zend_error_noreturn(E_COMPILE_ERROR, "Cannot create partial application for new expression");
 	}
 
-	opline = zend_emit_op(result, ZEND_DO_FCALL_PARTIAL,
+	if (opline->opcode == ZEND_INIT_FCALL) {
+		opline->op1.num = zend_vm_calc_used_stack(arg_count, fbc);
+	}
+
+	opline = zend_emit_op_tmp(result, ZEND_CALLABLE_CONVERT_PARTIAL,
 				(opline->opcode == ZEND_NEW) ? &op1 : NULL, NULL);
 
 	if (may_have_extra_named_args) {
@@ -4038,7 +4034,7 @@ static bool zend_compile_call_common(znode *result, zend_ast *args_ast, zend_fun
 
 	if (is_partial_call) {
 		zend_compile_call_partial(result, arg_count, may_have_extra_named_args, opnum_init, fbc);
-		return;
+		return true;
 	}
 
 	zend_do_extended_fcall_begin();
@@ -4801,7 +4797,7 @@ static void zend_compile_ns_call(znode *result, znode *name_node, zend_ast *args
 	/* Find frameless function with same name. */
 	zend_function *frameless_function = NULL;
 	if (args_ast->kind != ZEND_AST_CALLABLE_CONVERT
-	 && !zend_args_contain_unpack_or_named(zend_ast_get_list(args_ast))
+	 && !zend_args_contain_unpack_or_named_or_partial(zend_ast_get_list(args_ast))
 	 /* Avoid blowing up op count with nested frameless branches. */
 	 && !CG(context).in_jmp_frameless_branch) {
 		zend_string *lc_func_name = Z_STR_P(CT_CONSTANT_EX(CG(active_op_array), name_constants + 2));
@@ -5109,7 +5105,7 @@ static zend_result zend_try_compile_special_func(znode *result, zend_string *lcn
 		return FAILURE;
 	}
 
-	if (zend_args_contain_unpack_or_named(args)) {
+	if (zend_args_contain_unpack_or_named_or_partial(args)) {
 		return FAILURE;
 	}
 

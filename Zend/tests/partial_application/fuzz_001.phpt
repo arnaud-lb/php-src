@@ -1,16 +1,14 @@
 --TEST--
-Partial application variation closure
+Partial application fuzz 001
 --FILE--
 <?php
-$closure = function($a, $b) {
-
-};
+$closure = function($a, $b) {};
 
 echo (string) new ReflectionFunction($closure(1, ?));
 ?>
 --EXPECTF--
 Partial [ <user> function {closure:%s:%d} ] {
-  @@ %s 6 - 6
+  @@ %s 4 - 4
 
   - Parameters [1] {
     Parameter #0 [ <required> $b ]

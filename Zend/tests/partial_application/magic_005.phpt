@@ -12,7 +12,13 @@ $bar = $foo->method(?);
 var_dump($bar);
 ?>
 --EXPECTF--
-object(Closure)#%d (3) {
+object(Closure)#%d (6) {
+  ["name"]=>
+  string(6) "method"
+  ["file"]=>
+  string(73) "%smagic_005.php"
+  ["line"]=>
+  int(8)
   ["this"]=>
   object(Foo)#%d (0) {
   }
@@ -30,4 +36,3 @@ object(Closure)#%d (3) {
     }
   }
 }
-

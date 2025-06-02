@@ -33,6 +33,7 @@ typedef struct _zend_closure {
 	zend_object       std;
 	zend_function     func;
 	zval              this_ptr;
+	uint32_t          closure_flags;
 	zend_class_entry *called_scope;
 	zif_handler       orig_internal_handler;
 } zend_closure;
@@ -59,7 +60,7 @@ ZEND_METHOD(Closure, __invoke) /* {{{ */
 	zend_fcall_info_cache fcc = {
 		.closure = Z_OBJ_P(ZEND_THIS),
 	};
-	zend_closure_get_closure(Z_OBJ_P(ZEND_THIS), &fcc.calling_scope, &fcc.function_handler, &fcc.object, false);
+	Z_OBJ_P(ZEND_THIS)->handlers->get_closure(Z_OBJ_P(ZEND_THIS), &fcc.calling_scope, &fcc.function_handler, &fcc.object, false);
 	fcc.called_scope = fcc.calling_scope;
 	zend_call_known_fcc(&fcc, return_value, num_args, args, named_args);
 
@@ -76,8 +77,6 @@ ZEND_METHOD(Closure, __invoke) /* {{{ */
 	 * an invalid func pointer sitting on there, so this was changed in PHP 8.3.
 	 */
 	execute_data->func = NULL;
-
-#if ZEND_DEBUG
 }
 /* }}} */
 
@@ -167,11 +166,12 @@ ZEND_METHOD(Closure, call)
 	ZVAL_UNDEF(&closure_result);
 	fci.retval = &closure_result;
 
-	if (closure->func.common.fn_flags & ZEND_ACC_PARTIAL) {
+	if (closure->closure_flags & ZEND_CLOSURE_PARTIAL) {
 		zval new_closure;
 		zend_partial_bind(&new_closure, ZEND_THIS, newthis, newclass);
 		closure = (zend_closure *) Z_OBJ(new_closure);
 		fci_cache.function_handler = zend_partial_get_trampoline(Z_OBJ(new_closure));
+		fci_cache.object = fci.object = Z_OBJ(new_closure);
 
 		zend_call_function(&fci, &fci_cache);
 
@@ -270,7 +270,7 @@ static void do_closure_bind(zval *return_value, zval *zclosure, zval *newthis, z
 		called_scope = ce;
 	}
 
-	if (closure->func.common.fn_flags & ZEND_ACC_PARTIAL) {
+	if (closure->closure_flags & ZEND_CLOSURE_PARTIAL) {
 		zend_partial_bind(return_value, zclosure, newthis, called_scope);
 	} else {
 		zend_create_closure(return_value, &closure->func, ce, called_scope, newthis);

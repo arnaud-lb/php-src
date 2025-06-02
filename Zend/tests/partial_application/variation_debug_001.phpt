@@ -9,11 +9,17 @@ function bar($a = 1, $b = 2, ...$c) {
 var_dump(bar(?, new stdClass, 20, new stdClass, four: 4));
 ?>
 --EXPECTF--
-object(Closure)#%d (2) {
+object(Closure)#%d (5) {
+  ["name"]=>
+  string(3) "bar"
+  ["file"]=>
+  string(83) "%svariation_debug_001.php"
+  ["line"]=>
+  int(6)
   ["parameter"]=>
   array(1) {
     ["$a"]=>
-    string(10) "<required>"
+    string(10) "<optional>"
   }
   ["args"]=>
   array(3) {

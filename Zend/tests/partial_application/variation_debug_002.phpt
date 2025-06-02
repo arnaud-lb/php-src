@@ -5,7 +5,13 @@ Partial application variation debug internal
 var_dump(array_map(?, [1,2,3], [4,5, 6], ..., four: new stdClass));
 ?>
 --EXPECTF--
-object(Closure)#%d (2) {
+object(Closure)#%d (5) {
+  ["name"]=>
+  string(9) "array_map"
+  ["file"]=>
+  string(83) "%svariation_debug_002.php"
+  ["line"]=>
+  int(2)
   ["parameter"]=>
   array(2) {
     ["$callback"]=>
@@ -27,7 +33,7 @@ object(Closure)#%d (2) {
       int(3)
     }
     ["arrays"]=>
-    array(3) {
+    array(2) {
       [0]=>
       array(3) {
         [0]=>
@@ -37,12 +43,9 @@ object(Closure)#%d (2) {
         [2]=>
         int(6)
       }
-      [1]=>
-      NULL
       ["four"]=>
       object(stdClass)#%d (0) {
       }
     }
   }
 }
-
