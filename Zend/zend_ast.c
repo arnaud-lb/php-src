@@ -1127,12 +1127,12 @@ ZEND_API zend_result ZEND_FASTCALL zend_ast_evaluate_inner(
 
 						if (!(fptr->common.fn_flags & ZEND_ACC_STATIC)) {
 							zend_non_static_method_call(fptr);
-							
+
 							return FAILURE;
 						}
 						if ((fptr->common.fn_flags & ZEND_ACC_ABSTRACT)) {
 							zend_abstract_method_call(fptr);
-							
+
 							return FAILURE;
 						} else if (fptr->common.scope->ce_flags & ZEND_ACC_TRAIT) {
 							zend_error(E_DEPRECATED,
@@ -2968,4 +2968,19 @@ zend_ast * ZEND_FASTCALL zend_ast_with_attributes(zend_ast *ast, zend_ast *attr)
 	}
 
 	return ast;
+}
+
+zend_ast_list * ZEND_FASTCALL zend_ast_call_get_arg_list(zend_ast *ast)
+{
+	if (ast->kind == ZEND_AST_CALL) {
+		if (ast->child[1]->kind == ZEND_AST_ARG_LIST) {
+			return zend_ast_get_list(ast->child[1]);
+		}
+	} else if (ast->kind == ZEND_AST_STATIC_CALL || ast->kind == ZEND_AST_METHOD_CALL) {
+		if (ast->child[2]->kind == ZEND_AST_ARG_LIST) {
+			return zend_ast_get_list(ast->child[2]);
+		}
+	}
+
+	return NULL;
 }
