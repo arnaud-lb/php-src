@@ -23,6 +23,10 @@
 
 BEGIN_EXTERN_C()
 
+/* This macro depends on zend_closure structure layout */
+#define ZEND_PARTIAL_OBJECT(func) \
+	((zend_object*)((char*)(func) - XtOffsetOf(struct{uint32_t a; zend_function b;}, b) - sizeof(zval) - sizeof(zend_function) - sizeof(zend_object)))
+
 typedef struct _zend_partial zend_partial;
 
 void zend_partial_startup(void);

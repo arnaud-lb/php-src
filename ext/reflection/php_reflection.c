@@ -902,7 +902,7 @@ static void _function_string(smart_str *str, zend_function *fptr, zend_class_ent
 
 	smart_str_appendl(str, indent, strlen(indent));
 	const char *prefix = "Function [ ";
-	if (fptr->common.fn_flags & ZEND_ACC_CLOSURE) {
+	if (fptr->common.fn_flags & (ZEND_ACC_CLOSURE|ZEND_ACC_FAKE_CLOSURE)) {
 		if (zend_is_partial_function(fptr)) {
 			prefix = "Partial [ ";
 		} else {

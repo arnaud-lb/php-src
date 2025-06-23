@@ -917,6 +917,9 @@ zend_result zend_partial_init_call(zend_execute_data *call)
 	uint32_t orig_call_info = ZEND_CALL_INFO(call);
 	uint32_t call_info = orig_call_info & (ZEND_CALL_NESTED | ZEND_CALL_TOP | ZEND_CALL_ALLOCATED | ZEND_CALL_FREE_EXTRA_ARGS | ZEND_CALL_HAS_EXTRA_NAMED_PARAMS);
 	void *object_or_called_scope;
+	if (!ZEND_PARTIAL_FUNC_FLAG(&partial->func, ZEND_ACC_CALL_VIA_TRAMPOLINE)) {
+		call_info |= ZEND_CALL_FAKE_CLOSURE;
+	}
 	if (Z_TYPE(partial->This) == IS_OBJECT) {
 		object_or_called_scope = Z_OBJ(partial->This);
 		ZEND_ADD_CALL_FLAG_EX(call_info, ZEND_CALL_HAS_THIS);
@@ -960,9 +963,8 @@ zend_result zend_partial_init_call(zend_execute_data *call)
 
 	if (ZEND_PARTIAL_FUNC_FLAG(&partial->func, ZEND_ACC_CALL_VIA_TRAMPOLINE)) {
 		zend_string_addref(partial->func.common.function_name);
+		OBJ_RELEASE(&partial->std);
 	}
-
-	OBJ_RELEASE(&partial->std);
 
 	return SUCCESS;
 }
@@ -974,6 +976,8 @@ void zend_partial_create(zval *result, uint32_t info, zval *this_ptr, zend_funct
 	// TODO: run_time_cache?
 
 	zend_partial *applied, *partial = (zend_partial*) Z_OBJ_P(result);
+
+	ZEND_ASSERT(ZEND_PARTIAL_OBJECT(&partial->func) == &partial->std);
 
 	if ((applied = zend_partial_fetch(this_ptr))) {
 		ZEND_ADD_CALL_FLAG(partial, ZEND_CALL_INFO(applied) & ~ZEND_APPLY_VARIADIC);
