@@ -14,7 +14,7 @@ if (time() > 0) {
 }
 
 try {
-2 |> foo(..., a: 1);
+    2 |> foo(..., a: 1);
 } catch (\Throwable $e) {
     echo $e->getMessage(), "\n";
 }
