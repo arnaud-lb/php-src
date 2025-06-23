@@ -4112,18 +4112,6 @@ static void zend_compile_dynamic_call(znode *result, znode *name_node, zend_ast 
 }
 /* }}} */
 
-static inline bool zend_args_contain_partial(zend_ast_list *args) /* {{{ */
-{
-	uint32_t i;
-	for (i = 0; i < args->children; ++i) {
-		zend_ast *arg = args->child[i];
-		if (arg->kind == ZEND_AST_PLACEHOLDER_ARG) {
-			return 1;
-		}
-	}
-	return 0;
-}
-
 static inline bool zend_args_contain_unpack_or_named_or_partial(zend_ast_list *args) /* {{{ */
 {
 	uint32_t i;
