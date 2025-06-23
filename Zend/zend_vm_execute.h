@@ -1191,6 +1191,8 @@ static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL zend_leave_helper
 			OBJ_RELEASE(Z_OBJ(execute_data->This));
 		} else if (UNEXPECTED(call_info & ZEND_CALL_CLOSURE)) {
 			OBJ_RELEASE(ZEND_CLOSURE_OBJECT(EX(func)));
+		} else if (UNEXPECTED(call_info & ZEND_CALL_FAKE_CLOSURE)) {
+			OBJ_RELEASE(ZEND_PARTIAL_OBJECT(EX(func)));
 		}
 		EG(vm_stack_top) = (zval*)execute_data;
 		execute_data = EX(prev_execute_data);
@@ -1225,6 +1227,8 @@ static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL zend_leave_helper
 			OBJ_RELEASE(Z_OBJ(execute_data->This));
 		} else if (UNEXPECTED(call_info & ZEND_CALL_CLOSURE)) {
 			OBJ_RELEASE(ZEND_CLOSURE_OBJECT(EX(func)));
+		} else if (UNEXPECTED(call_info & ZEND_CALL_FAKE_CLOSURE)) {
+			OBJ_RELEASE(ZEND_PARTIAL_OBJECT(EX(func)));
 		}
 
 		old_execute_data = execute_data;
@@ -1282,6 +1286,8 @@ static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL zend_leave_helper
 			}
 			if (UNEXPECTED(call_info & ZEND_CALL_CLOSURE)) {
 				OBJ_RELEASE(ZEND_CLOSURE_OBJECT(EX(func)));
+			} else if (UNEXPECTED(call_info & ZEND_CALL_FAKE_CLOSURE)) {
+				OBJ_RELEASE(ZEND_PARTIAL_OBJECT(EX(func)));
 			}
 			ZEND_VM_RETURN();
 		} else /* if (call_kind == ZEND_CALL_TOP_CODE) */ {
@@ -3903,6 +3909,10 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CALL_PARTIAL_SPEC_HANDLER(ZEND
 		if (ret == &retval) {
 			zval_ptr_dtor(ret);
 		}
+
+		if (UNEXPECTED(ZEND_CALL_INFO(call) & ZEND_CALL_FAKE_CLOSURE)) {
+			OBJ_RELEASE(ZEND_PARTIAL_OBJECT(fbc));
+		}
 	}
 
 	execute_data = EG(current_execute_data);
@@ -4020,6 +4030,10 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CALL_PARTIAL_SPEC_OBSERVER_HAN
 		}
 		if (ret == &retval) {
 			zval_ptr_dtor(ret);
+		}
+
+		if (UNEXPECTED(ZEND_CALL_INFO(call) & ZEND_CALL_FAKE_CLOSURE)) {
+			OBJ_RELEASE(ZEND_PARTIAL_OBJECT(fbc));
 		}
 	}
 
@@ -59129,6 +59143,8 @@ zend_leave_helper_SPEC_LABEL:
 			OBJ_RELEASE(Z_OBJ(execute_data->This));
 		} else if (UNEXPECTED(call_info & ZEND_CALL_CLOSURE)) {
 			OBJ_RELEASE(ZEND_CLOSURE_OBJECT(EX(func)));
+		} else if (UNEXPECTED(call_info & ZEND_CALL_FAKE_CLOSURE)) {
+			OBJ_RELEASE(ZEND_PARTIAL_OBJECT(EX(func)));
 		}
 		EG(vm_stack_top) = (zval*)execute_data;
 		execute_data = EX(prev_execute_data);
@@ -59163,6 +59179,8 @@ zend_leave_helper_SPEC_LABEL:
 			OBJ_RELEASE(Z_OBJ(execute_data->This));
 		} else if (UNEXPECTED(call_info & ZEND_CALL_CLOSURE)) {
 			OBJ_RELEASE(ZEND_CLOSURE_OBJECT(EX(func)));
+		} else if (UNEXPECTED(call_info & ZEND_CALL_FAKE_CLOSURE)) {
+			OBJ_RELEASE(ZEND_PARTIAL_OBJECT(EX(func)));
 		}
 
 		old_execute_data = execute_data;
@@ -59220,6 +59238,8 @@ zend_leave_helper_SPEC_LABEL:
 			}
 			if (UNEXPECTED(call_info & ZEND_CALL_CLOSURE)) {
 				OBJ_RELEASE(ZEND_CLOSURE_OBJECT(EX(func)));
+			} else if (UNEXPECTED(call_info & ZEND_CALL_FAKE_CLOSURE)) {
+				OBJ_RELEASE(ZEND_PARTIAL_OBJECT(EX(func)));
 			}
 			ZEND_VM_RETURN();
 		} else /* if (call_kind == ZEND_CALL_TOP_CODE) */ {
