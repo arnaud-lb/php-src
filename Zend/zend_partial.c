@@ -515,6 +515,7 @@ static void zend_partial_init_call_trampoline_op(void) {
 	tmp_op_array.opcodes[0].opcode = ZEND_CALL_PARTIAL;
 	ZEND_VM_SET_OPCODE_HANDLER(&tmp_op_array.opcodes[0]);
 
+	// TODO: still needed?
 	tmp_op_array.opcodes[1].opcode = ZEND_RETURN;
 	tmp_op_array.opcodes[1].op1_type = IS_CONST;
 	tmp_op_array.opcodes[1].op1.constant = tmp_op_array.last_literal++;
