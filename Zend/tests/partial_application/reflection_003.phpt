@@ -37,7 +37,7 @@ Partial [ <user> function sprintf ] {
 
   - Parameters [2] {
     Parameter #0 [ <required> string $format ]
-    Parameter #1 [ <required> mixed $values ]
+    Parameter #1 [ <required> mixed $ ]
   }
   - Return [ string ]
 }

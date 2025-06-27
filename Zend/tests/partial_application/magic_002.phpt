@@ -33,7 +33,7 @@ Partial [ <user, prototype Foo> public method method ] {
   @@ %s 10 - 10
 
   - Parameters [1] {
-    Parameter #0 [ <required> $args ]
+    Parameter #0 [ <required> $ ]
   }
 }
 Foo::method
@@ -42,7 +42,7 @@ Partial [ <user, prototype Foo> public method method ] {
   @@ %s 16 - 16
 
   - Parameters [2] {
-    Parameter #0 [ <required> $args ]
+    Parameter #0 [ <required> $ ]
     Parameter #1 [ <optional> ...$args ]
   }
 }

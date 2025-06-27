@@ -24,7 +24,7 @@ object(Closure)#%d (6) {
   }
   ["parameter"]=>
   array(1) {
-    ["$args"]=>
+    ["$"]=>
     string(10) "<required>"
   }
   ["args"]=>

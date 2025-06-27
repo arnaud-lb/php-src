@@ -43,7 +43,7 @@ Partial [ <user> function foo ] {
 
   - Parameters [2] {
     Parameter #0 [ <required> $a ]
-    Parameter #1 [ <required> $b ]
+    Parameter #1 [ <required> $ ]
   }
 }
 Partial [ <user> function foo ] {
@@ -51,7 +51,7 @@ Partial [ <user> function foo ] {
 
   - Parameters [3] {
     Parameter #0 [ <required> $a ]
-    Parameter #1 [ <required> $b ]
-    Parameter #2 [ <required> $b ]
+    Parameter #1 [ <required> $ ]
+    Parameter #2 [ <required> $ ]
   }
 }

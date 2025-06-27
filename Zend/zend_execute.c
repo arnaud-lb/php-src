@@ -5395,6 +5395,10 @@ static zend_always_inline uint32_t zend_get_arg_offset_by_name(
 		return *(uintptr_t *)(cache_slot + 1);
 	}
 
+	if (UNEXPECTED(ZSTR_LEN(arg_name) == 0)) {
+		return (uint32_t)-1;
+	}
+
 	// TODO: Use a hash table?
 	uint32_t num_args = fbc->common.num_args;
 	if (EXPECTED(fbc->type == ZEND_USER_FUNCTION)

@@ -47,7 +47,7 @@ Partial [ <user, prototype Foo> public method method ] {
   @@ %s 12 - 12
 
   - Parameters [1] {
-    Parameter #0 [ <required> $args ]
+    Parameter #0 [ <required> $ ]
   }
 }
 not enough arguments for application of Foo::method, 0 given and exactly 1 expected, declared in %s on line 12
@@ -58,7 +58,7 @@ Partial [ <user, prototype Foo> public method method ] {
   @@ %s 30 - 30
 
   - Parameters [2] {
-    Parameter #0 [ <required> $args ]
+    Parameter #0 [ <required> $ ]
     Parameter #1 [ <optional> ...$args ]
   }
 }

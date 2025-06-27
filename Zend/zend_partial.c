@@ -139,15 +139,14 @@ static zend_always_inline void zend_partial_signature_create(zend_partial *parti
 				/* Placeholders that run into the variadic portion become
 				 * required and make all params before them required */
 				required = num;
-				// TODO: update arg name
+				info->name = zend_empty_string;
+				info->default_value = NULL;
 				if (ZEND_PARTIAL_IS_CALL_TRAMPOLINE(&partial->func)) {
-					memcpy(info, zend_call_magic_arginfo, sizeof(zend_arg_info));
+					info->type = (zend_type){0};
 				} else {
-					memcpy(info,
-						partial->func.common.arg_info + partial->func.common.num_args,
-						sizeof(zend_arg_info));
+					info->type = (partial->func.common.arg_info + partial->func.common.num_args)->type;
+					ZEND_TYPE_FULL_MASK(info->type) &= ~_ZEND_IS_VARIADIC_BIT;
 				}
-				ZEND_TYPE_FULL_MASK(info->type) &= ~_ZEND_IS_VARIADIC_BIT;
 				if (EXPECTED(num < MAX_ARG_FLAG_NUM)) {
 					uint32_t mode = ZEND_ARG_SEND_MODE(info);
 					if (mode) {
@@ -213,13 +212,15 @@ static zend_always_inline void zend_partial_signature_create(zend_partial *parti
 		if (ZEND_PARTIAL_FUNC_FLAG(&partial->trampoline, ZEND_ACC_HAS_RETURN_TYPE)) {
 			info++;
 		}
-		while (info < end) {
+		for (; info < end; info++) {
 			zend_internal_arg_info *ii = (zend_internal_arg_info*) info;
+			if ((zend_string*)ii->name == zend_empty_string) {
+				continue;
+			}
 			info->name = zend_string_init(ii->name, strlen(ii->name), false);
 			if (ii->default_value) {
 				info->default_value = zend_string_init(ii->default_value, strlen(ii->default_value), false);
 			}
-			info++;
 		}
 	}
 
