@@ -76,6 +76,7 @@ enum _zend_ast_kind {
 	ZEND_AST_TYPE,
 	ZEND_AST_CONSTANT_CLASS,
 	ZEND_AST_CALLABLE_CONVERT,
+	ZEND_AST_PLACEHOLDER_ARG,
 
 	/* 1 child node */
 	ZEND_AST_VAR = 1 << ZEND_AST_NUM_CHILDREN_SHIFT,
@@ -425,5 +426,7 @@ static zend_always_inline zend_ast *zend_ast_list_rtrim(zend_ast *ast) {
 }
 
 zend_ast * ZEND_FASTCALL zend_ast_with_attributes(zend_ast *ast, zend_ast *attr);
+
+zend_ast_list * ZEND_FASTCALL zend_ast_call_get_arg_list(zend_ast *ast);
 
 #endif

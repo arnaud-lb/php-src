@@ -26,6 +26,9 @@
 #include "zend_operators.h"
 #include "zend_variables.h"
 #include "zend_constants.h"
+#ifdef __SANITIZE_ADDRESS__
+# include <sanitizer/asan_interface.h>
+#endif
 
 #include <stdint.h>
 
@@ -322,6 +325,9 @@ static zend_always_inline zend_vm_stack zend_vm_stack_new_page(size_t size, zend
 	page->top = ZEND_VM_STACK_ELEMENTS(page);
 	page->end = (zval*)((char*)page + size);
 	page->prev = prev;
+#ifdef __SANITIZE_ADDRESS__
+	__asan_poison_memory_region(page->top, page->end - page->top);
+#endif
 	return page;
 }
 
@@ -342,10 +348,16 @@ static zend_always_inline zend_execute_data *zend_vm_stack_push_call_frame_ex(ui
 
 	if (UNEXPECTED(used_stack > (size_t)(((char*)EG(vm_stack_end)) - (char*)call))) {
 		call = (zend_execute_data*)zend_vm_stack_extend(used_stack);
+#ifdef __SANITIZE_ADDRESS__
+		__asan_unpoison_memory_region(call, used_stack);
+#endif
 		ZEND_ASSERT_VM_STACK_GLOBAL;
 		zend_vm_init_call_frame(call, call_info | ZEND_CALL_ALLOCATED, func, num_args, object_or_called_scope);
 		return call;
 	} else {
+#ifdef __SANITIZE_ADDRESS__
+		__asan_unpoison_memory_region(call, used_stack);
+#endif
 		EG(vm_stack_top) = (zval*)((char*)call + used_stack);
 		zend_vm_init_call_frame(call, call_info, func, num_args, object_or_called_scope);
 		return call;
@@ -415,6 +427,10 @@ static zend_always_inline void zend_vm_stack_free_call_frame_ex(uint32_t call_in
 		EG(vm_stack) = prev;
 		efree(p);
 	} else {
+#ifdef __SANITIZE_ADDRESS__
+		size_t size = (size_t)EG(vm_stack_top) - (size_t)call;
+		__asan_poison_memory_region(call, size);
+#endif
 		EG(vm_stack_top) = (zval*)call;
 	}
 
@@ -433,6 +449,9 @@ static zend_always_inline void zend_vm_stack_extend_call_frame(
 	zend_execute_data **call, uint32_t passed_args, uint32_t additional_args)
 {
 	if (EXPECTED((uint32_t)(EG(vm_stack_end) - EG(vm_stack_top)) > additional_args)) {
+#ifdef __SANITIZE_ADDRESS__
+		__asan_unpoison_memory_region(EG(vm_stack_top), additional_args * sizeof(zval));
+#endif
 		EG(vm_stack_top) += additional_args;
 	} else {
 		*call = zend_vm_stack_copy_call_frame(*call, passed_args, additional_args);
