@@ -1056,6 +1056,8 @@ jobs:
       fail-fast: false
       matrix:
         zts: [true, false]
+        exclude:
+          - zts: ${{ !inputs.run_freebsd_zts && true || '*never*' }}
     name: "FREEBSD_${{ matrix.zts && 'ZTS' || 'NTS' }}"
     runs-on: ubuntu-latest
     steps:
