@@ -132,6 +132,8 @@ foreach ($tests as $test => [$pfa, $closure]) {
         echo "PFA is not equivalent to closure\n";
     }
 }
+
+?>
 --EXPECT--
 # Manually specify the first two values, and pull the rest "as is"
 # Manually specify the first two values, and pull the rest "as is" (2)

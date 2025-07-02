@@ -9,5 +9,6 @@ if (time() > 0) {
 
 stuff(?, ?, ?, p: $point, ?);
 
+?>
 --EXPECTF--
 Fatal error: Cannot use positional argument after named argument in %s on line %d

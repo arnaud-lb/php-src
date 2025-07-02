@@ -9,5 +9,6 @@ if (time() > 0) {
 
 stuff(i:1, ?, ?, ?, ?);
 
+?>
 --EXPECTF--
 Fatal error: Cannot use positional argument after named argument in %s on line %d

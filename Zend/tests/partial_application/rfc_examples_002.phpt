@@ -87,6 +87,8 @@ foreach ($tests as $test => [$pfa, $closure]) {
         echo "PFA is not equivalent to closure\n";
     }
 }
+
+?>
 --EXPECTF--
 # FCC equivalent. The signature is unchanged
 # Provide some values, but allow the variadic to remain variadic

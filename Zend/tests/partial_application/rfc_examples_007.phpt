@@ -20,6 +20,7 @@ $partial = speak(?, getArg());
 print "Arnaud\n";
 $partial('Larry');
 
+?>
 --EXPECT--
 Arnaud
 getArg

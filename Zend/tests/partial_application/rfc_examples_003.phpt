@@ -25,6 +25,7 @@ try {
     echo $e->getMessage(), "\n";
 }
 
+?>
 --EXPECTF--
 not enough arguments or placeholders for application of stuff, 1 given and at least 4 expected, declared in %s on line %d
 too many arguments or placeholders for application of stuff, 6 given and a maximum of 5 expected, declared in %s on line %d
