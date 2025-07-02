@@ -649,6 +649,10 @@ struct _zend_ast_ref {
 #define _IS_BOOL					18
 #define _IS_NUMBER					19
 
+/* used for place holders */
+#define _IS_PLACEHOLDER_ARG         20
+#define _IS_PLACEHOLDER_VARIADIC    21
+
 /* guard flags */
 #define ZEND_GUARD_PROPERTY_GET		(1<<0)
 #define ZEND_GUARD_PROPERTY_SET		(1<<1)
@@ -665,10 +669,6 @@ struct _zend_ast_ref {
 #define ZEND_GUARD_IS_RECURSIVE(pg, t)			((*pg & ZEND_GUARD_RECURSION_TYPE(t)) != 0)
 #define ZEND_GUARD_PROTECT_RECURSION(pg, t)		*pg |= ZEND_GUARD_RECURSION_TYPE(t)
 #define ZEND_GUARD_UNPROTECT_RECURSION(pg, t)	*pg &= ~ZEND_GUARD_RECURSION_TYPE(t)
-
-/* used for place holders */
-#define _IS_PLACEHOLDER_ARG         20
-#define _IS_PLACEHOLDER_VARIADIC    21
 
 static zend_always_inline uint8_t zval_get_type(const zval* pz) {
 	return pz->u1.v.type;
