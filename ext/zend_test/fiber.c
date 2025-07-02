@@ -89,6 +89,9 @@ static ZEND_STACK_ALIGNED void zend_test_fiber_execute(zend_fiber_transfer *tran
 		EG(vm_stack_page_size) = ZEND_FIBER_VM_STACK_SIZE;
 
 		execute_data = (zend_execute_data *) stack->top;
+#ifdef __SANITIZE_ADDRESS__
+		__asan_unpoison_memory_region(stack->top, sizeof(zend_execute_data));
+#endif
 
 		memset(execute_data, 0, sizeof(zend_execute_data));
 		execute_data->func = (zend_function *) &zend_pass_function;

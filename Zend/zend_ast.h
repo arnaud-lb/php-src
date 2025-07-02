@@ -231,10 +231,12 @@ typedef struct _zend_ast_decl {
 	zend_ast *child[5];
 } zend_ast_decl;
 
+// TODO: rename
 typedef struct _zend_ast_fcc {
 	zend_ast_kind kind; /* Type of the node (ZEND_AST_* enum constant) */
 	zend_ast_attr attr; /* Additional attribute, use depending on node type */
 	uint32_t lineno;    /* Line number */
+	zend_ast *args;
 	ZEND_MAP_PTR_DEF(zend_function *, fptr);
 } zend_ast_fcc;
 
@@ -323,6 +325,15 @@ ZEND_API zend_ast *zend_ast_create_list(uint32_t init_children, zend_ast_kind ki
 #endif
 
 ZEND_API zend_ast * ZEND_FASTCALL zend_ast_list_add(zend_ast *list, zend_ast *op);
+
+/* Wraps the list into a ZEND_AST_CALLABLE_CONVERT if arg is a
+ * ZEND_AST_PLACEHOLDER_ARG. */
+ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_arg_list(zend_ast *arg);
+
+/* Like zend_ast_list_add(), but wraps the list into a ZEND_AST_CALLABLE_CONVERT
+ * if any arg is a ZEND_AST_PLACEHOLDER_ARG. list can be a zend_ast_list, or a
+ * zend_ast_fcc. */
+ZEND_API zend_ast * ZEND_FASTCALL zend_ast_arg_list_add(zend_ast *list, zend_ast *arg);
 
 ZEND_API zend_ast *zend_ast_create_decl(
 	zend_ast_kind kind, uint32_t flags, uint32_t start_lineno, zend_string *doc_comment,
@@ -427,6 +438,6 @@ static zend_always_inline zend_ast *zend_ast_list_rtrim(zend_ast *ast) {
 
 zend_ast * ZEND_FASTCALL zend_ast_with_attributes(zend_ast *ast, zend_ast *attr);
 
-zend_ast_list * ZEND_FASTCALL zend_ast_call_get_arg_list(zend_ast *ast);
+zend_ast * ZEND_FASTCALL zend_ast_call_get_args(zend_ast *ast);
 
 #endif
