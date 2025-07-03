@@ -310,24 +310,27 @@ ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_list_0(zend_ast_kind kind);
 ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_list_1(zend_ast_kind kind, zend_ast *child);
 ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_list_2(zend_ast_kind kind, zend_ast *child1, zend_ast *child2);
 
+ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_arg_list_0(zend_ast_kind kind);
+ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_arg_list_1(zend_ast_kind kind, zend_ast *child);
+ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_arg_list_2(zend_ast_kind kind, zend_ast *child1, zend_ast *child2);
+
 # define zend_ast_create(...) \
 	ZEND_AST_SPEC_CALL(zend_ast_create, __VA_ARGS__)
 # define zend_ast_create_ex(...) \
 	ZEND_AST_SPEC_CALL_EX(zend_ast_create_ex, __VA_ARGS__)
 # define zend_ast_create_list(init_children, ...) \
 	ZEND_AST_SPEC_CALL(zend_ast_create_list, __VA_ARGS__)
+# define zend_ast_create_arg_list(init_children, ...) \
+	ZEND_AST_SPEC_CALL(zend_ast_create_arg_list, __VA_ARGS__)
 
 #else
 ZEND_API zend_ast *zend_ast_create(zend_ast_kind kind, ...);
 ZEND_API zend_ast *zend_ast_create_ex(zend_ast_kind kind, zend_ast_attr attr, ...);
 ZEND_API zend_ast *zend_ast_create_list(uint32_t init_children, zend_ast_kind kind, ...);
+ZEND_API zend_ast *zend_ast_create_arg_list(uint32_t init_children, zend_ast_kind kind, ...);
 #endif
 
 ZEND_API zend_ast * ZEND_FASTCALL zend_ast_list_add(zend_ast *list, zend_ast *op);
-
-/* Wraps the list into a ZEND_AST_CALLABLE_CONVERT if arg is a
- * ZEND_AST_PLACEHOLDER_ARG. */
-ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_arg_list(zend_ast *arg);
 
 /* Like zend_ast_list_add(), but wraps the list into a ZEND_AST_CALLABLE_CONVERT
  * if any arg is a ZEND_AST_PLACEHOLDER_ARG. list can be a zend_ast_list, or a
