@@ -294,7 +294,11 @@ END_EXTERN_C()
 #define ZEND_JMP_FRAMELESS                  208
 #define ZEND_INIT_PARENT_PROPERTY_HOOK_CALL 209
 #define ZEND_DECLARE_ATTRIBUTED_CONST       210
+#define ZEND_SEND_PLACEHOLDER               211
+#define ZEND_CALLABLE_CONVERT_PARTIAL       212
+#define ZEND_CHECK_PARTIAL_ARGS             213
+#define ZEND_CALL_PARTIAL                   214
 
-#define ZEND_VM_LAST_OPCODE                 210
+#define ZEND_VM_LAST_OPCODE                 214
 
 #endif

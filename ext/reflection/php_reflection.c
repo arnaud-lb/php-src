@@ -51,6 +51,7 @@
 #include "zend_smart_str.h"
 #include "zend_enum.h"
 #include "zend_fibers.h"
+#include "zend_partial.h"
 
 #define REFLECTION_ATTRIBUTE_IS_INSTANCEOF (1 << 1)
 
@@ -206,6 +207,7 @@ static zend_function *_copy_function(zend_function *fptr) /* {{{ */
 		zend_function *copy_fptr;
 		copy_fptr = emalloc(sizeof(zend_function));
 		memcpy(copy_fptr, fptr, sizeof(zend_function));
+		copy_fptr->internal_function.fn_flags &= ~ZEND_ACC_TRAMPOLINE_PERMANENT;
 		copy_fptr->internal_function.function_name = zend_string_copy(fptr->internal_function.function_name);
 		return copy_fptr;
 	} else {
@@ -218,7 +220,8 @@ static zend_function *_copy_function(zend_function *fptr) /* {{{ */
 static void _free_function(zend_function *fptr) /* {{{ */
 {
 	if (fptr
-		&& (fptr->internal_function.fn_flags & ZEND_ACC_CALL_VIA_TRAMPOLINE))
+		&& (fptr->internal_function.fn_flags & ZEND_ACC_CALL_VIA_TRAMPOLINE)
+		&& !(fptr->internal_function.fn_flags & ZEND_ACC_TRAMPOLINE_PERMANENT))
 	{
 		zend_string_release_ex(fptr->internal_function.function_name, 0);
 		zend_free_trampoline(fptr);
@@ -703,14 +706,20 @@ static zend_op *get_recv_op(const zend_op_array *op_array, uint32_t offset)
 		}
 		++op;
 	}
-	ZEND_ASSERT(0 && "Failed to find op");
+
 	return NULL;
 }
 
 static zval *get_default_from_recv(zend_op_array *op_array, uint32_t offset) {
+
 	zend_op *recv = get_recv_op(op_array, offset);
-	if (!recv || recv->opcode != ZEND_RECV_INIT) {
+
+	if (!recv) {
 		return NULL;
+	}
+
+	if (recv->opcode != ZEND_RECV_INIT) {
+	    return NULL;
 	}
 
 	return RT_CONSTANT(recv, recv->op2);
@@ -805,7 +814,13 @@ static void _parameter_string(smart_str *str, zend_function *fptr, struct _zend_
 				smart_str_appends(str, "<default>");
 			}
 		} else {
-			zval *default_value = get_default_from_recv((zend_op_array*)fptr, offset);
+			zval *default_value;
+			if (zend_is_partial_trampoline(fptr)) {
+				default_value = zend_partial_get_param_default_value(
+						ZEND_PARTIAL_OBJECT_FROM_TRAMPOLINE(fptr), offset);
+			} else {
+				default_value = get_default_from_recv(&fptr->op_array, offset);
+			}
 			if (default_value) {
 				smart_str_appends(str, " = ");
 				if (format_default_value(str, default_value) == FAILURE) {
@@ -890,7 +905,18 @@ static void _function_string(smart_str *str, zend_function *fptr, zend_class_ent
 	}
 
 	smart_str_appendl(str, indent, strlen(indent));
-	smart_str_appends(str, fptr->common.fn_flags & ZEND_ACC_CLOSURE ? "Closure [ " : (fptr->common.scope ? "Method [ " : "Function [ "));
+	const char *prefix = "Function [ ";
+	if (fptr->common.fn_flags & (ZEND_ACC_CLOSURE|ZEND_ACC_FAKE_CLOSURE)) {
+		if (zend_is_partial_trampoline(fptr)) {
+			prefix = "Partial [ ";
+		} else {
+			prefix = "Closure [ ";
+		}
+	} else if (fptr->common.scope) {
+			prefix = "Method [ ";
+	}
+
+	smart_str_appends(str, prefix);
 	smart_str_appends(str, (fptr->type == ZEND_USER_FUNCTION) ? "<user" : "<internal");
 	if (fptr->common.fn_flags & ZEND_ACC_DEPRECATED) {
 		smart_str_appends(str, ", deprecated");
@@ -1750,7 +1776,9 @@ ZEND_METHOD(ReflectionFunction, __construct)
 		zval_ptr_dtor(reflection_prop_name(object));
 	}
 
-	ZVAL_STR_COPY(reflection_prop_name(object), fptr->common.function_name);
+    if (fptr->common.function_name) {
+	    ZVAL_STR_COPY(reflection_prop_name(object), fptr->common.function_name);
+    }
 	intern->ptr = fptr;
 	intern->ref_type = REF_TYPE_FUNCTION;
 	if (closure_obj) {
@@ -1802,6 +1830,21 @@ ZEND_METHOD(ReflectionFunctionAbstract, isClosure)
 }
 /* }}} */
 
+/* {{{ Returns whether this is a partial closure */
+ZEND_METHOD(ReflectionFunctionAbstract, isPartial)
+{
+	reflection_object *intern;
+	zend_function *fptr;
+
+	if (zend_parse_parameters_none() == FAILURE) {
+		RETURN_THROWS();
+	}
+	GET_REFLECTION_OBJECT_PTR(fptr);
+
+	RETURN_BOOL(zend_is_partial_trampoline(fptr));
+}
+/* }}} */
+
 /* {{{ Returns this pointer bound to closure */
 ZEND_METHOD(ReflectionFunctionAbstract, getClosureThis)
 {
@@ -1813,7 +1856,7 @@ ZEND_METHOD(ReflectionFunctionAbstract, getClosureThis)
 	GET_REFLECTION_OBJECT();
 	if (!Z_ISUNDEF(intern->obj)) {
 		closure_this = zend_get_closure_this_ptr(&intern->obj);
-		if (!Z_ISUNDEF_P(closure_this)) {
+		if (closure_this && Z_TYPE_P(closure_this) == IS_OBJECT) {
 			RETURN_OBJ_COPY(Z_OBJ_P(closure_this));
 		}
 	}
@@ -1830,6 +1873,7 @@ ZEND_METHOD(ReflectionFunctionAbstract, getClosureScopeClass)
 	GET_REFLECTION_OBJECT();
 	if (!Z_ISUNDEF(intern->obj)) {
 		closure_func = zend_get_closure_method_def(Z_OBJ(intern->obj));
+
 		if (closure_func && closure_func->common.scope) {
 			zend_reflection_class_factory(closure_func->common.scope, return_value);
 		}

@@ -34,6 +34,7 @@
 #include "zend_exceptions.h"
 #include "zend_interfaces.h"
 #include "zend_closures.h"
+#include "zend_partial.h"
 #include "zend_generators.h"
 #include "zend_vm.h"
 #include "zend_dtrace.h"
@@ -4308,7 +4309,7 @@ static zend_always_inline void zend_init_cvs(uint32_t first, uint32_t last EXECU
 	}
 }
 
-static zend_always_inline void i_init_func_execute_data(zend_op_array *op_array, zval *return_value, bool may_be_trampoline EXECUTE_DATA_DC) /* {{{ */
+static zend_always_inline void i_init_func_execute_data_ex(zend_op_array *op_array, zval *return_value, bool may_be_trampoline, bool skip_extra_args, bool skip_cvs EXECUTE_DATA_DC)
 {
 	uint32_t first_extra_arg, num_args;
 	ZEND_ASSERT(EX(func) == (zend_function*)op_array);
@@ -4325,7 +4326,7 @@ static zend_always_inline void i_init_func_execute_data(zend_op_array *op_array,
 	first_extra_arg = op_array->num_args;
 	num_args = EX_NUM_ARGS();
 	if (UNEXPECTED(num_args > first_extra_arg)) {
-		if (!may_be_trampoline || EXPECTED(!(op_array->fn_flags & ZEND_ACC_CALL_VIA_TRAMPOLINE))) {
+		if ((!may_be_trampoline || EXPECTED(!(op_array->fn_flags & ZEND_ACC_CALL_VIA_TRAMPOLINE))) && !skip_extra_args) {
 			zend_copy_extra_args(EXECUTE_DATA_C);
 		}
 	} else if (EXPECTED((op_array->fn_flags & ZEND_ACC_HAS_TYPE_HINTS) == 0)) {
@@ -4337,12 +4338,19 @@ static zend_always_inline void i_init_func_execute_data(zend_op_array *op_array,
 #endif
 	}
 
-	/* Initialize CV variables (skip arguments) */
-	zend_init_cvs(num_args, op_array->last_var EXECUTE_DATA_CC);
+	if (!skip_cvs) {
+		/* Initialize CV variables (skip arguments) */
+		zend_init_cvs(num_args, op_array->last_var EXECUTE_DATA_CC);
+	}
 
 	EX(run_time_cache) = RUN_TIME_CACHE(op_array);
 
 	EG(current_execute_data) = execute_data;
+}
+
+static zend_always_inline void i_init_func_execute_data(zend_op_array *op_array, zval *return_value, bool may_be_trampoline EXECUTE_DATA_DC) /* {{{ */
+{
+	i_init_func_execute_data_ex(op_array, return_value, may_be_trampoline, false, false EXECUTE_DATA_CC);
 }
 /* }}} */
 
@@ -4480,6 +4488,9 @@ zend_execute_data *zend_vm_stack_copy_call_frame(zend_execute_data *call, uint32
 
 	/* copy call frame into new stack segment */
 	new_call = zend_vm_stack_extend(used_stack * sizeof(zval));
+#ifdef __SANITIZE_ADDRESS__
+	__asan_unpoison_memory_region(new_call, used_stack * sizeof(zval));
+#endif
 	*new_call = *call;
 	ZEND_ADD_CALL_FLAG(new_call, ZEND_CALL_ALLOCATED);
 
@@ -4686,6 +4697,7 @@ static void cleanup_unfinished_calls(zend_execute_data *execute_data, uint32_t o
 					case ZEND_DO_UCALL:
 					case ZEND_DO_FCALL_BY_NAME:
 					case ZEND_CALLABLE_CONVERT:
+					case ZEND_CALLABLE_CONVERT_PARTIAL:
 						level++;
 						break;
 					case ZEND_INIT_FCALL:
@@ -4723,6 +4735,7 @@ static void cleanup_unfinished_calls(zend_execute_data *execute_data, uint32_t o
 					case ZEND_SEND_ARRAY:
 					case ZEND_SEND_UNPACK:
 					case ZEND_CHECK_UNDEF_ARGS:
+					case ZEND_CHECK_PARTIAL_ARGS:
 						if (level == 0) {
 							do_exit = 1;
 						}
@@ -4743,6 +4756,7 @@ static void cleanup_unfinished_calls(zend_execute_data *execute_data, uint32_t o
 						case ZEND_DO_UCALL:
 						case ZEND_DO_FCALL_BY_NAME:
 						case ZEND_CALLABLE_CONVERT:
+						case ZEND_CALLABLE_CONVERT_PARTIAL:
 							level++;
 							break;
 						case ZEND_INIT_FCALL:
@@ -5372,27 +5386,29 @@ static zend_always_inline uint32_t zend_get_arg_offset_by_name(
 		return *(uintptr_t *)(cache_slot + 1);
 	}
 
-	// TODO: Use a hash table?
-	uint32_t num_args = fbc->common.num_args;
-	if (EXPECTED(fbc->type == ZEND_USER_FUNCTION)
-			|| EXPECTED(fbc->common.fn_flags & ZEND_ACC_USER_ARG_INFO)) {
-		for (uint32_t i = 0; i < num_args; i++) {
-			zend_arg_info *arg_info = &fbc->op_array.arg_info[i];
-			if (zend_string_equals(arg_name, arg_info->name)) {
-				*cache_slot = fbc;
-				*(uintptr_t *)(cache_slot + 1) = i;
-				return i;
+	if (EXPECTED(ZSTR_LEN(arg_name) > 0)) {
+		// TODO: Use a hash table?
+		uint32_t num_args = fbc->common.num_args;
+		if (EXPECTED(fbc->type == ZEND_USER_FUNCTION)
+				|| EXPECTED(fbc->common.fn_flags & ZEND_ACC_USER_ARG_INFO)) {
+			for (uint32_t i = 0; i < num_args; i++) {
+				zend_arg_info *arg_info = &fbc->op_array.arg_info[i];
+				if (zend_string_equals(arg_name, arg_info->name)) {
+					*cache_slot = fbc;
+					*(uintptr_t *)(cache_slot + 1) = i;
+					return i;
+				}
 			}
-		}
-	} else {
-		ZEND_ASSERT(num_args == 0 || fbc->internal_function.arg_info);
-		for (uint32_t i = 0; i < num_args; i++) {
-			zend_internal_arg_info *arg_info = &fbc->internal_function.arg_info[i];
-			size_t len = strlen(arg_info->name);
-			if (zend_string_equals_cstr(arg_name, arg_info->name, len)) {
-				*cache_slot = fbc;
-				*(uintptr_t *)(cache_slot + 1) = i;
-				return i;
+		} else {
+			ZEND_ASSERT(num_args == 0 || fbc->internal_function.arg_info);
+			for (uint32_t i = 0; i < num_args; i++) {
+				zend_internal_arg_info *arg_info = &fbc->internal_function.arg_info[i];
+				size_t len = strlen(arg_info->name);
+				if (zend_string_equals_cstr(arg_name, arg_info->name, len)) {
+					*cache_slot = fbc;
+					*(uintptr_t *)(cache_slot + 1) = i;
+					return i;
+				}
 			}
 		}
 	}
@@ -5427,8 +5443,8 @@ zval * ZEND_FASTCALL zend_handle_named_arg(
 
 		arg = zend_hash_add_empty_element(call->extra_named_params, arg_name);
 		if (!arg) {
-			zend_throw_error(NULL, "Named parameter $%s overwrites previous argument",
-				ZSTR_VAL(arg_name));
+			zend_throw_error(NULL, "Named parameter $%s overwrites previous %s",
+				ZSTR_VAL(arg_name), Z_TYPE_P(arg) == _IS_PLACEHOLDER_ARG ? "placeholder" : "argument");
 			return NULL;
 		}
 		*arg_num_ptr = arg_offset + 1;
@@ -5457,9 +5473,14 @@ zval * ZEND_FASTCALL zend_handle_named_arg(
 		}
 	} else {
 		arg = ZEND_CALL_VAR_NUM(call, arg_offset);
+
+		if (UNEXPECTED(Z_TYPE_P(arg) == _IS_PLACEHOLDER_VARIADIC)) {
+			ZVAL_UNDEF(arg);
+		}
+
 		if (UNEXPECTED(!Z_ISUNDEF_P(arg))) {
-			zend_throw_error(NULL, "Named parameter $%s overwrites previous argument",
-				ZSTR_VAL(arg_name));
+			zend_throw_error(NULL, "Named parameter $%s overwrites previous %s",
+				ZSTR_VAL(arg_name), Z_TYPE_P(arg) == _IS_PLACEHOLDER_ARG ? "placeholder" : "argument");
 			return NULL;
 		}
 	}
@@ -5531,6 +5552,10 @@ ZEND_API zend_result ZEND_FASTCALL zend_handle_undef_args(zend_execute_data *cal
 				} else {
 					ZVAL_COPY(arg, default_value);
 				}
+			} else if (UNEXPECTED(opline->opcode == ZEND_CALL_PARTIAL)) {
+				// TODO: more tests
+				/* Undef args will be handled when calling the actual function */
+				return SUCCESS;
 			} else {
 				ZEND_ASSERT(opline->opcode == ZEND_RECV);
 				zend_execute_data *old = start_fake_frame(call, opline);
@@ -5607,11 +5632,17 @@ static zend_always_inline zend_execute_data *_zend_vm_stack_push_call_frame_ex(u
 	if (UNEXPECTED(used_stack > (size_t)(((char*)EG(vm_stack_end)) - (char*)call))) {
 		EX(opline) = opline; /* this is the only difference */
 		call = (zend_execute_data*)zend_vm_stack_extend(used_stack);
+#ifdef __SANITIZE_ADDRESS__
+		__asan_unpoison_memory_region(call, used_stack);
+#endif
 		ZEND_ASSERT_VM_STACK_GLOBAL;
 		zend_vm_init_call_frame(call, call_info | ZEND_CALL_ALLOCATED, func, num_args, object_or_called_scope);
 		return call;
 	} else {
 		EG(vm_stack_top) = (zval*)((char*)call + used_stack);
+#ifdef __SANITIZE_ADDRESS__
+		__asan_unpoison_memory_region(call, used_stack);
+#endif
 		zend_vm_init_call_frame(call, call_info, func, num_args, object_or_called_scope);
 		return call;
 	}
