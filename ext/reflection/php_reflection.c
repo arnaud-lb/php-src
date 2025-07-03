@@ -1455,31 +1455,6 @@ static void reflection_extension_factory(zval *object, const char *name_str)
 }
 /* }}} */
 
-static zend_always_inline uint32_t reflection_parameter_partial_offset(zend_function *fptr, zend_arg_info *info) {
-	zend_arg_info *arg = fptr->common.prototype->common.arg_info,
-				  *end = arg + fptr->common.prototype->common.num_args;
-	uint32_t offset = 0;
-
-	if (fptr->type == ZEND_USER_FUNCTION &&
-		fptr->op_array.opcodes == &EG(call_trampoline_op)) {
-		return 0;
-	}
-
-	if (fptr->common.fn_flags & ZEND_ACC_VARIADIC) {
-		end++;
-	}
-
-	while (arg < end) {
-		if (zend_string_equals_ci(info->name, arg->name)) {
-			return offset;
-		}
-		offset++;
-		arg++;
-    }
-    ZEND_ASSERT(0);
-    return -1;
-}
-
 /* {{{ reflection_parameter_factory */
 static void reflection_parameter_factory(zend_function *fptr, zval *closure_object, struct _zend_arg_info *arg_info, uint32_t offset, bool required, zval *object)
 {
@@ -1491,11 +1466,7 @@ static void reflection_parameter_factory(zend_function *fptr, zval *closure_obje
 	intern = Z_REFLECTION_P(object);
 	reference = (parameter_reference*) emalloc(sizeof(parameter_reference));
 	reference->arg_info = arg_info;
-	if (0 /* TODO: fptr->common.fn_flags & ZEND_ACC_PARTIAL*/) {
-	    reference->offset = reflection_parameter_partial_offset(fptr, arg_info);
-	} else {
-	    reference->offset = offset;
-	}
+	reference->offset = offset;
 	reference->required = required;
 	reference->fptr = fptr;
 	intern->ptr = reference;
