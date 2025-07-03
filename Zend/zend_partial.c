@@ -264,7 +264,7 @@ static zend_always_inline void zend_partial_signature_create(zend_partial *parti
 	partial->trampoline.common.prototype = &partial->func;
 }
 
-bool zend_is_partial_function(zend_function *function) {
+bool zend_is_partial_trampoline(zend_function *function) {
 	if (!(function->common.fn_flags & ZEND_ACC_CLOSURE)) {
 		return false;
 	}
@@ -485,6 +485,66 @@ zend_function *zend_partial_get_trampoline(zend_object *obj) {
 	zend_partial *partial = (zend_partial*) obj;
 
 	return &partial->trampoline;
+}
+
+static zend_op *zend_partial_get_recv_op(const zend_op_array *op_array, uint32_t offset)
+{
+	zend_op *op = op_array->opcodes;
+	const zend_op *end = op + op_array->last;
+
+	++offset;
+	while (op < end) {
+		if ((op->opcode == ZEND_RECV || op->opcode == ZEND_RECV_INIT
+		    || op->opcode == ZEND_RECV_VARIADIC) && op->op1.num == offset)
+		{
+			return op;
+		}
+		++op;
+	}
+
+	return NULL;
+}
+
+static zval *zend_partial_get_default_from_recv(const zend_op_array *op_array, uint32_t offset) {
+
+	zend_op *recv = zend_partial_get_recv_op(op_array, offset);
+
+	if (!recv) {
+		return NULL;
+	}
+
+	if (recv->opcode != ZEND_RECV_INIT) {
+	    return NULL;
+	}
+
+	return RT_CONSTANT(recv, recv->op2);
+}
+
+static uint32_t zend_partial_resolve_param_offset(zend_partial *partial, uint32_t offset) {
+
+	zval *argv = partial->argv;
+
+	for (uint32_t i = 0; i < partial->argc; i++) {
+		if (Z_IS_PLACEHOLDER_P(&argv[i])) {
+			if (offset == 0) {
+				return i;
+			}
+			offset--;
+		}
+	}
+
+	return (uint32_t)-1;
+}
+
+zval *zend_partial_get_param_default_value(zend_object *obj, uint32_t offset) {
+	zend_partial *partial = (zend_partial*)obj;
+
+	offset = zend_partial_resolve_param_offset(partial, offset);
+	if (offset == (uint32_t)-1) {
+		return NULL;
+	}
+
+	return zend_partial_get_default_from_recv(&partial->func.op_array, offset);
 }
 
 static void zend_partial_free(zend_object *object) {

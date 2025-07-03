@@ -694,8 +694,6 @@ static void _enum_case_string(smart_str *str, const zend_string *name, zend_clas
 
 static zend_op *get_recv_op(const zend_op_array *op_array, uint32_t offset)
 {
-	// TODO: partial
-
 	zend_op *op = op_array->opcodes;
 	const zend_op *end = op + op_array->last;
 
@@ -816,7 +814,13 @@ static void _parameter_string(smart_str *str, zend_function *fptr, struct _zend_
 				smart_str_appends(str, "<default>");
 			}
 		} else {
-			zval *default_value = get_default_from_recv((zend_op_array*)fptr, offset);
+			zval *default_value;
+			if (zend_is_partial_trampoline(fptr)) {
+				default_value = zend_partial_get_param_default_value(
+						ZEND_PARTIAL_OBJECT_FROM_TRAMPOLINE(fptr), offset);
+			} else {
+				default_value = get_default_from_recv(&fptr->op_array, offset);
+			}
 			if (default_value) {
 				smart_str_appends(str, " = ");
 				if (format_default_value(str, default_value) == FAILURE) {
@@ -903,7 +907,7 @@ static void _function_string(smart_str *str, zend_function *fptr, zend_class_ent
 	smart_str_appendl(str, indent, strlen(indent));
 	const char *prefix = "Function [ ";
 	if (fptr->common.fn_flags & (ZEND_ACC_CLOSURE|ZEND_ACC_FAKE_CLOSURE)) {
-		if (zend_is_partial_function(fptr)) {
+		if (zend_is_partial_trampoline(fptr)) {
 			prefix = "Partial [ ";
 		} else {
 			prefix = "Closure [ ";

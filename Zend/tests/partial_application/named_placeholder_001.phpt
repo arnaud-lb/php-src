@@ -58,7 +58,7 @@ Partial [ <user> function foo ] {
   @@ %snamed_placeholder_001.php 11 - 11
 
   - Parameters [1] {
-    Parameter #0 [ <optional> $b ]
+    Parameter #0 [ <optional> $b = 2 ]
   }
 }
 int(1)
@@ -69,7 +69,7 @@ Partial [ <user> function foo ] {
   @@ %snamed_placeholder_001.php 17 - 17
 
   - Parameters [1] {
-    Parameter #0 [ <optional> $b ]
+    Parameter #0 [ <optional> $b = 2 ]
   }
 }
 int(1)
@@ -80,7 +80,7 @@ Partial [ <user> function foo ] {
   @@ %snamed_placeholder_001.php 24 - 24
 
   - Parameters [1] {
-    Parameter #0 [ <optional> $b ]
+    Parameter #0 [ <optional> $b = 2 ]
   }
 }
 int(1)
@@ -91,8 +91,8 @@ Partial [ <user> function bar ] {
   @@ %snamed_placeholder_001.php 34 - 34
 
   - Parameters [3] {
-    Parameter #0 [ <optional> $a ]
-    Parameter #1 [ <optional> $b ]
+    Parameter #0 [ <optional> $a = 1 ]
+    Parameter #1 [ <optional> $b = 2 ]
     Parameter #2 [ <optional> ...$c ]
   }
 }

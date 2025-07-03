@@ -26,6 +26,9 @@ BEGIN_EXTERN_C()
 #define ZEND_PARTIAL_OBJECT(func) \
 	((zend_object*)((char*)(func) - zend_partial_func_offset()))
 
+#define ZEND_PARTIAL_OBJECT_FROM_TRAMPOLINE(trampoline) \
+	((zend_object*)((char*)(trampoline) - sizeof(zend_object)))
+
 typedef struct _zend_partial zend_partial;
 
 void zend_partial_startup(void);
@@ -42,9 +45,11 @@ void zend_partial_args_check(zend_execute_data *call);
 
 zend_function *zend_partial_get_trampoline(zend_object *object);
 
-zend_result zend_partial_init_call(zend_execute_data *call);
+bool zend_is_partial_trampoline(zend_function *function);
 
-bool zend_is_partial_function(zend_function *function);
+zval *zend_partial_get_param_default_value(zend_object *obj, uint32_t offset);
+
+zend_result zend_partial_init_call(zend_execute_data *call);
 
 /* Offset of zend_partial.func */
 static zend_always_inline size_t zend_partial_func_offset(void) {
