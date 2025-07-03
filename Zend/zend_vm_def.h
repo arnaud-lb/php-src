@@ -9261,17 +9261,6 @@ ZEND_VM_HANDLER(214, ZEND_CALL_PARTIAL, ANY, ANY, SPEC(OBSERVER))
 
 	fbc = call->func;
 
-	// TODO: deprecated check
-	if (UNEXPECTED(!RETURN_VALUE_USED(opline) && (fbc->common.fn_flags & ZEND_ACC_NODISCARD))) {
-		if ((fbc->common.fn_flags & ZEND_ACC_NODISCARD) && EG(exception) == NULL) {
-			zend_nodiscard_function(fbc);
-		}
-		if (UNEXPECTED(EG(exception) != NULL)) {
-			UNDEF_RESULT();
-			HANDLE_EXCEPTION();
-		}
-	}
-
 	if (EXPECTED(fbc->type == ZEND_USER_FUNCTION)) {
 		execute_data = call;
 		i_init_func_execute_data_ex(&fbc->op_array, ret, true, true, true EXECUTE_DATA_CC);

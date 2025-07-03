@@ -26,6 +26,7 @@
 #include "zend_types.h"
 #include "zend_vm.h"
 #include "zend_observer.h"
+#include "zend_attributes.h"
 
 typedef struct _zend_partial {
 	/* Common zend_closure fields */
@@ -98,6 +99,23 @@ static zend_always_inline uint32_t zend_partial_signature_size(zend_partial *par
 	return count * sizeof(zend_arg_info);
 }
 
+static void zend_partial_signature_copy_attributes(zend_array *dest, zend_array *src, uint32_t dest_offset, uint32_t src_offset) {
+	zend_attribute *attr;
+	ZEND_HASH_PACKED_FOREACH_PTR(src, attr) {
+		if (attr->offset == src_offset) {
+			if (src_offset != 0) {
+				zend_attribute *copy = emalloc(sizeof(zend_attribute));
+				memcpy(copy, attr, sizeof(zend_attribute));
+				copy->offset = dest_offset;
+				attr = copy;
+			}
+			zend_hash_next_index_insert_ptr(dest, attr);
+		} else if (attr->offset > src_offset) {
+			break;
+		}
+	} ZEND_HASH_FOREACH_END();
+}
+
 static zend_always_inline void zend_partial_signature_create(zend_partial *partial) {
 	zend_arg_info *signature = emalloc(zend_partial_signature_size(partial)), *info = signature;
 
@@ -112,6 +130,16 @@ static zend_always_inline void zend_partial_signature_create(zend_partial *parti
 
 	memset(partial->trampoline.op_array.arg_flags, 0,
 			sizeof(partial->trampoline.op_array.arg_flags));
+
+	zend_array *attributes;
+	if (partial->func.common.attributes) {
+		attributes = emalloc(sizeof(zend_array));
+		zend_hash_init(attributes, 0, NULL, NULL, false);
+		zend_partial_signature_copy_attributes(attributes, partial->func.common.attributes, 0, 0);
+		partial->trampoline.common.attributes = attributes;
+	} else {
+		attributes = NULL;
+	}
 
 	while (offset < limit) {
 		zval *arg = &partial->argv[offset];
@@ -131,6 +159,9 @@ static zend_always_inline void zend_partial_signature_create(zend_partial *parti
 						ZEND_SET_ARG_FLAG(&partial->trampoline, num, mode);
 						byref = true;
 					}
+				}
+				if (UNEXPECTED(attributes)) {
+					zend_partial_signature_copy_attributes(attributes, partial->func.common.attributes, num, offset + 1);
 				}
 				info++;
 			} else {
@@ -153,6 +184,9 @@ static zend_always_inline void zend_partial_signature_create(zend_partial *parti
 						ZEND_SET_ARG_FLAG(&partial->trampoline, num, mode);
 						byref = true;
 					}
+				}
+				if (UNEXPECTED(attributes)) {
+					zend_partial_signature_copy_attributes(attributes, partial->func.common.attributes, num, partial->func.common.num_args + 1);
 				}
 				info++;
 			}
@@ -187,6 +221,9 @@ static zend_always_inline void zend_partial_signature_create(zend_partial *parti
 				ZEND_SET_ARG_FLAG(&partial->trampoline, i, mode);
 			}
 			byref = true;
+		}
+		if (UNEXPECTED(attributes)) {
+			zend_partial_signature_copy_attributes(attributes, partial->func.common.attributes, num + 1, partial->func.common.num_args + 1);
 		}
 		info++;
 	}
@@ -267,7 +304,7 @@ static zend_always_inline void zend_partial_trampoline_create(zend_partial *part
 	static const void *dummy = (void*)(intptr_t)2;
 
 	const uint32_t keep_flags =
-		ZEND_ACC_RETURN_REFERENCE | ZEND_ACC_HAS_RETURN_TYPE | ZEND_ACC_STRICT_TYPES;
+		ZEND_ACC_RETURN_REFERENCE | ZEND_ACC_HAS_RETURN_TYPE | ZEND_ACC_STRICT_TYPES | ZEND_ACC_NODISCARD | ZEND_ACC_DEPRECATED;
 
 	trampoline->common = partial->func.common;
 	trampoline->type = ZEND_USER_FUNCTION;
@@ -498,6 +535,17 @@ static void zend_partial_free(zend_object *object) {
 	}
 	if (partial->func.type == ZEND_USER_FUNCTION) {
 		destroy_op_array(&partial->func.op_array);
+	}
+
+	if (partial->trampoline.common.attributes) {
+		zend_attribute *attr;
+		ZEND_HASH_PACKED_FOREACH_PTR(partial->trampoline.common.attributes, attr) {
+			if (attr->offset > 0) {
+				efree(attr);
+			}
+		} ZEND_HASH_FOREACH_END();
+		zend_hash_destroy(partial->trampoline.common.attributes);
+		efree(partial->trampoline.common.attributes);
 	}
 
 	if (Z_TYPE(partial->This) == IS_OBJECT) {
