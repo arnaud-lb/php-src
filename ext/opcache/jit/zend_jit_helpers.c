@@ -306,6 +306,20 @@ static zend_execute_data* ZEND_FASTCALL zend_jit_int_extend_stack_helper(uint32_
 	return call;
 }
 
+static void ZEND_FASTCALL zend_jit_poison_memory_region_helper(void *addr, size_t size)
+{
+#ifdef __SANITIZE_ADDRESS__
+	__asan_poison_memory_region(addr, size);
+#endif
+}
+
+static void ZEND_FASTCALL zend_jit_unpoison_memory_region_helper(void *addr, size_t size)
+{
+#ifdef __SANITIZE_ADDRESS__
+	__asan_unpoison_memory_region(addr, size);
+#endif
+}
+
 static zval* ZEND_FASTCALL zend_jit_symtable_find(HashTable *ht, zend_string *str)
 {
 	zend_ulong idx;
