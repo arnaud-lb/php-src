@@ -1194,8 +1194,14 @@ static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL zend_leave_helper
 		} else if (UNEXPECTED(call_info & ZEND_CALL_FAKE_CLOSURE)) {
 			OBJ_RELEASE(ZEND_PARTIAL_OBJECT(EX(func)));
 		}
+
+		zend_execute_data *prev_execute_data = EX(prev_execute_data);
+#ifdef __SANITIZE_ADDRESS__
+		size_t size = (size_t)EG(vm_stack_top) - (size_t)execute_data;
+		__asan_poison_memory_region(execute_data, size);
+#endif
 		EG(vm_stack_top) = (zval*)execute_data;
-		execute_data = EX(prev_execute_data);
+		execute_data = prev_execute_data;
 
 		if (UNEXPECTED(EG(exception) != NULL)) {
 			zend_rethrow_exception(execute_data);
@@ -1374,6 +1380,10 @@ static ZEND_VM_HOT ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_DO_ICALL_SPEC_RETV
 		}
 		zend_vm_stack_free_call_frame_ex(call_info, call);
 	} else {
+#ifdef __SANITIZE_ADDRESS__
+		size_t size = (size_t)EG(vm_stack_top) - (size_t)call;
+		__asan_poison_memory_region(call, size);
+#endif
 		EG(vm_stack_top) = (zval*)call;
 	}
 
@@ -1438,6 +1448,10 @@ static ZEND_VM_HOT ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_DO_ICALL_SPEC_RETV
 		}
 		zend_vm_stack_free_call_frame_ex(call_info, call);
 	} else {
+#ifdef __SANITIZE_ADDRESS__
+		size_t size = (size_t)EG(vm_stack_top) - (size_t)call;
+		__asan_poison_memory_region(call, size);
+#endif
 		EG(vm_stack_top) = (zval*)call;
 	}
 
@@ -1503,6 +1517,10 @@ static ZEND_VM_COLD ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_DO_ICALL_SPEC_OBS
 		}
 		zend_vm_stack_free_call_frame_ex(call_info, call);
 	} else {
+#ifdef __SANITIZE_ADDRESS__
+		size_t size = (size_t)EG(vm_stack_top) - (size_t)call;
+		__asan_poison_memory_region(call, size);
+#endif
 		EG(vm_stack_top) = (zval*)call;
 	}
 
@@ -1685,6 +1703,10 @@ fcall_by_name_end:
 			}
 			zend_vm_stack_free_call_frame_ex(call_info, call);
 		} else {
+#ifdef __SANITIZE_ADDRESS__
+			size_t size = (size_t)EG(vm_stack_top) - (size_t)call;
+			__asan_poison_memory_region(call, size);
+#endif
 			EG(vm_stack_top) = (zval*)call;
 		}
 
@@ -1794,6 +1816,10 @@ fcall_by_name_end:
 			}
 			zend_vm_stack_free_call_frame_ex(call_info, call);
 		} else {
+#ifdef __SANITIZE_ADDRESS__
+			size_t size = (size_t)EG(vm_stack_top) - (size_t)call;
+			__asan_poison_memory_region(call, size);
+#endif
 			EG(vm_stack_top) = (zval*)call;
 		}
 
@@ -1905,6 +1931,10 @@ fcall_by_name_end:
 			}
 			zend_vm_stack_free_call_frame_ex(call_info, call);
 		} else {
+#ifdef __SANITIZE_ADDRESS__
+			size_t size = (size_t)EG(vm_stack_top) - (size_t)call;
+			__asan_poison_memory_region(call, size);
+#endif
 			EG(vm_stack_top) = (zval*)call;
 		}
 
@@ -2357,8 +2387,13 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_GENERATOR_CREATE_SPEC_HANDLER(
 		call_info = EX_CALL_INFO();
 		EG(current_execute_data) = EX(prev_execute_data);
 		if (EXPECTED(!(call_info & (ZEND_CALL_TOP|ZEND_CALL_ALLOCATED)))) {
+			zend_execute_data *prev_execute_data = EX(prev_execute_data);
+#ifdef __SANITIZE_ADDRESS__
+			size_t size = (size_t)EG(vm_stack_top) - (size_t)execute_data;
+			__asan_poison_memory_region(execute_data, size);
+#endif
 			EG(vm_stack_top) = (zval*)execute_data;
-			execute_data = EX(prev_execute_data);
+			execute_data = prev_execute_data;
 			LOAD_NEXT_OPLINE();
 			ZEND_VM_LEAVE();
 		} else if (EXPECTED(!(call_info & ZEND_CALL_TOP))) {
@@ -59124,8 +59159,14 @@ zend_leave_helper_SPEC_LABEL:
 		} else if (UNEXPECTED(call_info & ZEND_CALL_FAKE_CLOSURE)) {
 			OBJ_RELEASE(ZEND_PARTIAL_OBJECT(EX(func)));
 		}
+
+		zend_execute_data *prev_execute_data = EX(prev_execute_data);
+#ifdef __SANITIZE_ADDRESS__
+		size_t size = (size_t)EG(vm_stack_top) - (size_t)execute_data;
+		__asan_poison_memory_region(execute_data, size);
+#endif
 		EG(vm_stack_top) = (zval*)execute_data;
-		execute_data = EX(prev_execute_data);
+		execute_data = prev_execute_data;
 
 		if (UNEXPECTED(EG(exception) != NULL)) {
 			zend_rethrow_exception(execute_data);
