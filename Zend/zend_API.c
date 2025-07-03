@@ -40,12 +40,19 @@
 /* these variables are true statics/globals, and have to be mutex'ed on every access */
 ZEND_API HashTable module_registry;
 
+ZEND_API bool zend_dl_use_deepbind = false;
+
 static zend_module_entry **module_request_startup_handlers;
 static zend_module_entry **module_request_shutdown_handlers;
 static zend_module_entry **module_post_deactivate_handlers;
 static zend_module_entry **modules_dl_loaded;
 
 static zend_class_entry  **class_cleanup_handlers;
+
+ZEND_API void zend_set_dl_use_deepbind(bool use_deepbind)
+{
+	zend_dl_use_deepbind = use_deepbind;
+}
 
 ZEND_API zend_result zend_get_parameters_array_ex(uint32_t param_count, zval *argument_array) /* {{{ */
 {
@@ -3641,6 +3648,7 @@ static void zend_disable_function(const char *function_name, size_t function_nam
 	if (UNEXPECTED(
 		(function_name_length == strlen("exit") && !memcmp(function_name, "exit", strlen("exit")))
 		|| (function_name_length == strlen("die") && !memcmp(function_name, "die", strlen("die")))
+		|| (function_name_length == strlen("clone") && !memcmp(function_name, "clone", strlen("clone")))
 	)) {
 		zend_error(E_WARNING, "Cannot disable function %s()", function_name);
 		return;
@@ -4152,13 +4160,10 @@ try_again:
 			if (ce == zend_ce_closure) {
 				const zend_function *fn = zend_get_closure_method_def(Z_OBJ_P(callable));
 
-				if (fn->common.fn_flags & ZEND_ACC_FAKE_CLOSURE) {
-					if (fn->common.scope) {
-						return zend_create_member_string(fn->common.scope->name, fn->common.function_name);
-					} else {
-						return zend_string_copy(fn->common.function_name);
-					}
+				if ((fn->common.fn_flags & ZEND_ACC_FAKE_CLOSURE) && fn->common.scope) {
+					return zend_create_member_string(fn->common.scope->name, fn->common.function_name);
 				}
+				return zend_string_copy(fn->common.function_name);
 			}
 
 			return zend_string_concat2(

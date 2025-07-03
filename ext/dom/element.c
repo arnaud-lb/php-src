@@ -23,8 +23,8 @@
 #if defined(HAVE_LIBXML) && defined(HAVE_DOM)
 #include "zend_enum.h"
 #include "php_dom.h"
+#include "obj_map.h"
 #include "namespace_compat.h"
-#include "private_data.h"
 #include "internal_helpers.h"
 #include "dom_properties.h"
 #include "token_list.h"
@@ -177,18 +177,21 @@ zend_result dom_element_class_name_write(dom_object *obj, zval *newval)
 }
 /* }}} */
 
-zval *dom_element_class_list_zval(dom_object *obj)
+zval *dom_get_prop_checked_offset(dom_object *obj, uint32_t offset, const char *name)
 {
-	const uint32_t PROP_INDEX = 0;
-
 #if ZEND_DEBUG
-	zend_string *class_list_str = ZSTR_INIT_LITERAL("classList", false);
-	const zend_property_info *prop_info = zend_get_property_info(dom_modern_element_class_entry, class_list_str, 0);
-	zend_string_release_ex(class_list_str, false);
-	ZEND_ASSERT(OBJ_PROP_TO_NUM(prop_info->offset) == PROP_INDEX);
+	zend_string *name_zstr = ZSTR_INIT_LITERAL(name, false);
+	const zend_property_info *prop_info = zend_get_property_info(obj->std.ce, name_zstr, 0);
+	zend_string_release_ex(name_zstr, false);
+	ZEND_ASSERT(OBJ_PROP_TO_NUM(prop_info->offset) == offset);
 #endif
 
-	return OBJ_PROP_NUM(&obj->std, PROP_INDEX);
+	return OBJ_PROP_NUM(&obj->std, offset);
+}
+
+zval *dom_element_class_list_zval(dom_object *obj)
+{
+	return dom_get_prop_checked_offset(obj, 1, "classList");
 }
 
 /* {{{ classList	TokenList
@@ -825,7 +828,7 @@ static void dom_element_get_elements_by_tag_name(INTERNAL_FUNCTION_PARAMETERS, z
 
 	object_init_ex(return_value, iter_ce);
 	namednode = Z_DOMOBJ_P(return_value);
-	dom_namednode_iter(intern, 0, namednode, NULL, name, NULL);
+	php_dom_create_obj_map(intern, namednode, NULL, name, NULL, &php_dom_obj_map_by_tag_name);
 }
 
 PHP_METHOD(DOMElement, getElementsByTagName)
@@ -1257,7 +1260,7 @@ static void dom_element_get_elements_by_tag_name_ns(INTERNAL_FUNCTION_PARAMETERS
 
 	object_init_ex(return_value, iter_ce);
 	namednode = Z_DOMOBJ_P(return_value);
-	dom_namednode_iter(intern, 0, namednode, NULL, name, uri);
+	php_dom_create_obj_map(intern, namednode, NULL, name, uri, &php_dom_obj_map_by_tag_name);
 }
 
 PHP_METHOD(DOMElement, getElementsByTagNameNS)

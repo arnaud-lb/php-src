@@ -6034,6 +6034,8 @@ ZEND_VM_COLD_CONST_HANDLER(110, ZEND_CLONE, CONST|TMPVAR|UNUSED|THIS|CV, ANY)
 	SAVE_OPLINE();
 	obj = GET_OP1_OBJ_ZVAL_PTR_UNDEF(BP_VAR_R);
 
+	/* ZEND_CLONE also exists as the clone() function and both implementations must be kept in sync. */
+
 	do {
 		if (OP1_TYPE == IS_CONST ||
 		    (OP1_TYPE != IS_UNUSED && UNEXPECTED(Z_TYPE_P(obj) != IS_OBJECT))) {
@@ -6050,7 +6052,7 @@ ZEND_VM_COLD_CONST_HANDLER(110, ZEND_CLONE, CONST|TMPVAR|UNUSED|THIS|CV, ANY)
 					HANDLE_EXCEPTION();
 				}
 			}
-			zend_throw_error(NULL, "__clone method called on non-object");
+			zend_type_error("clone(): Argument #1 ($object) must be of type object, %s given", zend_zval_value_name(obj));
 			FREE_OP1();
 			HANDLE_EXCEPTION();
 		}
@@ -6072,7 +6074,7 @@ ZEND_VM_COLD_CONST_HANDLER(110, ZEND_CLONE, CONST|TMPVAR|UNUSED|THIS|CV, ANY)
 		if (clone->common.scope != scope) {
 			if (UNEXPECTED(clone->common.fn_flags & ZEND_ACC_PRIVATE)
 			 || UNEXPECTED(!zend_check_protected(zend_get_function_root_class(clone), scope))) {
-				zend_wrong_clone_call(clone, scope);
+				zend_bad_method_call(clone, clone->common.function_name, scope);
 				FREE_OP1();
 				ZVAL_UNDEF(EX_VAR(opline->result.var));
 				HANDLE_EXCEPTION();
@@ -8287,7 +8289,7 @@ ZEND_VM_HANDLER(143, ZEND_DECLARE_CONST, CONST, CONST)
 	ZEND_CONSTANT_SET_FLAGS(&c, 0, PHP_USER_CONSTANT);
 	c.name = zend_string_copy(Z_STR_P(name));
 
-	if (zend_register_constant(&c) == FAILURE) {
+	if (zend_register_constant(&c) == NULL) {
 	}
 
 	FREE_OP1();
@@ -8300,7 +8302,7 @@ ZEND_VM_HANDLER(210, ZEND_DECLARE_ATTRIBUTED_CONST, CONST, CONST)
 	USE_OPLINE
 	zval *name;
 	zval *val;
-	zend_constant c;
+	zend_constant c, *registered;
 
 	SAVE_OPLINE();
 	name  = GET_OP1_ZVAL_PTR(BP_VAR_R);
@@ -8319,7 +8321,8 @@ ZEND_VM_HANDLER(210, ZEND_DECLARE_ATTRIBUTED_CONST, CONST, CONST)
 	ZEND_CONSTANT_SET_FLAGS(&c, 0, PHP_USER_CONSTANT);
 	c.name = zend_string_copy(Z_STR_P(name));
 
-	if (zend_register_constant(&c) == FAILURE) {
+	registered = zend_register_constant(&c);
+	if (registered == NULL) {
 		FREE_OP1();
 		FREE_OP2();
 		/* two opcodes used, second one is the data with attributes */
@@ -8327,9 +8330,7 @@ ZEND_VM_HANDLER(210, ZEND_DECLARE_ATTRIBUTED_CONST, CONST, CONST)
 	}
 
 	HashTable *attributes = Z_PTR_P(GET_OP_DATA_ZVAL_PTR(BP_VAR_R));
-	zend_constant *registered = zend_get_constant_ptr(c.name);
 	ZEND_ASSERT(attributes != NULL);
-	ZEND_ASSERT(registered != NULL);
 	zend_constant_add_attributes(registered, attributes);
 
 	FREE_OP1();

@@ -5442,6 +5442,8 @@ static ZEND_VM_COLD ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CLONE_SPEC_CONST_
 	SAVE_OPLINE();
 	obj = RT_CONSTANT(opline, opline->op1);
 
+	/* ZEND_CLONE also exists as the clone() function and both implementations must be kept in sync. */
+
 	do {
 		if (IS_CONST == IS_CONST ||
 		    (IS_CONST != IS_UNUSED && UNEXPECTED(Z_TYPE_P(obj) != IS_OBJECT))) {
@@ -5458,7 +5460,7 @@ static ZEND_VM_COLD ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CLONE_SPEC_CONST_
 					HANDLE_EXCEPTION();
 				}
 			}
-			zend_throw_error(NULL, "__clone method called on non-object");
+			zend_type_error("clone(): Argument #1 ($object) must be of type object, %s given", zend_zval_value_name(obj));
 
 			HANDLE_EXCEPTION();
 		}
@@ -5480,7 +5482,7 @@ static ZEND_VM_COLD ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CLONE_SPEC_CONST_
 		if (clone->common.scope != scope) {
 			if (UNEXPECTED(clone->common.fn_flags & ZEND_ACC_PRIVATE)
 			 || UNEXPECTED(!zend_check_protected(zend_get_function_root_class(clone), scope))) {
-				zend_wrong_clone_call(clone, scope);
+				zend_bad_method_call(clone, clone->common.function_name, scope);
 
 				ZVAL_UNDEF(EX_VAR(opline->result.var));
 				HANDLE_EXCEPTION();
@@ -8303,7 +8305,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_DECLARE_CONST_SPEC_CONST_CONST
 	ZEND_CONSTANT_SET_FLAGS(&c, 0, PHP_USER_CONSTANT);
 	c.name = zend_string_copy(Z_STR_P(name));
 
-	if (zend_register_constant(&c) == FAILURE) {
+	if (zend_register_constant(&c) == NULL) {
 	}
 
 
@@ -8315,7 +8317,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_DECLARE_ATTRIBUTED_CONST_SPEC_
 	USE_OPLINE
 	zval *name;
 	zval *val;
-	zend_constant c;
+	zend_constant c, *registered;
 
 	SAVE_OPLINE();
 	name  = RT_CONSTANT(opline, opline->op1);
@@ -8334,7 +8336,8 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_DECLARE_ATTRIBUTED_CONST_SPEC_
 	ZEND_CONSTANT_SET_FLAGS(&c, 0, PHP_USER_CONSTANT);
 	c.name = zend_string_copy(Z_STR_P(name));
 
-	if (zend_register_constant(&c) == FAILURE) {
+	registered = zend_register_constant(&c);
+	if (registered == NULL) {
 
 
 		/* two opcodes used, second one is the data with attributes */
@@ -8342,9 +8345,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_DECLARE_ATTRIBUTED_CONST_SPEC_
 	}
 
 	HashTable *attributes = Z_PTR_P(get_op_data_zval_ptr_r((opline+1)->op1_type, (opline+1)->op1));
-	zend_constant *registered = zend_get_constant_ptr(c.name);
 	ZEND_ASSERT(attributes != NULL);
-	ZEND_ASSERT(registered != NULL);
 	zend_constant_add_attributes(registered, attributes);
 
 
@@ -15690,6 +15691,8 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CLONE_SPEC_TMPVAR_HANDLER(ZEND
 	SAVE_OPLINE();
 	obj = _get_zval_ptr_var(opline->op1.var EXECUTE_DATA_CC);
 
+	/* ZEND_CLONE also exists as the clone() function and both implementations must be kept in sync. */
+
 	do {
 		if ((IS_TMP_VAR|IS_VAR) == IS_CONST ||
 		    ((IS_TMP_VAR|IS_VAR) != IS_UNUSED && UNEXPECTED(Z_TYPE_P(obj) != IS_OBJECT))) {
@@ -15706,7 +15709,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CLONE_SPEC_TMPVAR_HANDLER(ZEND
 					HANDLE_EXCEPTION();
 				}
 			}
-			zend_throw_error(NULL, "__clone method called on non-object");
+			zend_type_error("clone(): Argument #1 ($object) must be of type object, %s given", zend_zval_value_name(obj));
 			zval_ptr_dtor_nogc(EX_VAR(opline->op1.var));
 			HANDLE_EXCEPTION();
 		}
@@ -15728,7 +15731,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CLONE_SPEC_TMPVAR_HANDLER(ZEND
 		if (clone->common.scope != scope) {
 			if (UNEXPECTED(clone->common.fn_flags & ZEND_ACC_PRIVATE)
 			 || UNEXPECTED(!zend_check_protected(zend_get_function_root_class(clone), scope))) {
-				zend_wrong_clone_call(clone, scope);
+				zend_bad_method_call(clone, clone->common.function_name, scope);
 				zval_ptr_dtor_nogc(EX_VAR(opline->op1.var));
 				ZVAL_UNDEF(EX_VAR(opline->result.var));
 				HANDLE_EXCEPTION();
@@ -33785,6 +33788,8 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CLONE_SPEC_UNUSED_HANDLER(ZEND
 	SAVE_OPLINE();
 	obj = &EX(This);
 
+	/* ZEND_CLONE also exists as the clone() function and both implementations must be kept in sync. */
+
 	do {
 		if (IS_UNUSED == IS_CONST ||
 		    (IS_UNUSED != IS_UNUSED && UNEXPECTED(Z_TYPE_P(obj) != IS_OBJECT))) {
@@ -33801,7 +33806,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CLONE_SPEC_UNUSED_HANDLER(ZEND
 					HANDLE_EXCEPTION();
 				}
 			}
-			zend_throw_error(NULL, "__clone method called on non-object");
+			zend_type_error("clone(): Argument #1 ($object) must be of type object, %s given", zend_zval_value_name(obj));
 
 			HANDLE_EXCEPTION();
 		}
@@ -33823,7 +33828,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CLONE_SPEC_UNUSED_HANDLER(ZEND
 		if (clone->common.scope != scope) {
 			if (UNEXPECTED(clone->common.fn_flags & ZEND_ACC_PRIVATE)
 			 || UNEXPECTED(!zend_check_protected(zend_get_function_root_class(clone), scope))) {
-				zend_wrong_clone_call(clone, scope);
+				zend_bad_method_call(clone, clone->common.function_name, scope);
 
 				ZVAL_UNDEF(EX_VAR(opline->result.var));
 				HANDLE_EXCEPTION();
@@ -41404,6 +41409,8 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CLONE_SPEC_CV_HANDLER(ZEND_OPC
 	SAVE_OPLINE();
 	obj = EX_VAR(opline->op1.var);
 
+	/* ZEND_CLONE also exists as the clone() function and both implementations must be kept in sync. */
+
 	do {
 		if (IS_CV == IS_CONST ||
 		    (IS_CV != IS_UNUSED && UNEXPECTED(Z_TYPE_P(obj) != IS_OBJECT))) {
@@ -41420,7 +41427,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CLONE_SPEC_CV_HANDLER(ZEND_OPC
 					HANDLE_EXCEPTION();
 				}
 			}
-			zend_throw_error(NULL, "__clone method called on non-object");
+			zend_type_error("clone(): Argument #1 ($object) must be of type object, %s given", zend_zval_value_name(obj));
 
 			HANDLE_EXCEPTION();
 		}
@@ -41442,7 +41449,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CLONE_SPEC_CV_HANDLER(ZEND_OPC
 		if (clone->common.scope != scope) {
 			if (UNEXPECTED(clone->common.fn_flags & ZEND_ACC_PRIVATE)
 			 || UNEXPECTED(!zend_check_protected(zend_get_function_root_class(clone), scope))) {
-				zend_wrong_clone_call(clone, scope);
+				zend_bad_method_call(clone, clone->common.function_name, scope);
 
 				ZVAL_UNDEF(EX_VAR(opline->result.var));
 				HANDLE_EXCEPTION();

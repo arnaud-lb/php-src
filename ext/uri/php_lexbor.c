@@ -73,10 +73,10 @@ static void lexbor_cleanup_parser(void)
  * When errors is NULL, the caller is not interested in the additional error information,
  * so the function does nothing.
  */
-static void fill_errors(zval *errors)
+static const char *fill_errors(zval *errors)
 {
 	if (errors == NULL) {
-		return;
+		return NULL;
 	}
 
 	ZEND_ASSERT(Z_ISUNDEF_P(errors));
@@ -84,171 +84,167 @@ static void fill_errors(zval *errors)
 	array_init(errors);
 
 	if (lexbor_parser.log == NULL) {
-		return;
+		return NULL;
 	}
 
+	const char *result = NULL;
 	lexbor_plog_entry_t *lxb_error;
 	while ((lxb_error = lexbor_array_obj_pop(&lexbor_parser.log->list)) != NULL) {
 		zval error;
 		object_init_ex(&error, uri_whatwg_url_validation_error_ce);
 		zend_update_property_string(uri_whatwg_url_validation_error_ce, Z_OBJ(error), ZEND_STRL("context"), (const char *) lxb_error->data);
 
-		zend_string *error_str;
+		const char *error_str;
 		zval failure;
 		switch (lxb_error->id) {
 			case LXB_URL_ERROR_TYPE_DOMAIN_TO_ASCII:
-				error_str = ZSTR_INIT_LITERAL("DomainToAscii", false);
+				error_str = "DomainToAscii";
 				ZVAL_TRUE(&failure);
 				break;
 			case LXB_URL_ERROR_TYPE_DOMAIN_TO_UNICODE:
-				error_str = ZSTR_INIT_LITERAL("DomainToUnicode", false);
+				error_str = "DomainToUnicode";
 				ZVAL_FALSE(&failure);
 				break;
 			case LXB_URL_ERROR_TYPE_DOMAIN_INVALID_CODE_POINT:
-				error_str = ZSTR_INIT_LITERAL("DomainInvalidCodePoint", false);
+				error_str = "DomainInvalidCodePoint";
 				ZVAL_TRUE(&failure);
 				break;
 			case LXB_URL_ERROR_TYPE_HOST_INVALID_CODE_POINT:
-				error_str = ZSTR_INIT_LITERAL("HostInvalidCodePoint", false);
+				error_str = "HostInvalidCodePoint";
 				ZVAL_TRUE(&failure);
 				break;
 			case LXB_URL_ERROR_TYPE_IPV4_EMPTY_PART:
-				error_str = ZSTR_INIT_LITERAL("Ipv4EmptyPart", false);
+				error_str = "Ipv4EmptyPart";
 				ZVAL_FALSE(&failure);
 				break;
 			case LXB_URL_ERROR_TYPE_IPV4_TOO_MANY_PARTS:
-				error_str = ZSTR_INIT_LITERAL("Ipv4TooManyParts", false);
+				error_str = "Ipv4TooManyParts";
 				ZVAL_TRUE(&failure);
 				break;
 			case LXB_URL_ERROR_TYPE_IPV4_NON_NUMERIC_PART:
-				error_str = ZSTR_INIT_LITERAL("Ipv4NonNumericPart", false);
+				error_str = "Ipv4NonNumericPart";
 				ZVAL_TRUE(&failure);
 				break;
 			case LXB_URL_ERROR_TYPE_IPV4_NON_DECIMAL_PART:
-				error_str = ZSTR_INIT_LITERAL("Ipv4NonDecimalPart", false);
+				error_str = "Ipv4NonDecimalPart";
 				ZVAL_FALSE(&failure);
 				break;
 			case LXB_URL_ERROR_TYPE_IPV4_OUT_OF_RANGE_PART:
-				error_str = ZSTR_INIT_LITERAL("Ipv4OutOfRangePart", false);
+				error_str = "Ipv4OutOfRangePart";
 				ZVAL_TRUE(&failure);
 				break;
 			case LXB_URL_ERROR_TYPE_IPV6_UNCLOSED:
-				error_str = ZSTR_INIT_LITERAL("Ipv6Unclosed", false);
+				error_str = "Ipv6Unclosed";
 				ZVAL_TRUE(&failure);
 				break;
 			case LXB_URL_ERROR_TYPE_IPV6_INVALID_COMPRESSION:
-				error_str = ZSTR_INIT_LITERAL("Ipv6InvalidCompression", false);
+				error_str = "Ipv6InvalidCompression";
 				ZVAL_TRUE(&failure);
 				break;
 			case LXB_URL_ERROR_TYPE_IPV6_TOO_MANY_PIECES:
-				error_str = ZSTR_INIT_LITERAL("Ipv6TooManyPieces", false);
+				error_str = "Ipv6TooManyPieces";
 				ZVAL_TRUE(&failure);
 				break;
 			case LXB_URL_ERROR_TYPE_IPV6_MULTIPLE_COMPRESSION:
-				error_str = ZSTR_INIT_LITERAL("Ipv6MultipleCompression", false);
+				error_str = "Ipv6MultipleCompression";
 				ZVAL_TRUE(&failure);
 				break;
 			case LXB_URL_ERROR_TYPE_IPV6_INVALID_CODE_POINT:
-				error_str = ZSTR_INIT_LITERAL("Ipv6InvalidCodePoint", false);
+				error_str = "Ipv6InvalidCodePoint";
 				ZVAL_TRUE(&failure);
 				break;
 			case LXB_URL_ERROR_TYPE_IPV6_TOO_FEW_PIECES:
-				error_str = ZSTR_INIT_LITERAL("Ipv6TooFewPieces", false);
+				error_str = "Ipv6TooFewPieces";
 				ZVAL_TRUE(&failure);
 				break;
 			case LXB_URL_ERROR_TYPE_IPV4_IN_IPV6_TOO_MANY_PIECES:
-				error_str = ZSTR_INIT_LITERAL("Ipv4InIpv6TooManyPieces", false);
+				error_str = "Ipv4InIpv6TooManyPieces";
 				ZVAL_TRUE(&failure);
 				break;
 			case LXB_URL_ERROR_TYPE_IPV4_IN_IPV6_INVALID_CODE_POINT:
-				error_str = ZSTR_INIT_LITERAL("Ipv4InIpv6InvalidCodePoint", false);
+				error_str = "Ipv4InIpv6InvalidCodePoint";
 				ZVAL_TRUE(&failure);
 				break;
 			case LXB_URL_ERROR_TYPE_IPV4_IN_IPV6_OUT_OF_RANGE_PART:
-				error_str = ZSTR_INIT_LITERAL("Ipv4InIpv6OutOfRangePart", false);
+				error_str = "Ipv4InIpv6OutOfRangePart";
 				ZVAL_TRUE(&failure);
 				break;
 			case LXB_URL_ERROR_TYPE_IPV4_IN_IPV6_TOO_FEW_PARTS:
-				error_str = ZSTR_INIT_LITERAL("Ipv4InIpv6TooFewParts", false);
+				error_str = "Ipv4InIpv6TooFewParts";
 				ZVAL_TRUE(&failure);
 				break;
 			case LXB_URL_ERROR_TYPE_INVALID_URL_UNIT:
-				error_str = ZSTR_INIT_LITERAL("InvalidUrlUnit", false);
+				error_str = "InvalidUrlUnit";
 				ZVAL_FALSE(&failure);
 				break;
 			case LXB_URL_ERROR_TYPE_SPECIAL_SCHEME_MISSING_FOLLOWING_SOLIDUS:
-				error_str = ZSTR_INIT_LITERAL("SpecialSchemeMissingFollowingSolidus", false);
+				error_str = "SpecialSchemeMissingFollowingSolidus";
 				ZVAL_FALSE(&failure);
 				break;
 			case LXB_URL_ERROR_TYPE_MISSING_SCHEME_NON_RELATIVE_URL:
-				error_str = ZSTR_INIT_LITERAL("MissingSchemeNonRelativeUrl", false);
+				error_str = "MissingSchemeNonRelativeUrl";
 				ZVAL_TRUE(&failure);
 				break;
 			case LXB_URL_ERROR_TYPE_INVALID_REVERSE_SOLIDUS:
-				error_str = ZSTR_INIT_LITERAL("InvalidReverseSoldius", false);
+				error_str = "InvalidReverseSoldius";
 				ZVAL_FALSE(&failure);
 				break;
 			case LXB_URL_ERROR_TYPE_INVALID_CREDENTIALS:
-				error_str = ZSTR_INIT_LITERAL("InvalidCredentials", false);
+				error_str = "InvalidCredentials";
 				ZVAL_FALSE(&failure);
 				break;
 			case LXB_URL_ERROR_TYPE_HOST_MISSING:
-				error_str = ZSTR_INIT_LITERAL("HostMissing", false);
+				error_str = "HostMissing";
 				ZVAL_TRUE(&failure);
 				break;
 			case LXB_URL_ERROR_TYPE_PORT_OUT_OF_RANGE:
-				error_str = ZSTR_INIT_LITERAL("PortOutOfRange", false);
+				error_str = "PortOutOfRange";
 				ZVAL_TRUE(&failure);
 				break;
 			case LXB_URL_ERROR_TYPE_PORT_INVALID:
-				error_str = ZSTR_INIT_LITERAL("PortInvalid", false);
+				error_str = "PortInvalid";
 				ZVAL_TRUE(&failure);
 				break;
 			case LXB_URL_ERROR_TYPE_FILE_INVALID_WINDOWS_DRIVE_LETTER:
-				error_str = ZSTR_INIT_LITERAL("FileInvalidWindowsDriveLetter", false);
+				error_str = "FileInvalidWindowsDriveLetter";
 				ZVAL_FALSE(&failure);
 				break;
 			case LXB_URL_ERROR_TYPE_FILE_INVALID_WINDOWS_DRIVE_LETTER_HOST:
-				error_str = ZSTR_INIT_LITERAL("FileInvalidWindowsDriveLetterHost", false);
+				error_str = "FileInvalidWindowsDriveLetterHost";
 				ZVAL_FALSE(&failure);
 				break;
 			EMPTY_SWITCH_DEFAULT_CASE()
 		}
 
 		zval error_type;
-		zend_enum_new(&error_type, uri_whatwg_url_validation_error_type_ce, error_str, NULL);
+		ZVAL_OBJ(&error_type, zend_enum_get_case_cstr(uri_whatwg_url_validation_error_type_ce, error_str));
 		zend_update_property_ex(uri_whatwg_url_validation_error_ce, Z_OBJ(error), ZSTR_KNOWN(ZEND_STR_TYPE), &error_type);
-		zend_string_release_ex(error_str, false);
-		zval_ptr_dtor(&error_type);
 
 		zend_update_property(uri_whatwg_url_validation_error_ce, Z_OBJ(error), ZEND_STRL("failure"), &failure);
 
+		if (Z_TYPE(failure) == IS_TRUE) {
+			result = error_str;
+		}
+
 		add_next_index_zval(errors, &error);
 	}
+
+	return result;
 }
 
-static void throw_invalid_url_exception(zval *errors)
+static void throw_invalid_url_exception_during_write(zval *errors, const char *component)
 {
-	ZEND_ASSERT(errors != NULL && Z_TYPE_P(errors) == IS_ARRAY);
-
-	zval exception;
-
-	object_init_ex(&exception, uri_whatwg_invalid_url_exception_ce);
-
-	zval value;
-	ZVAL_STRING(&value, "URL parsing failed");
-	zend_update_property_ex(uri_whatwg_invalid_url_exception_ce, Z_OBJ(exception), ZSTR_KNOWN(ZEND_STR_MESSAGE), &value);
-	zval_ptr_dtor_str(&value);
-
-	zend_update_property(uri_whatwg_invalid_url_exception_ce, Z_OBJ(exception), ZEND_STRL("errors"), errors);
-
-	zend_throw_exception_object(&exception);
-}
-
-static void throw_invalid_url_exception_during_write(zval *errors)
-{
-	fill_errors(errors);
-	throw_invalid_url_exception(errors);
+	const char *reason = fill_errors(errors);
+	zend_object *exception = zend_throw_exception_ex(
+		uri_whatwg_invalid_url_exception_ce,
+		0,
+		"The specified %s is malformed%s%s%s",
+		component,
+		reason ? " (" : "",
+		reason ? reason : "",
+		reason ? ")" : ""
+	);
+	zend_update_property(exception->ce, exception, ZEND_STRL("errors"), errors);
 }
 
 static lxb_status_t lexbor_serialize_callback(const lxb_char_t *data, size_t length, void *ctx)
@@ -281,7 +277,7 @@ static zend_result lexbor_write_scheme(struct uri_internal_t *internal_uri, zval
 	zval_string_or_null_to_lexbor_str(value, &str);
 
 	if (lxb_url_api_protocol_set(lexbor_uri, &lexbor_parser, str.data, str.length) != LXB_STATUS_OK) {
-		throw_invalid_url_exception_during_write(errors);
+		throw_invalid_url_exception_during_write(errors, "scheme");
 
 		return FAILURE;
 	}
@@ -310,7 +306,7 @@ static zend_result lexbor_write_username(uri_internal_t *internal_uri, zval *val
 	zval_string_or_null_to_lexbor_str(value, &str);
 
 	if (lxb_url_api_username_set(lexbor_uri, str.data, str.length) != LXB_STATUS_OK) {
-		throw_invalid_url_exception_during_write(errors);
+		throw_invalid_url_exception_during_write(errors, "username");
 
 		return FAILURE;
 	}
@@ -339,7 +335,7 @@ static zend_result lexbor_write_password(struct uri_internal_t *internal_uri, zv
 	zval_string_or_null_to_lexbor_str(value, &str);
 
 	if (lxb_url_api_password_set(lexbor_uri, str.data, str.length) != LXB_STATUS_OK) {
-		throw_invalid_url_exception_during_write(errors);
+		throw_invalid_url_exception_during_write(errors, "password");
 
 		return FAILURE;
 	}
@@ -411,7 +407,7 @@ static zend_result lexbor_write_host(struct uri_internal_t *internal_uri, zval *
 	zval_string_or_null_to_lexbor_str(value, &str);
 
 	if (lxb_url_api_hostname_set(lexbor_uri, &lexbor_parser, str.data, str.length) != LXB_STATUS_OK) {
-		throw_invalid_url_exception_during_write(errors);
+		throw_invalid_url_exception_during_write(errors, "host");
 
 		return FAILURE;
 	}
@@ -440,7 +436,7 @@ static zend_result lexbor_write_port(struct uri_internal_t *internal_uri, zval *
 	zval_long_or_null_to_lexbor_str(value, &str);
 
 	if (lxb_url_api_port_set(lexbor_uri, &lexbor_parser, str.data, str.length) != LXB_STATUS_OK) {
-		throw_invalid_url_exception_during_write(errors);
+		throw_invalid_url_exception_during_write(errors, "port");
 
 		return FAILURE;
 	}
@@ -469,7 +465,7 @@ static zend_result lexbor_write_path(struct uri_internal_t *internal_uri, zval *
 	zval_string_or_null_to_lexbor_str(value, &str);
 
 	if (lxb_url_api_pathname_set(lexbor_uri, &lexbor_parser, str.data, str.length) != LXB_STATUS_OK) {
-		throw_invalid_url_exception_during_write(errors);
+		throw_invalid_url_exception_during_write(errors, "path");
 
 		return FAILURE;
 	}
@@ -498,7 +494,7 @@ static zend_result lexbor_write_query(struct uri_internal_t *internal_uri, zval 
 	zval_string_or_null_to_lexbor_str(value, &str);
 
 	if (lxb_url_api_search_set(lexbor_uri, &lexbor_parser, str.data, str.length) != LXB_STATUS_OK) {
-		throw_invalid_url_exception_during_write(errors);
+		throw_invalid_url_exception_during_write(errors, "query string");
 
 		return FAILURE;
 	}
@@ -527,7 +523,7 @@ static zend_result lexbor_write_fragment(struct uri_internal_t *internal_uri, zv
 	zval_string_or_null_to_lexbor_str(value, &str);
 
 	if (lxb_url_api_hash_set(lexbor_uri, &lexbor_parser, str.data, str.length) != LXB_STATUS_OK) {
-		throw_invalid_url_exception_during_write(errors);
+		throw_invalid_url_exception_during_write(errors, "fragment");
 
 		return FAILURE;
 	}
@@ -569,10 +565,11 @@ lxb_url_t *lexbor_parse_uri_ex(const zend_string *uri_str, const lxb_url_t *lexb
 	lexbor_cleanup_parser();
 
 	lxb_url_t *url = lxb_url_parse(&lexbor_parser, lexbor_base_url, (unsigned char *) ZSTR_VAL(uri_str), ZSTR_LEN(uri_str));
-	fill_errors(errors);
+	const char *reason = fill_errors(errors);
 
 	if (url == NULL && !silent) {
-		throw_invalid_url_exception(errors);
+		zend_object *exception = zend_throw_exception_ex(uri_whatwg_invalid_url_exception_ce, 0, "The specified URI is malformed%s%s%s", reason ? " (" : "", reason ? reason : "", reason ? ")" : "");
+		zend_update_property(exception->ce, exception, ZEND_STRL("errors"), errors);
 	}
 
 	return url;
