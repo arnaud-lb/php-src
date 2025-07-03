@@ -27,6 +27,7 @@
 #include <ZendAccelerator.h>
 #include "Optimizer/zend_func_info.h"
 #include "Optimizer/zend_call_graph.h"
+#include "zend_partial.h"
 #include "zend_jit.h"
 
 #include "zend_jit_internal.h"
@@ -59,6 +60,8 @@ ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL zend_jit_leave_nested_func_helper(ZEND_OPC
 		OBJ_RELEASE(Z_OBJ(execute_data->This));
 	} else if (UNEXPECTED(call_info & ZEND_CALL_CLOSURE)) {
 		OBJ_RELEASE(ZEND_CLOSURE_OBJECT(EX(func)));
+	} else if (UNEXPECTED(call_info & ZEND_CALL_FAKE_CLOSURE)) {
+		OBJ_RELEASE(ZEND_PARTIAL_OBJECT(EX(func)));
 	}
 	if (UNEXPECTED(call_info & ZEND_CALL_HAS_EXTRA_NAMED_PARAMS)) {
 		zend_free_extra_named_params(EX(extra_named_params));
@@ -100,6 +103,8 @@ ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL zend_jit_leave_top_func_helper(ZEND_OPCODE
 	}
 	if (UNEXPECTED(call_info & ZEND_CALL_CLOSURE)) {
 		OBJ_RELEASE(ZEND_CLOSURE_OBJECT(EX(func)));
+	} else if (UNEXPECTED(call_info & ZEND_CALL_FAKE_CLOSURE)) {
+		OBJ_RELEASE(ZEND_PARTIAL_OBJECT(EX(func)));
 	}
 	execute_data = EG(current_execute_data);
 #ifdef HAVE_GCC_GLOBAL_REGS
@@ -692,7 +697,9 @@ zend_jit_trace_stop ZEND_FASTCALL zend_jit_trace_execute(zend_execute_data  *ex,
 		(zend_jit_op_array_trace_extension*)ZEND_FUNC_INFO(op_array);
 	offset = jit_extension->offset;
 	if (!op_array->function_name
-	 || (op_array->fn_flags & ZEND_ACC_CLOSURE)) {
+	 || (op_array->fn_flags & (ZEND_ACC_CLOSURE|ZEND_ACC_FAKE_CLOSURE))) {
+		/* op_array is a copy that may be freed during tracing. Also, it
+		 * may be bound to a custom scope. Fetch the original op_array. */
 		op_array = jit_extension->op_array;
 	}
 
@@ -977,7 +984,8 @@ zend_jit_trace_stop ZEND_FASTCALL zend_jit_trace_execute(zend_execute_data  *ex,
 				TRACE_RECORD(ZEND_JIT_TRACE_DO_ICALL, 0, func);
 			}
 		} else if (opline->opcode == ZEND_INCLUDE_OR_EVAL
-				|| opline->opcode == ZEND_CALLABLE_CONVERT) {
+				|| opline->opcode == ZEND_CALLABLE_CONVERT
+				|| opline->opcode == ZEND_CALLABLE_CONVERT_PARTIAL) {
 			/* TODO: Support tracing JIT for ZEND_CALLABLE_CONVERT. */
 			stop = ZEND_JIT_TRACE_STOP_INTERPRETER;
 			break;
@@ -1016,7 +1024,9 @@ zend_jit_trace_stop ZEND_FASTCALL zend_jit_trace_execute(zend_execute_data  *ex,
 			}
 			offset = jit_extension->offset;
 			if (!op_array->function_name
-			 || (op_array->fn_flags & ZEND_ACC_CLOSURE)) {
+			 || (op_array->fn_flags & (ZEND_ACC_CLOSURE|ZEND_ACC_FAKE_CLOSURE))) {
+				/* op_array is a copy that may be freed during tracing. Also, it
+				 * may be bound to a custom scope. Fetch the original op_array. */
 				op_array = jit_extension->op_array;
 			}
 

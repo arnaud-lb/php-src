@@ -23,9 +23,8 @@
 
 BEGIN_EXTERN_C()
 
-/* This macro depends on zend_closure structure layout */
 #define ZEND_PARTIAL_OBJECT(func) \
-	((zend_object*)((char*)(func) - XtOffsetOf(struct{uint32_t a; zend_function b;}, b) - sizeof(zval) - sizeof(zend_function) - sizeof(zend_object)))
+	((zend_object*)((char*)(func) - zend_partial_func_offset()))
 
 typedef struct _zend_partial zend_partial;
 
@@ -46,6 +45,17 @@ zend_function *zend_partial_get_trampoline(zend_object *object);
 zend_result zend_partial_init_call(zend_execute_data *call);
 
 bool zend_is_partial_function(zend_function *function);
+
+/* Offset of zend_partial.func */
+static zend_always_inline size_t zend_partial_func_offset(void) {
+	return XtOffsetOf(struct {
+		zend_object a;
+		zend_function b;
+		zval c;
+		uint32_t d;
+		zend_function func;
+	}, func);
+}
 
 END_EXTERN_C()
 

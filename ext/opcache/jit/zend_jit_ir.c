@@ -16,6 +16,7 @@
  *  +----------------------------------------------------------------------+
  */
 
+#include "zend_partial.h"
 #include "jit/ir/ir.h"
 #include "jit/ir/ir_builder.h"
 
