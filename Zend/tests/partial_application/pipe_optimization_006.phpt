@@ -21,7 +21,7 @@ $_main:
      ; (lines=11, args=0, vars=0, tmps=2)
      ; (after optimizer)
      ; %spipe_optimization_006.php:1-12
-0000 INIT_FCALL 0 80 string("time")
+0000 INIT_FCALL 0 %d string("time")
 0001 V1 = DO_ICALL
 0002 T0 = IS_SMALLER int(0) V1
 0003 JMPZ T0 0005
@@ -40,7 +40,7 @@ foo:
 0000 CV0($a) = RECV 1
 0001 CV1($b) = RECV_INIT 2 null
 0002 CV2($c) = RECV_INIT 3 null
-0003 INIT_FCALL 3 128 string("var_dump")
+0003 INIT_FCALL 3 %d string("var_dump")
 0004 SEND_VAR CV0($a) 1
 0005 SEND_VAR CV1($b) 2
 0006 SEND_VAR CV2($c) 3
