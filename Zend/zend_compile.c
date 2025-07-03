@@ -3983,20 +3983,17 @@ ZEND_API uint8_t zend_get_call_op(const zend_op *init_op, zend_function *fbc, bo
 
 void zend_compile_call_partial(znode *result, uint32_t arg_count, bool may_have_extra_named_args, uint32_t opnum_init, zend_function *fbc) { /* {{{ */
 	zend_op *opline = &CG(active_op_array)->opcodes[opnum_init];
-	znode op1;
 
 	opline->extended_value = arg_count;
 
-	if (opline->opcode == ZEND_NEW) {
-		zend_error_noreturn(E_COMPILE_ERROR, "Cannot create partial application for new expression");
-	}
+	ZEND_ASSERT(opline->opcode != ZEND_NEW);
 
 	if (opline->opcode == ZEND_INIT_FCALL) {
 		opline->op1.num = zend_vm_calc_used_stack(arg_count, fbc);
 	}
 
 	opline = zend_emit_op_tmp(result, ZEND_CALLABLE_CONVERT_PARTIAL,
-				(opline->opcode == ZEND_NEW) ? &op1 : NULL, NULL);
+				NULL, NULL);
 
 	if (may_have_extra_named_args) {
 		opline->extended_value = ZEND_FCALL_MAY_HAVE_EXTRA_NAMED_PARAMS;
@@ -4120,14 +4117,13 @@ static void zend_compile_dynamic_call(znode *result, znode *name_node, zend_ast 
 }
 /* }}} */
 
-static inline bool zend_args_contain_unpack_or_named_or_partial(zend_ast_list *args) /* {{{ */
+static inline bool zend_args_contain_unpack_or_named(zend_ast_list *args) /* {{{ */
 {
 	uint32_t i;
 	for (i = 0; i < args->children; ++i) {
 		zend_ast *arg = args->child[i];
 		if (arg->kind == ZEND_AST_UNPACK ||
-			arg->kind == ZEND_AST_NAMED_ARG ||
-			arg->kind == ZEND_AST_PLACEHOLDER_ARG) {
+			arg->kind == ZEND_AST_NAMED_ARG) {
 			return 1;
 		}
 	}
@@ -4374,7 +4370,7 @@ static zend_result zend_compile_func_cufa(znode *result, zend_ast_list *args, ze
 		zend_string *name = zend_resolve_function_name(orig_name, args->child[1]->child[0]->attr, &is_fully_qualified);
 
 		if (zend_string_equals_literal_ci(name, "array_slice")
-	     && !zend_args_contain_unpack_or_named_or_partial(list)
+	     && !zend_args_contain_unpack_or_named(list)
 		 && list->children == 3
 		 && list->child[1]->kind == ZEND_AST_ZVAL) {
 			zval *zv = zend_ast_get_zval(list->child[1]);
@@ -4805,7 +4801,7 @@ static void zend_compile_ns_call(znode *result, znode *name_node, zend_ast *args
 	/* Find frameless function with same name. */
 	zend_function *frameless_function = NULL;
 	if (args_ast->kind != ZEND_AST_CALLABLE_CONVERT
-	 && !zend_args_contain_unpack_or_named_or_partial(zend_ast_get_list(args_ast))
+	 && !zend_args_contain_unpack_or_named(zend_ast_get_list(args_ast))
 	 /* Avoid blowing up op count with nested frameless branches. */
 	 && !CG(context).in_jmp_frameless_branch) {
 		zend_string *lc_func_name = Z_STR_P(CT_CONSTANT_EX(CG(active_op_array), name_constants + 2));
@@ -5113,7 +5109,7 @@ static zend_result zend_try_compile_special_func(znode *result, zend_string *lcn
 		return FAILURE;
 	}
 
-	if (zend_args_contain_unpack_or_named_or_partial(args)) {
+	if (zend_args_contain_unpack_or_named(args)) {
 		return FAILURE;
 	}
 

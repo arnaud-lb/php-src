@@ -914,13 +914,18 @@ non_empty_argument_list:
 ;
 
 argument:
-		expr				{ $$ = $1; }
+		expr
+			{ $$ = $1; }
 	|	identifier ':' expr
 			{ $$ = zend_ast_create(ZEND_AST_NAMED_ARG, $1, $3); }
-	|	T_ELLIPSIS { $$ = zend_ast_create_ex(ZEND_AST_PLACEHOLDER_ARG, _IS_PLACEHOLDER_VARIADIC); }
-	|	'?' { $$ = zend_ast_create_ex(ZEND_AST_PLACEHOLDER_ARG, _IS_PLACEHOLDER_ARG); }
-	|	identifier ':' '?' { $$ = zend_ast_create(ZEND_AST_NAMED_ARG, $1, zend_ast_create_ex(ZEND_AST_PLACEHOLDER_ARG, _IS_PLACEHOLDER_ARG)); }
-	|	T_ELLIPSIS expr	{ $$ = zend_ast_create(ZEND_AST_UNPACK, $2); }
+	|	T_ELLIPSIS
+			{ $$ = zend_ast_create_ex(ZEND_AST_PLACEHOLDER_ARG, _IS_PLACEHOLDER_VARIADIC); }
+	|	'?'
+			{ $$ = zend_ast_create_ex(ZEND_AST_PLACEHOLDER_ARG, _IS_PLACEHOLDER_ARG); }
+	|	identifier ':' '?'
+			{ $$ = zend_ast_create(ZEND_AST_NAMED_ARG, $1, zend_ast_create_ex(ZEND_AST_PLACEHOLDER_ARG, _IS_PLACEHOLDER_ARG)); }
+	|	T_ELLIPSIS expr
+			{ $$ = zend_ast_create(ZEND_AST_UNPACK, $2); }
 ;
 
 global_var_list:
