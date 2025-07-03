@@ -3112,8 +3112,10 @@ static void zend_jit_setup_disasm(void)
 	REGISTER_HELPER(zend_jit_uninit_static_prop);
 	REGISTER_HELPER(zend_jit_rope_end);
 	REGISTER_HELPER(zend_fcall_interrupt);
+# ifdef __SANITIZE_ADDRESS__
 	REGISTER_HELPER(zend_jit_poison_memory_region_helper);
 	REGISTER_HELPER(zend_jit_unpoison_memory_region_helper);
+# endif
 
 #ifndef ZTS
 	REGISTER_DATA(EG(current_execute_data));
