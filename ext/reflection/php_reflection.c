@@ -1826,7 +1826,7 @@ ZEND_METHOD(ReflectionFunctionAbstract, isClosure)
 	ZEND_PARSE_PARAMETERS_NONE();
 
 	GET_REFLECTION_OBJECT_PTR(fptr);
-	RETURN_BOOL(fptr->common.fn_flags & ZEND_ACC_CLOSURE/*TODO |ZEND_ACC_PARTIAL*/);
+	RETURN_BOOL(fptr->common.fn_flags & ZEND_ACC_CLOSURE);
 }
 /* }}} */
 
@@ -1840,9 +1840,8 @@ ZEND_METHOD(ReflectionFunctionAbstract, isPartial)
 		RETURN_THROWS();
 	}
 	GET_REFLECTION_OBJECT_PTR(fptr);
-	RETURN_BOOL(0);
-	(void)fptr;
-	// TODO RETURN_BOOL(fptr->common.fn_flags & ZEND_ACC_PARTIAL);
+
+	RETURN_BOOL(zend_is_partial_trampoline(fptr));
 }
 /* }}} */
 
