@@ -84,7 +84,8 @@ static bool zend_valid_closure_binding(
 		zend_closure *closure, zval *newthis, zend_class_entry *scope) /* {{{ */
 {
 	zend_function *func = &closure->func;
-	bool is_fake_closure = (func->common.fn_flags & ZEND_ACC_FAKE_CLOSURE) != 0;
+	bool is_fake_closure = (func->common.fn_flags & ZEND_ACC_FAKE_CLOSURE) != 0
+			|| (closure->closure_flags & ZEND_CLOSURE_PARTIAL);
 
 	if (newthis) {
 		if (func->common.fn_flags & ZEND_ACC_STATIC) {
