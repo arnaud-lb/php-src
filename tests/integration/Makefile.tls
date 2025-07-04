@@ -1,0 +1,19 @@
+
+TESTDIR:=$(CURDIR)/../../ext/opcache/jit/tls/testing
+
+ifeq ($(OS),Darwin)
+	TLSC := $(CURDIR)/../../ext/opcache/jit/tls/zend_jit_tls_darwin.c
+else ifeq ($(CPU),x86_64)
+	TLSC := $(CURDIR)/../../ext/opcache/jit/tls/zend_jit_tls_x86_64.c
+else ifeq ($(CPU),x86)
+	TLSC := $(CURDIR)/../../ext/opcache/jit/tls/zend_jit_tls_x86.c
+else ifeq ($(CPU),aarch64)
+	TLSC := $(CURDIR)/../../ext/opcache/jit/tls/zend_jit_tls_aarch64.c
+endif
+
+ifeq ($(CPU),x86)
+	MACHINE:=-m32
+endif
+
+test:
+	TLSC=$(TLSC) MACHINE=$(MACHINE) $(CURDIR)/../../ext/opcache/jit/tls/testing/test.sh
