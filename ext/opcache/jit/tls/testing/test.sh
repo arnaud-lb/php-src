@@ -177,6 +177,10 @@ else
   MUSL=
 fi
 
+if [ "${STATIC_SUPPORT:-yes}" = "yes" ]; then
+  STATIC=-static
+fi
+
 for CC in clang gcc; do
   if [ $CC = gcc ] && [ -f /etc/freebsd-update.conf ]; then
     RPATH=-Wl,-rpath,/usr/local/lib/gcc13
@@ -207,7 +211,7 @@ for CC in clang gcc; do
       CFLAGS="$MACHINE $MUSL $opt -Werror -I$root/ext/opcache -I$root/Zend -I$root"
       LDFLAGS="$MACHINE -fuse-ld=$LD $RPATH"
 
-      for pic in "-fPIC" "-fno-PIC -static"; do
+      for pic in "-fPIC" "-fno-PIC $STATIC"; do
         CFLAGS="$CFLAGS $pic" exe_def_static_user
       done
       shared_def_static_user

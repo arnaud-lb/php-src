@@ -95,8 +95,9 @@ function run_opcache_tls_tests(Environment $environment): bool
         return true;
     }
 
-    $machine = '';
     $tlsc = '';
+    $machine = '';
+    $static_support = 'yes';
 
     switch ($environment->cpuArch) {
         case 'x86':
@@ -121,13 +122,14 @@ function run_opcache_tls_tests(Environment $environment): bool
                 return true;
             }
             $tlsc = __DIR__ . "/ext/opcache/jit/tls/zend_jit_tls_darwin.c";
+            $static_support = 'no';
             break;
         default:
             echo "Skipping: {$environment->os}\n";
             return true;
     }
 
-    echo "TLSC=$tlsc MACHINE=$machine ext/opcache/jit/tls/testing/test.sh\n";
+    echo "TLSC=$tlsc MACHINE=$machine STATIC_SUPPORT=$static_support ext/opcache/jit/tls/testing/test.sh\n";
 
     $proc = proc_open(
         __DIR__ . '/ext/opcache/jit/tls/testing/test.sh',
@@ -138,6 +140,7 @@ function run_opcache_tls_tests(Environment $environment): bool
         env_vars: array_merge(getenv(), [
             'TLSC' => $tlsc,
             'MACHINE' => $machine,
+            'STATIC_SUPPORT' => $static_support,
         ]),
     );
 
