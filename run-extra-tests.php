@@ -197,6 +197,8 @@ function detect_cpu_arch(): string
         $cpu = 'x86_64';
     } else if (in_array($cpu, ['i386', 'i686'])) {
         $cpu = 'x86';
+    } else if ($cpu === 'arm64') {
+        $cpu = 'aarch64';
     }
 
     return $cpu;
