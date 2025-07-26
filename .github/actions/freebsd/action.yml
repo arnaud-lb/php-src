@@ -4,7 +4,7 @@ inputs:
     default: ''
     required: false
   runExtraTests:
-    default: ''
+    default: false
     required: false
 runs:
   using: composite
@@ -116,6 +116,6 @@ runs:
             --set-timeout 120 \
             -d zend_extension=opcache.so
 
-          if test "${{ inputs.runExtraTests }}" = "yes"; then
+          if test "${{ inputs.runExtraTests }}" = "true"; then
             sapi/cli/php run-extra-tests.php
           fi
