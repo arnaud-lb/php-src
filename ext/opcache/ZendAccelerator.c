@@ -26,7 +26,9 @@
 #include "zend_compile.h"
 #include "ZendAccelerator.h"
 #include "zend_modules.h"
+#include "zend_operators.h"
 #include "zend_persist.h"
+#include "zend_portability.h"
 #include "zend_shared_alloc.h"
 #include "zend_accelerator_module.h"
 #include "zend_accelerator_blacklist.h"
@@ -50,6 +52,7 @@
 #include "zend_system_id.h"
 #include "ext/pcre/php_pcre.h"
 #include "ext/standard/basic_functions.h"
+#include "zend_vm_opcodes.h"
 
 #ifdef ZEND_WIN32
 # include "ext/hash/php_hash.h"
@@ -1990,6 +1993,170 @@ static int check_persistent_script_access(zend_persistent_script *persistent_scr
 		efree(phar_path);
 		return ret;
 	}
+}
+
+static const char hexchars[] = "0123456789abcdef";
+
+static char *accel_uintptr_hex(char *dest, uintptr_t n)
+{
+	char *start = dest;
+	dest += sizeof(uintptr_t)*2;
+
+	while (n > 0) {
+		*--dest = hexchars[n % strlen(hexchars)];
+		n /= strlen(hexchars);
+	}
+	while (dest > start) {
+		*--dest = '0';
+	}
+
+	return dest + sizeof(uintptr_t)*2;
+}
+
+static zend_string *zend_accel_pfa_key(const zend_op *declaring_opline,
+		const zend_function *called_function,
+		const zend_class_entry *called_scope)
+{
+	size_t key_len = strlen("partial") + (strlen(":")+sizeof(uintptr_t)*2)*3;
+	zend_string *key = zend_string_alloc(key_len, 0);
+	char *dest = ZSTR_VAL(key);
+
+	dest = mempcpy(ZSTR_VAL(key), "partial", strlen("partial"));
+	*dest++ = ':';
+	dest = accel_uintptr_hex(dest, (uintptr_t)declaring_opline);
+	*dest++ = ':';
+	dest = accel_uintptr_hex(dest, (uintptr_t)called_scope);
+	*dest++ = ':';
+	dest = accel_uintptr_hex(dest, (uintptr_t)called_function);
+
+	ZEND_ASSERT(dest == ZSTR_VAL(key) + key_len);
+
+	ZSTR_VAL(key)[key_len] = 0;
+	ZSTR_LEN(key) = key_len;
+
+	return key;
+}
+
+zend_op_array *zend_accel_pfa_cache_get(const zend_op_array *declaring_op_array,
+		const zend_op *declaring_opline,
+		const zend_function *called_function,
+		const zend_class_entry *called_scope)
+{
+	if (!ZCG(accelerator_enabled)) {
+		return NULL;
+	}
+
+	/* The PFA is not cached if either the declaring op array, called_function,
+	 * or called_scope is not cached. */
+
+	if (declaring_op_array->refcount
+			|| (called_function->type == ZEND_USER_FUNCTION && called_function->op_array.refcount)
+			|| (called_scope && called_scope->type == ZEND_USER_CLASS && !(called_scope->ce_flags & ZEND_ACC_IMMUTABLE))) {
+		return NULL;
+	}
+
+	zend_string *key = zend_accel_pfa_key(declaring_opline,
+			called_function, called_scope);
+	zend_persistent_script *persistent_script =
+		zend_accel_hash_find(&ZCSG(hash), key);
+	zend_string_release(key);
+
+	if (!persistent_script) {
+		return NULL;
+	}
+
+	/* Do not revalidate or check access: this was already validated when
+	 * loading the declaring op array. */
+
+	ZEND_ASSERT(persistent_script->script.main_op_array.num_dynamic_func_defs == 1);
+	return persistent_script->script.main_op_array.dynamic_func_defs[0];
+}
+
+zend_op_array *zend_accel_compile_pfa(zend_ast *ast,
+		const zend_op_array *declaring_op_array,
+		const zend_op *declaring_opline,
+		const zend_function *called_function,
+		const zend_class_entry *called_scope)
+{
+	// TODO: file cache support
+
+	zend_begin_record_errors();
+	zend_op_array *op_array;
+
+	uint32_t orig_compiler_options = CG(compiler_options);
+
+	zend_try {
+		CG(compiler_options) |= ZEND_COMPILE_HANDLE_OP_ARRAY;
+		CG(compiler_options) |= ZEND_COMPILE_DELAYED_BINDING;
+		CG(compiler_options) |= ZEND_COMPILE_NO_CONSTANT_SUBSTITUTION;
+		CG(compiler_options) |= ZEND_COMPILE_IGNORE_OTHER_FILES;
+		CG(compiler_options) |= ZEND_COMPILE_IGNORE_OBSERVER;
+#ifdef ZEND_WIN32
+		/* On Windows, don't compile with internal classes. Shm may be attached from different
+		 * processes with internal classes living in different addresses. */
+		CG(compiler_options) |= ZEND_COMPILE_IGNORE_INTERNAL_CLASSES;
+#endif
+		if (ZCG(accel_directives).file_cache) {
+			CG(compiler_options) |= ZEND_COMPILE_WITH_FILE_CACHE;
+			/* Don't compile with internal classes for file cache, in case some extension is removed
+			 * later on. We cannot assume it is there in the future. */
+			CG(compiler_options) |= ZEND_COMPILE_IGNORE_INTERNAL_CLASSES;
+		}
+
+		op_array = zend_compile_ast(ast, ZEND_USER_FUNCTION, declaring_op_array->filename);
+
+		ZEND_ASSERT(op_array->num_dynamic_func_defs == 1);
+
+		CG(compiler_options) = orig_compiler_options;
+	} zend_catch {
+		op_array = NULL;
+		CG(compiler_options) = orig_compiler_options;
+		zend_bailout();
+	} zend_end_try();
+
+	// TODO: record errors in SHM
+	zend_emit_recorded_errors();
+	zend_free_recorded_errors();
+
+	if (!op_array) {
+		return NULL;
+	}
+
+	/* Cache op_array only if the declaring op_array, the called function, and
+	 * the called_scope are cached */
+	if (!ZCG(accelerator_enabled)
+			|| declaring_op_array->refcount
+			|| (called_function->type == ZEND_USER_FUNCTION && called_function->op_array.refcount)
+			|| (called_scope && called_scope->type == ZEND_USER_CLASS && !(called_scope->ce_flags & ZEND_ACC_IMMUTABLE))) {
+		zend_op_array *closure = op_array->dynamic_func_defs[0];
+		(*closure->refcount)++;
+		destroy_op_array(op_array);
+		efree(op_array);
+		return closure;
+	}
+
+	zend_persistent_script *new_persistent_script = create_persistent_script();
+	new_persistent_script->script.main_op_array = *op_array;
+	efree_size(op_array, sizeof(zend_op_array));
+
+	zend_string *key = zend_accel_pfa_key(declaring_opline,
+			called_function, called_scope);
+
+	new_persistent_script->script.filename = key;
+
+	HANDLE_BLOCK_INTERRUPTIONS();
+	SHM_UNPROTECT();
+
+	bool from_shared_memory;
+	/* See GH-17246: we disable GC so that user code cannot be executed during the optimizer run. */
+	bool orig_gc_state = gc_enable(false);
+	new_persistent_script = cache_script_in_shared_memory(new_persistent_script, NULL, &from_shared_memory);
+	gc_enable(orig_gc_state);
+
+	SHM_PROTECT();
+	HANDLE_UNBLOCK_INTERRUPTIONS();
+
+	return new_persistent_script->script.main_op_array.dynamic_func_defs[0];
 }
 
 /* zend_compile() replacement */

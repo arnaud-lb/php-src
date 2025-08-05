@@ -1,0 +1,78 @@
+--TEST--
+Closure application errors: missing parameters
+--FILE--
+<?php
+function foo($a, ...$b) {
+
+}
+
+function bar($a, $b, $c) {}
+
+$foo = foo(?);
+
+try {
+    $foo();
+} catch (Error $ex) {
+    printf("%s\n", $ex->getMessage());
+}
+
+$foo = foo(?, ?);
+
+try {
+    $foo(1);
+} catch (Error $ex) {
+    printf("%s\n", $ex->getMessage());
+}
+
+$bar = bar(?, ?, ...);
+
+try {
+    $bar(1);
+} catch (Error $ex) {
+    printf("%s\n", $ex->getMessage());
+}
+
+class Foo {
+    public function bar($a, ...$b) {}
+}
+
+$foo = new Foo;
+
+$bar = $foo->bar(?);
+
+try {
+    $bar();
+} catch (Error $ex) {
+    printf("%s\n", $ex->getMessage());
+}
+
+$repeat = str_repeat('a', ...);
+
+try {
+    $repeat();
+} catch (Error $ex) {
+    printf("%s\n", $ex->getMessage());
+}
+
+$usleep = usleep(?);
+
+try {
+    $usleep();
+} catch (Error $ex) {
+    printf("%s\n", $ex->getMessage());
+}
+
+try {
+    $usleep(1, 2);
+} catch (Error $ex) {
+    printf("%s\n", $ex->getMessage());
+}
+?>
+--EXPECTF--
+not enough arguments for application of foo, 0 given and exactly 1 expected, declared in %s on line 8
+not enough arguments for application of foo, 1 given and exactly 2 expected, declared in %s on line 16
+not enough arguments for application of bar, 1 given and at least 3 expected, declared in %s on line 24
+not enough arguments for application of Foo::bar, 0 given and exactly 1 expected, declared in %s on line 38
+not enough arguments for application of str_repeat, 0 given and at least 1 expected, declared in %s on line 46
+not enough arguments for application of usleep, 0 given and exactly 1 expected, declared in %s on line 54
+too many arguments for application of usleep, 2 given and a maximum of 1 expected, declared in %s on line 54
