@@ -15,7 +15,7 @@ arnaud-lb
 YuanchengJiang
 --FILE--
 <?php
-$str = str_repeat('a', 1024 * 1024 * 1.25);
+$str = str_repeat('a', 1024 * 1024 * 3.25);
 class DestructableObject
 {
     public function __destruct()
