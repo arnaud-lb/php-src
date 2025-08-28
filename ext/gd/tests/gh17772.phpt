@@ -3,7 +3,7 @@ GH-17772 (imagepalettetotruecolor segfault on image deallocation)
 --EXTENSIONS--
 gd
 --INI--
-memory_limit=2M
+memory_limit=4M
 --CREDITS--
 YuanchengJiang
 --SKIPIF--
@@ -20,7 +20,7 @@ while ($i < 16 * $thickness) {
 $arer[$i++] = $color;
 }
 }
-$im = imagecreate(800, 800);
+$im = imagecreate(800, 1600);
 setStyleAndThickness($im, 0, 6);
 imagepalettetotruecolor($im);
 ?>
