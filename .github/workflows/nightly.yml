@@ -186,6 +186,18 @@ jobs:
             run_tests_parameters: '--asan'
             test_function_jit: false
             asan: true
+          - name: _ASAN_UBSAN_TAILCALL
+            debug: true
+            zts: true
+            configuration_parameters: >-
+              CC=clang-20
+              CXX=clang++-20
+              CFLAGS="-fsanitize=undefined,address -DZEND_TRACK_ARENA_ALLOC"
+              LDFLAGS="-fsanitize=undefined,address"
+            run_tests_parameters: '--asan'
+            test_function_jit: false
+            asan: true
+            clang: 20
           - name: _REPEAT
             debug: true
             zts: false
@@ -215,6 +227,12 @@ jobs:
         uses: ./.github/actions/apt-x64
         with:
           asan: ${{ matrix.asan && 'true' || 'false' }}
+      - name: Install specific clang version if needed
+        if: ${{ matrix.clang }}
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod u+x llvm.sh
+          sudo ./llvm.sh ${{ matrix.clang }}
       - name: System info
         run: |
           echo "::group::Show host CPU info"
