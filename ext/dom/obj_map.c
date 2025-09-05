@@ -238,7 +238,7 @@ static void dom_map_cache_obj(dom_nnodemap_object *map, xmlNodePtr itemnode, zen
 	 * This also means we have to manually refcount the objects here, and remove the reference count
 	 * in reset_objmap_cache() and the destructor. */
 	dom_object *cached_obj = Z_DOMOBJ_P(return_value);
-	GC_ADDREF(&cached_obj->std);
+	GC_ADDREF_OBJ(&cached_obj->std);
 	/* If the tag is stale, all cached data is useless. Otherwise only the cached object is useless. */
 	if (php_dom_is_cache_tag_stale_from_node(&map->cache_tag, itemnode)) {
 		php_dom_mark_cache_tag_up_to_date_from_node(&map->cache_tag, itemnode);
@@ -433,7 +433,7 @@ void php_dom_create_obj_map(dom_object *basenode, dom_object *intern, xmlHashTab
 
 	ZEND_ASSERT(basenode != NULL);
 
-	GC_ADDREF(&basenode->std);
+	GC_ADDREF_OBJ(&basenode->std);
 
 	xmlDocPtr doc = basenode->document ? basenode->document->ptr : NULL;
 

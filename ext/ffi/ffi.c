@@ -605,7 +605,7 @@ again:
 						cdata = zend_ffi_cdata_to_zval_slow_ptr(ptr, type, flags);
 					}
 				} else {
-					GC_ADDREF(&cdata->std);
+					GC_ADDREF_OBJ(&cdata->std);
 				}
 				ZVAL_OBJ(rv, &cdata->std);
 				return;
@@ -621,7 +621,7 @@ again:
 			cdata = zend_ffi_cdata_to_zval_slow(ptr, type, flags);
 		}
 	} else {
-		GC_ADDREF(&cdata->std);
+		GC_ADDREF_OBJ(&cdata->std);
 	}
 	ZVAL_OBJ(rv, &cdata->std);
 }

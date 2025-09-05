@@ -99,6 +99,10 @@ static void zend_weakref_unref(zend_object *object, void *tagged_ptr) {
 static void zend_weakref_register(zend_object *object, void *payload) {
 	GC_ADD_FLAGS(object, IS_OBJ_WEAKLY_REFERENCED);
 
+#if USE_LIBGC
+	zend_objects_store_set_weakref_finalizer(object);
+#endif
+
 	zend_ulong obj_key = zend_object_to_weakref_key(object);
 	zval *zv = zend_hash_index_lookup(&EG(weakrefs), obj_key);
 	if (Z_TYPE_P(zv) == IS_NULL) {
@@ -483,7 +487,7 @@ static HashTable *zend_weakmap_get_properties_for(zend_object *object, zend_prop
 		zval pair;
 		array_init(&pair);
 
-		GC_ADDREF(obj);
+		GC_ADDREF_OBJ(obj);
 		add_assoc_object(&pair, "key", obj);
 		Z_TRY_ADDREF_P(val);
 		add_assoc_zval(&pair, "value", val);

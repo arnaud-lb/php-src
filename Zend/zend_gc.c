@@ -1891,10 +1891,10 @@ static zend_always_inline zend_result gc_call_destructors(uint32_t idx, uint32_t
 				zend_object *obj = (zend_object*)p;
 				GC_TRACE_REF(obj, "calling destructor");
 				GC_ADD_FLAGS(obj, IS_OBJ_DESTRUCTOR_CALLED);
-				GC_ADDREF(obj);
+				GC_ADDREF_OBJ(obj);
 				obj->handlers->dtor_obj(obj);
 				GC_TRACE_REF(obj, "returned from destructor");
-				GC_DELREF(obj);
+				GC_DELREF_OBJ(obj);
 				if (UNEXPECTED(fiber != NULL && GC_G(dtor_fiber) != fiber)) {
 					/* We resumed after suspension */
 					gc_check_possible_root((zend_refcounted*)&obj->gc);
@@ -2107,9 +2107,9 @@ rerun_gc:
 					current->ref = GC_MAKE_GARBAGE(((char*)obj) - obj->handlers->offset);
 					if (!(OBJ_FLAGS(obj) & IS_OBJ_FREE_CALLED)) {
 						GC_ADD_FLAGS(obj, IS_OBJ_FREE_CALLED);
-						GC_ADDREF(obj);
+						GC_ADDREF_OBJ(obj);
 						obj->handlers->free_obj(obj);
-						GC_DELREF(obj);
+						GC_DELREF_OBJ(obj);
 					}
 
 					ZEND_OBJECTS_STORE_ADD_TO_FREE_LIST(obj->handle);
@@ -2325,7 +2325,7 @@ static ZEND_FUNCTION(gc_destructor_fiber)
 			if (GC_G(dtor_fiber) == fiber) {
 				GC_G(dtor_fiber) = NULL;
 			}
-			GC_DELREF(&fiber->std);
+			GC_DELREF_OBJ(&fiber->std);
 			gc_check_possible_root((zend_refcounted*)&fiber->std.gc);
 			return;
 		}

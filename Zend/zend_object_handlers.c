@@ -330,10 +330,10 @@ static ZEND_COLD zend_never_inline void zend_forbidden_dynamic_property(
 
 static ZEND_COLD zend_never_inline bool zend_deprecated_dynamic_property(
 		zend_object *obj, const zend_string *member) {
-	GC_ADDREF(obj);
+	GC_ADDREF_OBJ(obj);
 	zend_error(E_DEPRECATED, "Creation of dynamic property %s::$%s is deprecated",
 		ZSTR_VAL(obj->ce->name), ZSTR_VAL(member));
-	if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+	if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 		zend_class_entry *ce = obj->ce;
 		zend_objects_store_del(obj);
 		if (!EG(exception)) {
@@ -1079,9 +1079,9 @@ try_again:
 typed_property:
 				ZVAL_COPY_VALUE(&tmp, value);
 				// Increase refcount to prevent object from being released in __toString()
-				GC_ADDREF(zobj);
+				GC_ADDREF_OBJ(zobj);
 				bool type_matched = zend_verify_property_type(prop_info, &tmp, property_uses_strict_types());
-				if (UNEXPECTED(GC_DELREF(zobj) == 0)) {
+				if (UNEXPECTED(GC_DELREF_OBJ(zobj) == 0)) {
 					zend_object_released_while_assigning_to_property_error(prop_info);
 					zend_objects_store_del(zobj);
 					zval_ptr_dtor(&tmp);
@@ -1290,7 +1290,7 @@ ZEND_API zval *zend_std_read_dimension(zend_object *object, zval *offset, int ty
 			ZVAL_COPY_DEREF(&tmp_offset, offset);
 		}
 
-		GC_ADDREF(object);
+		GC_ADDREF_OBJ(object);
 		if (type == BP_VAR_IS) {
 			zend_call_known_instance_method_with_1_params(funcs->zf_offsetexists, object, rv, &tmp_offset);
 			if (UNEXPECTED(Z_ISUNDEF_P(rv))) {
@@ -1338,7 +1338,7 @@ ZEND_API void zend_std_write_dimension(zend_object *object, zval *offset, zval *
 		} else {
 			ZVAL_COPY_DEREF(&tmp_offset, offset);
 		}
-		GC_ADDREF(object);
+		GC_ADDREF_OBJ(object);
 		zend_call_known_instance_method_with_2_params(funcs->zf_offsetset, object, NULL, &tmp_offset, value);
 		OBJ_RELEASE(object);
 		zval_ptr_dtor(&tmp_offset);
@@ -1358,7 +1358,7 @@ ZEND_API int zend_std_has_dimension(zend_object *object, zval *offset, int check
 	zend_class_arrayaccess_funcs *funcs = ce->arrayaccess_funcs_ptr;
 	if (EXPECTED(funcs)) {
 		ZVAL_COPY_DEREF(&tmp_offset, offset);
-		GC_ADDREF(object);
+		GC_ADDREF_OBJ(object);
 		zend_call_known_instance_method_with_1_params(funcs->zf_offsetexists, object, &retval, &tmp_offset);
 		result = i_zend_is_true(&retval);
 		zval_ptr_dtor(&retval);
@@ -1611,7 +1611,7 @@ ZEND_API void zend_std_unset_dimension(zend_object *object, zval *offset) /* {{{
 	zend_class_arrayaccess_funcs *funcs = ce->arrayaccess_funcs_ptr;
 	if (EXPECTED(funcs)) {
 		ZVAL_COPY_DEREF(&tmp_offset, offset);
-		GC_ADDREF(object);
+		GC_ADDREF_OBJ(object);
 		zend_call_known_instance_method_with_1_params(funcs->zf_offsetunset, object, NULL, &tmp_offset);
 		OBJ_RELEASE(object);
 		zval_ptr_dtor(&tmp_offset);

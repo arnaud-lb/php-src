@@ -212,7 +212,7 @@ static int zval_call_destructor(zval *zv) /* {{{ */
 	if (Z_TYPE_P(zv) == IS_INDIRECT) {
 		zv = Z_INDIRECT_P(zv);
 	}
-	if (Z_TYPE_P(zv) == IS_OBJECT && Z_REFCOUNT_P(zv) == 1) {
+	if (Z_TYPE_P(zv) == IS_OBJECT) {
 		return ZEND_HASH_APPLY_REMOVE;
 	} else {
 		return ZEND_HASH_APPLY_KEEP;
@@ -264,6 +264,9 @@ void shutdown_destructors(void) /* {{{ */
 		/* if we couldn't destruct cleanly, mark all objects as destructed anyway */
 		zend_objects_store_mark_destructed(&EG(objects_store));
 	} zend_end_try();
+
+	GC_invoke_finalizers();
+	ZEND_ASSERT(!GC_should_invoke_finalizers());
 }
 /* }}} */
 
@@ -484,6 +487,9 @@ void shutdown_executor(void) /* {{{ */
 				}
 				destroy_op_array(&func->op_array);
 				zend_string_release_ex(key, 0);
+#ifdef USE_LIBGC
+				Z_PTR_P(zv) = NULL;
+#endif
 			} ZEND_HASH_MAP_FOREACH_END_DEL();
 
 			ZEND_HASH_MAP_REVERSE_FOREACH_STR_KEY_VAL(EG(class_table), key, zv) {
@@ -492,6 +498,9 @@ void shutdown_executor(void) /* {{{ */
 				}
 				destroy_zend_class(zv);
 				zend_string_release_ex(key, 0);
+#ifdef USE_LIBGC
+				Z_PTR_P(zv) = NULL;
+#endif
 			} ZEND_HASH_MAP_FOREACH_END_DEL();
 		}
 
@@ -499,6 +508,7 @@ void shutdown_executor(void) /* {{{ */
 			EG(symtable_cache_ptr)--;
 			zend_hash_destroy(*EG(symtable_cache_ptr));
 			FREE_HASHTABLE(*EG(symtable_cache_ptr));
+			*EG(symtable_cache_ptr) = NULL;
 		}
 
 		zend_hash_destroy(&EG(included_files));

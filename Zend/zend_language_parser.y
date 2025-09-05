@@ -27,15 +27,14 @@
 #include "zend_constants.h"
 #include "zend_language_scanner.h"
 #include "zend_exceptions.h"
+#include "zend_alloc.h"
 
 #define YYSIZE_T size_t
 #define yytnamerr zend_yytnamerr
 static YYSIZE_T zend_yytnamerr(char*, const char*);
 
-#ifdef _MSC_VER
-#define YYMALLOC malloc
-#define YYFREE free
-#endif
+#define YYMALLOC(size) emalloc(size)
+#define YYFREE(ptr) free(ptr)
 }
 
 %code requires {

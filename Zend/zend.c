@@ -119,6 +119,7 @@ static ZEND_INI_MH(OnUpdateErrorReporting) /* {{{ */
 }
 /* }}} */
 
+#ifndef USE_LIBGC
 static ZEND_INI_MH(OnUpdateGCEnabled) /* {{{ */
 {
 	bool val;
@@ -139,7 +140,7 @@ static ZEND_INI_DISP(zend_gc_enabled_displayer_cb) /* {{{ */
 	}
 }
 /* }}} */
-
+#endif
 
 static ZEND_INI_MH(OnUpdateScriptEncoding) /* {{{ */
 {
@@ -262,7 +263,9 @@ ZEND_INI_BEGIN()
 	ZEND_INI_ENTRY("error_reporting",				NULL,		ZEND_INI_ALL,		OnUpdateErrorReporting)
 	STD_ZEND_INI_BOOLEAN("fatal_error_backtraces",			"1",	ZEND_INI_ALL,       OnUpdateBool, fatal_error_backtrace_on,      zend_executor_globals, executor_globals)
 	STD_ZEND_INI_ENTRY("zend.assertions",				"1",    ZEND_INI_ALL,       OnUpdateAssertions,           assertions,   zend_executor_globals,  executor_globals)
+#ifndef USE_LIBGC
 	ZEND_INI_ENTRY3_EX("zend.enable_gc",				"1",	ZEND_INI_ALL,		OnUpdateGCEnabled, NULL, NULL, NULL, zend_gc_enabled_displayer_cb)
+#endif
 	STD_ZEND_INI_BOOLEAN("zend.multibyte", "0", ZEND_INI_PERDIR, OnUpdateBool, multibyte,      zend_compiler_globals, compiler_globals)
 	ZEND_INI_ENTRY("zend.script_encoding",			NULL,		ZEND_INI_ALL,		OnUpdateScriptEncoding)
 	STD_ZEND_INI_BOOLEAN("zend.detect_unicode",			"1",	ZEND_INI_ALL,		OnUpdateBool, detect_unicode, zend_compiler_globals, compiler_globals)

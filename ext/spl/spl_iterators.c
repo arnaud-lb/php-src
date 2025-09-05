@@ -594,7 +594,7 @@ static void spl_recursive_it_it_construct(INTERNAL_FUNCTION_PARAMETERS, zend_cla
 				}
 				iterator = &aggregate_retval;
 			} else {
-				Z_ADDREF_P(iterator);
+				GC_ADDREF_OBJ(Z_OBJ_P(iterator));
 			}
 			break;
 		}

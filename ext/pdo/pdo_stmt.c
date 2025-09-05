@@ -214,8 +214,8 @@ static void pdo_get_lazy_object(pdo_stmt_t *stmt, zval *return_value) /* {{{ */
 		zend_object_std_init(&row->std, pdo_row_ce);
 		object_properties_init(&row->std, pdo_row_ce);
 		stmt->lazy_object_ref = &row->std;
-		GC_ADDREF(&stmt->std);
-		GC_DELREF(&row->std);
+		GC_ADDREF_OBJ(&stmt->std);
+		GC_DELREF_OBJ(&row->std);
 	}
 	ZVAL_OBJ_COPY(return_value, stmt->lazy_object_ref);
 }

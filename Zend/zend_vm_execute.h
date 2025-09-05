@@ -2344,7 +2344,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_GENERATOR_CRE
 			 /* Bug #72523 */
 			|| UNEXPECTED(zend_execute_ex != execute_ex))) {
 			ZEND_ADD_CALL_FLAG_EX(call_info, ZEND_CALL_RELEASE_THIS);
-			Z_ADDREF(gen_execute_data->This);
+			GC_ADDREF_OBJ(Z_OBJ(gen_execute_data->This));
 		}
 		ZEND_ADD_CALL_FLAG_EX(call_info, (ZEND_CALL_TOP_FUNCTION | ZEND_CALL_ALLOCATED | ZEND_CALL_GENERATOR));
 		Z_TYPE_INFO(gen_execute_data->This) = call_info;
@@ -3982,27 +3982,34 @@ static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV 
 {
 	zend_atomic_bool_store_ex(&EG(vm_interrupt), false);
 	SAVE_OPLINE();
+	bool expected = true;
 	if (zend_atomic_bool_load_ex(&EG(timed_out))) {
 		zend_timeout();
+		ZEND_VM_CONTINUE();
 	} else if (zend_interrupt_function) {
 		zend_interrupt_function(execute_data);
-		if (EG(exception)) {
-			/* We have to UNDEF result, because ZEND_HANDLE_EXCEPTION is going to free it */
-			const zend_op *throw_op = EG(opline_before_exception);
-
-			if (throw_op
-			 && throw_op->result_type & (IS_TMP_VAR|IS_VAR)
-			 && throw_op->opcode != ZEND_ADD_ARRAY_ELEMENT
-			 && throw_op->opcode != ZEND_ADD_ARRAY_UNPACK
-			 && throw_op->opcode != ZEND_ROPE_INIT
-			 && throw_op->opcode != ZEND_ROPE_ADD) {
-				ZVAL_UNDEF(ZEND_CALL_VAR(EG(current_execute_data), throw_op->result.var));
-
-			}
-		}
-		ZEND_VM_ENTER();
+#ifdef USE_LIBGC
+	} else if (zend_atomic_bool_compare_exchange_ex(&EG(pending_finalizations), &expected, false)) {
+		GC_invoke_finalizers();
+#endif
+	} else {
+		ZEND_VM_CONTINUE();
 	}
-	ZEND_VM_CONTINUE();
+	if (EG(exception)) {
+		/* We have to UNDEF result, because ZEND_HANDLE_EXCEPTION is going to free it */
+		const zend_op *throw_op = EG(opline_before_exception);
+
+		if (throw_op
+		 && throw_op->result_type & (IS_TMP_VAR|IS_VAR)
+		 && throw_op->opcode != ZEND_ADD_ARRAY_ELEMENT
+		 && throw_op->opcode != ZEND_ADD_ARRAY_UNPACK
+		 && throw_op->opcode != ZEND_ROPE_INIT
+		 && throw_op->opcode != ZEND_ROPE_ADD) {
+			ZVAL_UNDEF(ZEND_CALL_VAR(EG(current_execute_data), throw_op->result.var));
+
+		}
+	}
+	ZEND_VM_ENTER();
 }
 static ZEND_VM_HOT ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_INIT_FCALL_BY_NAME_SPEC_CONST_HANDLER(ZEND_OPCODE_HANDLER_ARGS)
 {
@@ -5864,7 +5871,7 @@ yield_from_try_again:
 		if (ce == zend_ce_generator) {
 			zend_generator *new_gen = (zend_generator *) Z_OBJ_P(val);
 
-			Z_ADDREF_P(val);
+			GC_ADDREF_OBJ(Z_OBJ_P(val));
 
 			if (UNEXPECTED(new_gen->execute_data == NULL)) {
 				zend_throw_error(NULL, "Generator passed to yield from was aborted without proper return and is unable to continue");
@@ -7289,7 +7296,7 @@ static ZEND_VM_COLD ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_
 			CACHE_POLYMORPHIC_PTR(opline->result.num, called_scope, fbc);
 		}
 		if ((IS_CONST & (IS_VAR|IS_TMP_VAR)) && UNEXPECTED(obj != orig_obj)) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 			if (GC_DELREF(orig_obj) == 0) {
 				zend_objects_store_del(orig_obj);
 			}
@@ -7305,7 +7312,7 @@ static ZEND_VM_COLD ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_
 
 	call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS;
 	if (UNEXPECTED((fbc->common.fn_flags & ZEND_ACC_STATIC) != 0)) {
-		if ((IS_CONST & (IS_VAR|IS_TMP_VAR)) && GC_DELREF(obj) == 0) {
+		if ((IS_CONST & (IS_VAR|IS_TMP_VAR)) && GC_DELREF_OBJ(obj) == 0) {
 			zend_objects_store_del(obj);
 			if (UNEXPECTED(EG(exception))) {
 				HANDLE_EXCEPTION();
@@ -7316,7 +7323,7 @@ static ZEND_VM_COLD ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_
 		call_info = ZEND_CALL_NESTED_FUNCTION;
 	} else if (IS_CONST & (IS_VAR|IS_TMP_VAR|IS_CV)) {
 		if (IS_CONST == IS_CV) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 		}
 		/* CV may be changed indirectly (e.g. when it's a reference) */
 		call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS | ZEND_CALL_RELEASE_THIS;
@@ -9919,7 +9926,7 @@ static ZEND_VM_COLD ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_
 			CACHE_POLYMORPHIC_PTR(opline->result.num, called_scope, fbc);
 		}
 		if ((IS_CONST & (IS_VAR|IS_TMP_VAR)) && UNEXPECTED(obj != orig_obj)) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 			if (GC_DELREF(orig_obj) == 0) {
 				zend_objects_store_del(orig_obj);
 			}
@@ -9935,7 +9942,7 @@ static ZEND_VM_COLD ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_
 
 	call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS;
 	if (UNEXPECTED((fbc->common.fn_flags & ZEND_ACC_STATIC) != 0)) {
-		if ((IS_CONST & (IS_VAR|IS_TMP_VAR)) && GC_DELREF(obj) == 0) {
+		if ((IS_CONST & (IS_VAR|IS_TMP_VAR)) && GC_DELREF_OBJ(obj) == 0) {
 			zend_objects_store_del(obj);
 			if (UNEXPECTED(EG(exception))) {
 				HANDLE_EXCEPTION();
@@ -9946,7 +9953,7 @@ static ZEND_VM_COLD ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_
 		call_info = ZEND_CALL_NESTED_FUNCTION;
 	} else if (IS_CONST & (IS_VAR|IS_TMP_VAR|IS_CV)) {
 		if (IS_CONST == IS_CV) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 		}
 		/* CV may be changed indirectly (e.g. when it's a reference) */
 		call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS | ZEND_CALL_RELEASE_THIS;
@@ -11082,7 +11089,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_NEW_SPEC_CONS
 			constructor,
 			opline->extended_value,
 			Z_OBJ_P(result));
-		Z_ADDREF_P(result);
+		GC_ADDREF_OBJ(Z_OBJ_P(result));
 	}
 
 	call->prev_execute_data = EX(call);
@@ -12412,7 +12419,7 @@ static ZEND_VM_COLD ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_
 			CACHE_POLYMORPHIC_PTR(opline->result.num, called_scope, fbc);
 		}
 		if ((IS_CONST & (IS_VAR|IS_TMP_VAR)) && UNEXPECTED(obj != orig_obj)) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 			if (GC_DELREF(orig_obj) == 0) {
 				zend_objects_store_del(orig_obj);
 			}
@@ -12428,7 +12435,7 @@ static ZEND_VM_COLD ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_
 
 	call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS;
 	if (UNEXPECTED((fbc->common.fn_flags & ZEND_ACC_STATIC) != 0)) {
-		if ((IS_CONST & (IS_VAR|IS_TMP_VAR)) && GC_DELREF(obj) == 0) {
+		if ((IS_CONST & (IS_VAR|IS_TMP_VAR)) && GC_DELREF_OBJ(obj) == 0) {
 			zend_objects_store_del(obj);
 			if (UNEXPECTED(EG(exception))) {
 				HANDLE_EXCEPTION();
@@ -12439,7 +12446,7 @@ static ZEND_VM_COLD ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_
 		call_info = ZEND_CALL_NESTED_FUNCTION;
 	} else if (IS_CONST & (IS_VAR|IS_TMP_VAR|IS_CV)) {
 		if (IS_CONST == IS_CV) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 		}
 		/* CV may be changed indirectly (e.g. when it's a reference) */
 		call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS | ZEND_CALL_RELEASE_THIS;
@@ -15605,7 +15612,7 @@ yield_from_try_again:
 		if (ce == zend_ce_generator) {
 			zend_generator *new_gen = (zend_generator *) Z_OBJ_P(val);
 
-			Z_ADDREF_P(val);
+			GC_ADDREF_OBJ(Z_OBJ_P(val));
 			zval_ptr_dtor_nogc(EX_VAR(opline->op1.var));
 
 			if (UNEXPECTED(new_gen->execute_data == NULL)) {
@@ -16895,7 +16902,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_INIT_METHOD_C
 			CACHE_POLYMORPHIC_PTR(opline->result.num, called_scope, fbc);
 		}
 		if (((IS_TMP_VAR|IS_VAR) & (IS_VAR|IS_TMP_VAR)) && UNEXPECTED(obj != orig_obj)) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 			if (GC_DELREF(orig_obj) == 0) {
 				zend_objects_store_del(orig_obj);
 			}
@@ -16911,7 +16918,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_INIT_METHOD_C
 
 	call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS;
 	if (UNEXPECTED((fbc->common.fn_flags & ZEND_ACC_STATIC) != 0)) {
-		if (((IS_TMP_VAR|IS_VAR) & (IS_VAR|IS_TMP_VAR)) && GC_DELREF(obj) == 0) {
+		if (((IS_TMP_VAR|IS_VAR) & (IS_VAR|IS_TMP_VAR)) && GC_DELREF_OBJ(obj) == 0) {
 			zend_objects_store_del(obj);
 			if (UNEXPECTED(EG(exception))) {
 				HANDLE_EXCEPTION();
@@ -16922,7 +16929,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_INIT_METHOD_C
 		call_info = ZEND_CALL_NESTED_FUNCTION;
 	} else if ((IS_TMP_VAR|IS_VAR) & (IS_VAR|IS_TMP_VAR|IS_CV)) {
 		if ((IS_TMP_VAR|IS_VAR) == IS_CV) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 		}
 		/* CV may be changed indirectly (e.g. when it's a reference) */
 		call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS | ZEND_CALL_RELEASE_THIS;
@@ -18388,7 +18395,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_INIT_METHOD_C
 			CACHE_POLYMORPHIC_PTR(opline->result.num, called_scope, fbc);
 		}
 		if (((IS_TMP_VAR|IS_VAR) & (IS_VAR|IS_TMP_VAR)) && UNEXPECTED(obj != orig_obj)) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 			if (GC_DELREF(orig_obj) == 0) {
 				zend_objects_store_del(orig_obj);
 			}
@@ -18404,7 +18411,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_INIT_METHOD_C
 
 	call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS;
 	if (UNEXPECTED((fbc->common.fn_flags & ZEND_ACC_STATIC) != 0)) {
-		if (((IS_TMP_VAR|IS_VAR) & (IS_VAR|IS_TMP_VAR)) && GC_DELREF(obj) == 0) {
+		if (((IS_TMP_VAR|IS_VAR) & (IS_VAR|IS_TMP_VAR)) && GC_DELREF_OBJ(obj) == 0) {
 			zend_objects_store_del(obj);
 			if (UNEXPECTED(EG(exception))) {
 				HANDLE_EXCEPTION();
@@ -18415,7 +18422,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_INIT_METHOD_C
 		call_info = ZEND_CALL_NESTED_FUNCTION;
 	} else if ((IS_TMP_VAR|IS_VAR) & (IS_VAR|IS_TMP_VAR|IS_CV)) {
 		if ((IS_TMP_VAR|IS_VAR) == IS_CV) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 		}
 		/* CV may be changed indirectly (e.g. when it's a reference) */
 		call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS | ZEND_CALL_RELEASE_THIS;
@@ -19795,7 +19802,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_INIT_METHOD_C
 			CACHE_POLYMORPHIC_PTR(opline->result.num, called_scope, fbc);
 		}
 		if (((IS_TMP_VAR|IS_VAR) & (IS_VAR|IS_TMP_VAR)) && UNEXPECTED(obj != orig_obj)) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 			if (GC_DELREF(orig_obj) == 0) {
 				zend_objects_store_del(orig_obj);
 			}
@@ -19811,7 +19818,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_INIT_METHOD_C
 
 	call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS;
 	if (UNEXPECTED((fbc->common.fn_flags & ZEND_ACC_STATIC) != 0)) {
-		if (((IS_TMP_VAR|IS_VAR) & (IS_VAR|IS_TMP_VAR)) && GC_DELREF(obj) == 0) {
+		if (((IS_TMP_VAR|IS_VAR) & (IS_VAR|IS_TMP_VAR)) && GC_DELREF_OBJ(obj) == 0) {
 			zend_objects_store_del(obj);
 			if (UNEXPECTED(EG(exception))) {
 				HANDLE_EXCEPTION();
@@ -19822,7 +19829,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_INIT_METHOD_C
 		call_info = ZEND_CALL_NESTED_FUNCTION;
 	} else if ((IS_TMP_VAR|IS_VAR) & (IS_VAR|IS_TMP_VAR|IS_CV)) {
 		if ((IS_TMP_VAR|IS_VAR) == IS_CV) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 		}
 		/* CV may be changed indirectly (e.g. when it's a reference) */
 		call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS | ZEND_CALL_RELEASE_THIS;
@@ -24823,7 +24830,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = RT_CONSTANT(opline, opline->op2);
 			if (IS_CONST == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -24840,7 +24847,7 @@ try_assign_dim_array:
 
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -24975,7 +24982,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = RT_CONSTANT(opline, opline->op2);
 			if (IS_CONST == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -24993,7 +25000,7 @@ try_assign_dim_array:
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
 			zval_ptr_dtor_nogc(EX_VAR((opline+1)->op1.var));
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -25128,7 +25135,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = RT_CONSTANT(opline, opline->op2);
 			if (IS_CONST == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -25146,7 +25153,7 @@ try_assign_dim_array:
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
 			zval_ptr_dtor_nogc(EX_VAR((opline+1)->op1.var));
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -25281,7 +25288,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = RT_CONSTANT(opline, opline->op2);
 			if (IS_CONST == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -25298,7 +25305,7 @@ try_assign_dim_array:
 
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -27829,7 +27836,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = _get_zval_ptr_var(opline->op2.var EXECUTE_DATA_CC);
 			if ((IS_TMP_VAR|IS_VAR) == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -27846,7 +27853,7 @@ try_assign_dim_array:
 
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -27981,7 +27988,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = _get_zval_ptr_var(opline->op2.var EXECUTE_DATA_CC);
 			if ((IS_TMP_VAR|IS_VAR) == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -27999,7 +28006,7 @@ try_assign_dim_array:
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
 			zval_ptr_dtor_nogc(EX_VAR((opline+1)->op1.var));
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -28134,7 +28141,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = _get_zval_ptr_var(opline->op2.var EXECUTE_DATA_CC);
 			if ((IS_TMP_VAR|IS_VAR) == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -28152,7 +28159,7 @@ try_assign_dim_array:
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
 			zval_ptr_dtor_nogc(EX_VAR((opline+1)->op1.var));
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -28287,7 +28294,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = _get_zval_ptr_var(opline->op2.var EXECUTE_DATA_CC);
 			if ((IS_TMP_VAR|IS_VAR) == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -28304,7 +28311,7 @@ try_assign_dim_array:
 
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -29414,7 +29421,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = NULL;
 			if (IS_UNUSED == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -29431,7 +29438,7 @@ try_assign_dim_array:
 
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -29566,7 +29573,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = NULL;
 			if (IS_UNUSED == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -29584,7 +29591,7 @@ try_assign_dim_array:
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
 			zval_ptr_dtor_nogc(EX_VAR((opline+1)->op1.var));
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -29719,7 +29726,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = NULL;
 			if (IS_UNUSED == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -29737,7 +29744,7 @@ try_assign_dim_array:
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
 			zval_ptr_dtor_nogc(EX_VAR((opline+1)->op1.var));
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -29872,7 +29879,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = NULL;
 			if (IS_UNUSED == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -29889,7 +29896,7 @@ try_assign_dim_array:
 
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -30631,7 +30638,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_NEW_SPEC_VAR_
 			constructor,
 			opline->extended_value,
 			Z_OBJ_P(result));
-		Z_ADDREF_P(result);
+		GC_ADDREF_OBJ(Z_OBJ_P(result));
 	}
 
 	call->prev_execute_data = EX(call);
@@ -32183,7 +32190,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = EX_VAR(opline->op2.var);
 			if (IS_CV == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -32200,7 +32207,7 @@ try_assign_dim_array:
 
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -32335,7 +32342,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = EX_VAR(opline->op2.var);
 			if (IS_CV == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -32353,7 +32360,7 @@ try_assign_dim_array:
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
 			zval_ptr_dtor_nogc(EX_VAR((opline+1)->op1.var));
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -32488,7 +32495,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = EX_VAR(opline->op2.var);
 			if (IS_CV == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -32506,7 +32513,7 @@ try_assign_dim_array:
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
 			zval_ptr_dtor_nogc(EX_VAR((opline+1)->op1.var));
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -32641,7 +32648,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = EX_VAR(opline->op2.var);
 			if (IS_CV == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -32658,7 +32665,7 @@ try_assign_dim_array:
 
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -35114,7 +35121,7 @@ static ZEND_VM_HOT ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_I
 			CACHE_POLYMORPHIC_PTR(opline->result.num, called_scope, fbc);
 		}
 		if ((IS_UNUSED & (IS_VAR|IS_TMP_VAR)) && UNEXPECTED(obj != orig_obj)) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 			if (GC_DELREF(orig_obj) == 0) {
 				zend_objects_store_del(orig_obj);
 			}
@@ -35130,7 +35137,7 @@ static ZEND_VM_HOT ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_I
 
 	call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS;
 	if (UNEXPECTED((fbc->common.fn_flags & ZEND_ACC_STATIC) != 0)) {
-		if ((IS_UNUSED & (IS_VAR|IS_TMP_VAR)) && GC_DELREF(obj) == 0) {
+		if ((IS_UNUSED & (IS_VAR|IS_TMP_VAR)) && GC_DELREF_OBJ(obj) == 0) {
 			zend_objects_store_del(obj);
 			if (UNEXPECTED(EG(exception))) {
 				HANDLE_EXCEPTION();
@@ -35141,7 +35148,7 @@ static ZEND_VM_HOT ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_I
 		call_info = ZEND_CALL_NESTED_FUNCTION;
 	} else if (IS_UNUSED & (IS_VAR|IS_TMP_VAR|IS_CV)) {
 		if (IS_UNUSED == IS_CV) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 		}
 		/* CV may be changed indirectly (e.g. when it's a reference) */
 		call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS | ZEND_CALL_RELEASE_THIS;
@@ -37298,7 +37305,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_INIT_METHOD_C
 			CACHE_POLYMORPHIC_PTR(opline->result.num, called_scope, fbc);
 		}
 		if ((IS_UNUSED & (IS_VAR|IS_TMP_VAR)) && UNEXPECTED(obj != orig_obj)) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 			if (GC_DELREF(orig_obj) == 0) {
 				zend_objects_store_del(orig_obj);
 			}
@@ -37314,7 +37321,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_INIT_METHOD_C
 
 	call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS;
 	if (UNEXPECTED((fbc->common.fn_flags & ZEND_ACC_STATIC) != 0)) {
-		if ((IS_UNUSED & (IS_VAR|IS_TMP_VAR)) && GC_DELREF(obj) == 0) {
+		if ((IS_UNUSED & (IS_VAR|IS_TMP_VAR)) && GC_DELREF_OBJ(obj) == 0) {
 			zend_objects_store_del(obj);
 			if (UNEXPECTED(EG(exception))) {
 				HANDLE_EXCEPTION();
@@ -37325,7 +37332,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_INIT_METHOD_C
 		call_info = ZEND_CALL_NESTED_FUNCTION;
 	} else if (IS_UNUSED & (IS_VAR|IS_TMP_VAR|IS_CV)) {
 		if (IS_UNUSED == IS_CV) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 		}
 		/* CV may be changed indirectly (e.g. when it's a reference) */
 		call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS | ZEND_CALL_RELEASE_THIS;
@@ -38097,7 +38104,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_NEW_SPEC_UNUS
 			constructor,
 			opline->extended_value,
 			Z_OBJ_P(result));
-		Z_ADDREF_P(result);
+		GC_ADDREF_OBJ(Z_OBJ_P(result));
 	}
 
 	call->prev_execute_data = EX(call);
@@ -38254,7 +38261,7 @@ static ZEND_VM_HOT ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_F
 		zval *result = EX_VAR(opline->result.var);
 
 		ZVAL_OBJ(result, Z_OBJ(EX(This)));
-		Z_ADDREF_P(result);
+		GC_ADDREF_OBJ(Z_OBJ_P(result));
 		ZEND_VM_NEXT_OPCODE();
 	} else {
 		ZEND_VM_TAIL_CALL(zend_this_not_in_object_context_helper_SPEC(ZEND_OPCODE_HANDLER_ARGS_PASSTHRU));
@@ -39944,7 +39951,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_INIT_METHOD_C
 			CACHE_POLYMORPHIC_PTR(opline->result.num, called_scope, fbc);
 		}
 		if ((IS_UNUSED & (IS_VAR|IS_TMP_VAR)) && UNEXPECTED(obj != orig_obj)) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 			if (GC_DELREF(orig_obj) == 0) {
 				zend_objects_store_del(orig_obj);
 			}
@@ -39960,7 +39967,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_INIT_METHOD_C
 
 	call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS;
 	if (UNEXPECTED((fbc->common.fn_flags & ZEND_ACC_STATIC) != 0)) {
-		if ((IS_UNUSED & (IS_VAR|IS_TMP_VAR)) && GC_DELREF(obj) == 0) {
+		if ((IS_UNUSED & (IS_VAR|IS_TMP_VAR)) && GC_DELREF_OBJ(obj) == 0) {
 			zend_objects_store_del(obj);
 			if (UNEXPECTED(EG(exception))) {
 				HANDLE_EXCEPTION();
@@ -39971,7 +39978,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_INIT_METHOD_C
 		call_info = ZEND_CALL_NESTED_FUNCTION;
 	} else if (IS_UNUSED & (IS_VAR|IS_TMP_VAR|IS_CV)) {
 		if (IS_UNUSED == IS_CV) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 		}
 		/* CV may be changed indirectly (e.g. when it's a reference) */
 		call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS | ZEND_CALL_RELEASE_THIS;
@@ -41609,7 +41616,7 @@ yield_from_try_again:
 		if (ce == zend_ce_generator) {
 			zend_generator *new_gen = (zend_generator *) Z_OBJ_P(val);
 
-			Z_ADDREF_P(val);
+			GC_ADDREF_OBJ(Z_OBJ_P(val));
 
 			if (UNEXPECTED(new_gen->execute_data == NULL)) {
 				zend_throw_error(NULL, "Generator passed to yield from was aborted without proper return and is unable to continue");
@@ -44121,7 +44128,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = RT_CONSTANT(opline, opline->op2);
 			if (IS_CONST == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -44138,7 +44145,7 @@ try_assign_dim_array:
 
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -44273,7 +44280,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = RT_CONSTANT(opline, opline->op2);
 			if (IS_CONST == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -44291,7 +44298,7 @@ try_assign_dim_array:
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
 			zval_ptr_dtor_nogc(EX_VAR((opline+1)->op1.var));
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -44426,7 +44433,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = RT_CONSTANT(opline, opline->op2);
 			if (IS_CONST == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -44444,7 +44451,7 @@ try_assign_dim_array:
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
 			zval_ptr_dtor_nogc(EX_VAR((opline+1)->op1.var));
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -44579,7 +44586,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = RT_CONSTANT(opline, opline->op2);
 			if (IS_CONST == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -44596,7 +44603,7 @@ try_assign_dim_array:
 
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -45019,7 +45026,7 @@ static ZEND_VM_HOT ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_I
 			CACHE_POLYMORPHIC_PTR(opline->result.num, called_scope, fbc);
 		}
 		if ((IS_CV & (IS_VAR|IS_TMP_VAR)) && UNEXPECTED(obj != orig_obj)) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 			if (GC_DELREF(orig_obj) == 0) {
 				zend_objects_store_del(orig_obj);
 			}
@@ -45035,7 +45042,7 @@ static ZEND_VM_HOT ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_I
 
 	call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS;
 	if (UNEXPECTED((fbc->common.fn_flags & ZEND_ACC_STATIC) != 0)) {
-		if ((IS_CV & (IS_VAR|IS_TMP_VAR)) && GC_DELREF(obj) == 0) {
+		if ((IS_CV & (IS_VAR|IS_TMP_VAR)) && GC_DELREF_OBJ(obj) == 0) {
 			zend_objects_store_del(obj);
 			if (UNEXPECTED(EG(exception))) {
 				HANDLE_EXCEPTION();
@@ -45046,7 +45053,7 @@ static ZEND_VM_HOT ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_I
 		call_info = ZEND_CALL_NESTED_FUNCTION;
 	} else if (IS_CV & (IS_VAR|IS_TMP_VAR|IS_CV)) {
 		if (IS_CV == IS_CV) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 		}
 		/* CV may be changed indirectly (e.g. when it's a reference) */
 		call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS | ZEND_CALL_RELEASE_THIS;
@@ -48074,7 +48081,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = _get_zval_ptr_var(opline->op2.var EXECUTE_DATA_CC);
 			if ((IS_TMP_VAR|IS_VAR) == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -48091,7 +48098,7 @@ try_assign_dim_array:
 
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -48226,7 +48233,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = _get_zval_ptr_var(opline->op2.var EXECUTE_DATA_CC);
 			if ((IS_TMP_VAR|IS_VAR) == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -48244,7 +48251,7 @@ try_assign_dim_array:
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
 			zval_ptr_dtor_nogc(EX_VAR((opline+1)->op1.var));
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -48379,7 +48386,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = _get_zval_ptr_var(opline->op2.var EXECUTE_DATA_CC);
 			if ((IS_TMP_VAR|IS_VAR) == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -48397,7 +48404,7 @@ try_assign_dim_array:
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
 			zval_ptr_dtor_nogc(EX_VAR((opline+1)->op1.var));
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -48532,7 +48539,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = _get_zval_ptr_var(opline->op2.var EXECUTE_DATA_CC);
 			if ((IS_TMP_VAR|IS_VAR) == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -48549,7 +48556,7 @@ try_assign_dim_array:
 
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -48914,7 +48921,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_INIT_METHOD_C
 			CACHE_POLYMORPHIC_PTR(opline->result.num, called_scope, fbc);
 		}
 		if ((IS_CV & (IS_VAR|IS_TMP_VAR)) && UNEXPECTED(obj != orig_obj)) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 			if (GC_DELREF(orig_obj) == 0) {
 				zend_objects_store_del(orig_obj);
 			}
@@ -48930,7 +48937,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_INIT_METHOD_C
 
 	call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS;
 	if (UNEXPECTED((fbc->common.fn_flags & ZEND_ACC_STATIC) != 0)) {
-		if ((IS_CV & (IS_VAR|IS_TMP_VAR)) && GC_DELREF(obj) == 0) {
+		if ((IS_CV & (IS_VAR|IS_TMP_VAR)) && GC_DELREF_OBJ(obj) == 0) {
 			zend_objects_store_del(obj);
 			if (UNEXPECTED(EG(exception))) {
 				HANDLE_EXCEPTION();
@@ -48941,7 +48948,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_INIT_METHOD_C
 		call_info = ZEND_CALL_NESTED_FUNCTION;
 	} else if (IS_CV & (IS_VAR|IS_TMP_VAR|IS_CV)) {
 		if (IS_CV == IS_CV) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 		}
 		/* CV may be changed indirectly (e.g. when it's a reference) */
 		call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS | ZEND_CALL_RELEASE_THIS;
@@ -50117,7 +50124,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = NULL;
 			if (IS_UNUSED == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -50134,7 +50141,7 @@ try_assign_dim_array:
 
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -50269,7 +50276,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = NULL;
 			if (IS_UNUSED == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -50287,7 +50294,7 @@ try_assign_dim_array:
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
 			zval_ptr_dtor_nogc(EX_VAR((opline+1)->op1.var));
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -50422,7 +50429,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = NULL;
 			if (IS_UNUSED == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -50440,7 +50447,7 @@ try_assign_dim_array:
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
 			zval_ptr_dtor_nogc(EX_VAR((opline+1)->op1.var));
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -50575,7 +50582,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = NULL;
 			if (IS_UNUSED == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -50592,7 +50599,7 @@ try_assign_dim_array:
 
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -53574,7 +53581,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = EX_VAR(opline->op2.var);
 			if (IS_CV == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -53591,7 +53598,7 @@ try_assign_dim_array:
 
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -53726,7 +53733,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = EX_VAR(opline->op2.var);
 			if (IS_CV == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -53744,7 +53751,7 @@ try_assign_dim_array:
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
 			zval_ptr_dtor_nogc(EX_VAR((opline+1)->op1.var));
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -53879,7 +53886,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = EX_VAR(opline->op2.var);
 			if (IS_CV == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -53897,7 +53904,7 @@ try_assign_dim_array:
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
 			zval_ptr_dtor_nogc(EX_VAR((opline+1)->op1.var));
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -54032,7 +54039,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = EX_VAR(opline->op2.var);
 			if (IS_CV == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -54049,7 +54056,7 @@ try_assign_dim_array:
 
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -54510,7 +54517,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_INIT_METHOD_C
 			CACHE_POLYMORPHIC_PTR(opline->result.num, called_scope, fbc);
 		}
 		if ((IS_CV & (IS_VAR|IS_TMP_VAR)) && UNEXPECTED(obj != orig_obj)) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 			if (GC_DELREF(orig_obj) == 0) {
 				zend_objects_store_del(orig_obj);
 			}
@@ -54526,7 +54533,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_INIT_METHOD_C
 
 	call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS;
 	if (UNEXPECTED((fbc->common.fn_flags & ZEND_ACC_STATIC) != 0)) {
-		if ((IS_CV & (IS_VAR|IS_TMP_VAR)) && GC_DELREF(obj) == 0) {
+		if ((IS_CV & (IS_VAR|IS_TMP_VAR)) && GC_DELREF_OBJ(obj) == 0) {
 			zend_objects_store_del(obj);
 			if (UNEXPECTED(EG(exception))) {
 				HANDLE_EXCEPTION();
@@ -54537,7 +54544,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_INIT_METHOD_C
 		call_info = ZEND_CALL_NESTED_FUNCTION;
 	} else if (IS_CV & (IS_VAR|IS_TMP_VAR|IS_CV)) {
 		if (IS_CV == IS_CV) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 		}
 		/* CV may be changed indirectly (e.g. when it's a reference) */
 		call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS | ZEND_CALL_RELEASE_THIS;
@@ -56751,7 +56758,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_GENERATOR_CREATE_S
 			 /* Bug #72523 */
 			|| UNEXPECTED(zend_execute_ex != execute_ex))) {
 			ZEND_ADD_CALL_FLAG_EX(call_info, ZEND_CALL_RELEASE_THIS);
-			Z_ADDREF(gen_execute_data->This);
+			GC_ADDREF_OBJ(Z_OBJ(gen_execute_data->This));
 		}
 		ZEND_ADD_CALL_FLAG_EX(call_info, (ZEND_CALL_TOP_FUNCTION | ZEND_CALL_ALLOCATED | ZEND_CALL_GENERATOR));
 		Z_TYPE_INFO(gen_execute_data->This) = call_info;
@@ -58273,27 +58280,34 @@ static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV  zend
 {
 	zend_atomic_bool_store_ex(&EG(vm_interrupt), false);
 	SAVE_OPLINE();
+	bool expected = true;
 	if (zend_atomic_bool_load_ex(&EG(timed_out))) {
 		zend_timeout();
+		ZEND_VM_CONTINUE();
 	} else if (zend_interrupt_function) {
 		zend_interrupt_function(execute_data);
-		if (EG(exception)) {
-			/* We have to UNDEF result, because ZEND_HANDLE_EXCEPTION is going to free it */
-			const zend_op *throw_op = EG(opline_before_exception);
-
-			if (throw_op
-			 && throw_op->result_type & (IS_TMP_VAR|IS_VAR)
-			 && throw_op->opcode != ZEND_ADD_ARRAY_ELEMENT
-			 && throw_op->opcode != ZEND_ADD_ARRAY_UNPACK
-			 && throw_op->opcode != ZEND_ROPE_INIT
-			 && throw_op->opcode != ZEND_ROPE_ADD) {
-				ZVAL_UNDEF(ZEND_CALL_VAR(EG(current_execute_data), throw_op->result.var));
-
-			}
-		}
-		ZEND_VM_ENTER();
+#ifdef USE_LIBGC
+	} else if (zend_atomic_bool_compare_exchange_ex(&EG(pending_finalizations), &expected, false)) {
+		GC_invoke_finalizers();
+#endif
+	} else {
+		ZEND_VM_CONTINUE();
 	}
-	ZEND_VM_CONTINUE();
+	if (EG(exception)) {
+		/* We have to UNDEF result, because ZEND_HANDLE_EXCEPTION is going to free it */
+		const zend_op *throw_op = EG(opline_before_exception);
+
+		if (throw_op
+		 && throw_op->result_type & (IS_TMP_VAR|IS_VAR)
+		 && throw_op->opcode != ZEND_ADD_ARRAY_ELEMENT
+		 && throw_op->opcode != ZEND_ADD_ARRAY_UNPACK
+		 && throw_op->opcode != ZEND_ROPE_INIT
+		 && throw_op->opcode != ZEND_ROPE_ADD) {
+			ZVAL_UNDEF(ZEND_CALL_VAR(EG(current_execute_data), throw_op->result.var));
+
+		}
+	}
+	ZEND_VM_ENTER();
 }
 static ZEND_VM_HOT ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_FCALL_BY_NAME_SPEC_CONST_TAILCALL_HANDLER(ZEND_OPCODE_HANDLER_ARGS)
 {
@@ -60155,7 +60169,7 @@ yield_from_try_again:
 		if (ce == zend_ce_generator) {
 			zend_generator *new_gen = (zend_generator *) Z_OBJ_P(val);
 
-			Z_ADDREF_P(val);
+			GC_ADDREF_OBJ(Z_OBJ_P(val));
 
 			if (UNEXPECTED(new_gen->execute_data == NULL)) {
 				zend_throw_error(NULL, "Generator passed to yield from was aborted without proper return and is unable to continue");
@@ -61580,7 +61594,7 @@ static ZEND_VM_COLD ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_
 			CACHE_POLYMORPHIC_PTR(opline->result.num, called_scope, fbc);
 		}
 		if ((IS_CONST & (IS_VAR|IS_TMP_VAR)) && UNEXPECTED(obj != orig_obj)) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 			if (GC_DELREF(orig_obj) == 0) {
 				zend_objects_store_del(orig_obj);
 			}
@@ -61596,7 +61610,7 @@ static ZEND_VM_COLD ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_
 
 	call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS;
 	if (UNEXPECTED((fbc->common.fn_flags & ZEND_ACC_STATIC) != 0)) {
-		if ((IS_CONST & (IS_VAR|IS_TMP_VAR)) && GC_DELREF(obj) == 0) {
+		if ((IS_CONST & (IS_VAR|IS_TMP_VAR)) && GC_DELREF_OBJ(obj) == 0) {
 			zend_objects_store_del(obj);
 			if (UNEXPECTED(EG(exception))) {
 				HANDLE_EXCEPTION();
@@ -61607,7 +61621,7 @@ static ZEND_VM_COLD ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_
 		call_info = ZEND_CALL_NESTED_FUNCTION;
 	} else if (IS_CONST & (IS_VAR|IS_TMP_VAR|IS_CV)) {
 		if (IS_CONST == IS_CV) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 		}
 		/* CV may be changed indirectly (e.g. when it's a reference) */
 		call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS | ZEND_CALL_RELEASE_THIS;
@@ -64210,7 +64224,7 @@ static ZEND_VM_COLD ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_
 			CACHE_POLYMORPHIC_PTR(opline->result.num, called_scope, fbc);
 		}
 		if ((IS_CONST & (IS_VAR|IS_TMP_VAR)) && UNEXPECTED(obj != orig_obj)) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 			if (GC_DELREF(orig_obj) == 0) {
 				zend_objects_store_del(orig_obj);
 			}
@@ -64226,7 +64240,7 @@ static ZEND_VM_COLD ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_
 
 	call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS;
 	if (UNEXPECTED((fbc->common.fn_flags & ZEND_ACC_STATIC) != 0)) {
-		if ((IS_CONST & (IS_VAR|IS_TMP_VAR)) && GC_DELREF(obj) == 0) {
+		if ((IS_CONST & (IS_VAR|IS_TMP_VAR)) && GC_DELREF_OBJ(obj) == 0) {
 			zend_objects_store_del(obj);
 			if (UNEXPECTED(EG(exception))) {
 				HANDLE_EXCEPTION();
@@ -64237,7 +64251,7 @@ static ZEND_VM_COLD ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_
 		call_info = ZEND_CALL_NESTED_FUNCTION;
 	} else if (IS_CONST & (IS_VAR|IS_TMP_VAR|IS_CV)) {
 		if (IS_CONST == IS_CV) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 		}
 		/* CV may be changed indirectly (e.g. when it's a reference) */
 		call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS | ZEND_CALL_RELEASE_THIS;
@@ -65273,7 +65287,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_NEW_SPEC_CONST_UNU
 			constructor,
 			opline->extended_value,
 			Z_OBJ_P(result));
-		Z_ADDREF_P(result);
+		GC_ADDREF_OBJ(Z_OBJ_P(result));
 	}
 
 	call->prev_execute_data = EX(call);
@@ -66603,7 +66617,7 @@ static ZEND_VM_COLD ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_
 			CACHE_POLYMORPHIC_PTR(opline->result.num, called_scope, fbc);
 		}
 		if ((IS_CONST & (IS_VAR|IS_TMP_VAR)) && UNEXPECTED(obj != orig_obj)) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 			if (GC_DELREF(orig_obj) == 0) {
 				zend_objects_store_del(orig_obj);
 			}
@@ -66619,7 +66633,7 @@ static ZEND_VM_COLD ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_
 
 	call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS;
 	if (UNEXPECTED((fbc->common.fn_flags & ZEND_ACC_STATIC) != 0)) {
-		if ((IS_CONST & (IS_VAR|IS_TMP_VAR)) && GC_DELREF(obj) == 0) {
+		if ((IS_CONST & (IS_VAR|IS_TMP_VAR)) && GC_DELREF_OBJ(obj) == 0) {
 			zend_objects_store_del(obj);
 			if (UNEXPECTED(EG(exception))) {
 				HANDLE_EXCEPTION();
@@ -66630,7 +66644,7 @@ static ZEND_VM_COLD ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_
 		call_info = ZEND_CALL_NESTED_FUNCTION;
 	} else if (IS_CONST & (IS_VAR|IS_TMP_VAR|IS_CV)) {
 		if (IS_CONST == IS_CV) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 		}
 		/* CV may be changed indirectly (e.g. when it's a reference) */
 		call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS | ZEND_CALL_RELEASE_THIS;
@@ -69796,7 +69810,7 @@ yield_from_try_again:
 		if (ce == zend_ce_generator) {
 			zend_generator *new_gen = (zend_generator *) Z_OBJ_P(val);
 
-			Z_ADDREF_P(val);
+			GC_ADDREF_OBJ(Z_OBJ_P(val));
 			zval_ptr_dtor_nogc(EX_VAR(opline->op1.var));
 
 			if (UNEXPECTED(new_gen->execute_data == NULL)) {
@@ -71086,7 +71100,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_METHOD_CALL_S
 			CACHE_POLYMORPHIC_PTR(opline->result.num, called_scope, fbc);
 		}
 		if (((IS_TMP_VAR|IS_VAR) & (IS_VAR|IS_TMP_VAR)) && UNEXPECTED(obj != orig_obj)) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 			if (GC_DELREF(orig_obj) == 0) {
 				zend_objects_store_del(orig_obj);
 			}
@@ -71102,7 +71116,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_METHOD_CALL_S
 
 	call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS;
 	if (UNEXPECTED((fbc->common.fn_flags & ZEND_ACC_STATIC) != 0)) {
-		if (((IS_TMP_VAR|IS_VAR) & (IS_VAR|IS_TMP_VAR)) && GC_DELREF(obj) == 0) {
+		if (((IS_TMP_VAR|IS_VAR) & (IS_VAR|IS_TMP_VAR)) && GC_DELREF_OBJ(obj) == 0) {
 			zend_objects_store_del(obj);
 			if (UNEXPECTED(EG(exception))) {
 				HANDLE_EXCEPTION();
@@ -71113,7 +71127,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_METHOD_CALL_S
 		call_info = ZEND_CALL_NESTED_FUNCTION;
 	} else if ((IS_TMP_VAR|IS_VAR) & (IS_VAR|IS_TMP_VAR|IS_CV)) {
 		if ((IS_TMP_VAR|IS_VAR) == IS_CV) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 		}
 		/* CV may be changed indirectly (e.g. when it's a reference) */
 		call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS | ZEND_CALL_RELEASE_THIS;
@@ -72579,7 +72593,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_METHOD_CALL_S
 			CACHE_POLYMORPHIC_PTR(opline->result.num, called_scope, fbc);
 		}
 		if (((IS_TMP_VAR|IS_VAR) & (IS_VAR|IS_TMP_VAR)) && UNEXPECTED(obj != orig_obj)) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 			if (GC_DELREF(orig_obj) == 0) {
 				zend_objects_store_del(orig_obj);
 			}
@@ -72595,7 +72609,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_METHOD_CALL_S
 
 	call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS;
 	if (UNEXPECTED((fbc->common.fn_flags & ZEND_ACC_STATIC) != 0)) {
-		if (((IS_TMP_VAR|IS_VAR) & (IS_VAR|IS_TMP_VAR)) && GC_DELREF(obj) == 0) {
+		if (((IS_TMP_VAR|IS_VAR) & (IS_VAR|IS_TMP_VAR)) && GC_DELREF_OBJ(obj) == 0) {
 			zend_objects_store_del(obj);
 			if (UNEXPECTED(EG(exception))) {
 				HANDLE_EXCEPTION();
@@ -72606,7 +72620,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_METHOD_CALL_S
 		call_info = ZEND_CALL_NESTED_FUNCTION;
 	} else if ((IS_TMP_VAR|IS_VAR) & (IS_VAR|IS_TMP_VAR|IS_CV)) {
 		if ((IS_TMP_VAR|IS_VAR) == IS_CV) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 		}
 		/* CV may be changed indirectly (e.g. when it's a reference) */
 		call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS | ZEND_CALL_RELEASE_THIS;
@@ -73886,7 +73900,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_METHOD_CALL_S
 			CACHE_POLYMORPHIC_PTR(opline->result.num, called_scope, fbc);
 		}
 		if (((IS_TMP_VAR|IS_VAR) & (IS_VAR|IS_TMP_VAR)) && UNEXPECTED(obj != orig_obj)) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 			if (GC_DELREF(orig_obj) == 0) {
 				zend_objects_store_del(orig_obj);
 			}
@@ -73902,7 +73916,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_METHOD_CALL_S
 
 	call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS;
 	if (UNEXPECTED((fbc->common.fn_flags & ZEND_ACC_STATIC) != 0)) {
-		if (((IS_TMP_VAR|IS_VAR) & (IS_VAR|IS_TMP_VAR)) && GC_DELREF(obj) == 0) {
+		if (((IS_TMP_VAR|IS_VAR) & (IS_VAR|IS_TMP_VAR)) && GC_DELREF_OBJ(obj) == 0) {
 			zend_objects_store_del(obj);
 			if (UNEXPECTED(EG(exception))) {
 				HANDLE_EXCEPTION();
@@ -73913,7 +73927,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_METHOD_CALL_S
 		call_info = ZEND_CALL_NESTED_FUNCTION;
 	} else if ((IS_TMP_VAR|IS_VAR) & (IS_VAR|IS_TMP_VAR|IS_CV)) {
 		if ((IS_TMP_VAR|IS_VAR) == IS_CV) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 		}
 		/* CV may be changed indirectly (e.g. when it's a reference) */
 		call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS | ZEND_CALL_RELEASE_THIS;
@@ -78914,7 +78928,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = RT_CONSTANT(opline, opline->op2);
 			if (IS_CONST == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -78931,7 +78945,7 @@ try_assign_dim_array:
 
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -79066,7 +79080,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = RT_CONSTANT(opline, opline->op2);
 			if (IS_CONST == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -79084,7 +79098,7 @@ try_assign_dim_array:
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
 			zval_ptr_dtor_nogc(EX_VAR((opline+1)->op1.var));
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -79219,7 +79233,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = RT_CONSTANT(opline, opline->op2);
 			if (IS_CONST == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -79237,7 +79251,7 @@ try_assign_dim_array:
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
 			zval_ptr_dtor_nogc(EX_VAR((opline+1)->op1.var));
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -79372,7 +79386,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = RT_CONSTANT(opline, opline->op2);
 			if (IS_CONST == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -79389,7 +79403,7 @@ try_assign_dim_array:
 
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -81920,7 +81934,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = _get_zval_ptr_var(opline->op2.var EXECUTE_DATA_CC);
 			if ((IS_TMP_VAR|IS_VAR) == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -81937,7 +81951,7 @@ try_assign_dim_array:
 
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -82072,7 +82086,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = _get_zval_ptr_var(opline->op2.var EXECUTE_DATA_CC);
 			if ((IS_TMP_VAR|IS_VAR) == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -82090,7 +82104,7 @@ try_assign_dim_array:
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
 			zval_ptr_dtor_nogc(EX_VAR((opline+1)->op1.var));
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -82225,7 +82239,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = _get_zval_ptr_var(opline->op2.var EXECUTE_DATA_CC);
 			if ((IS_TMP_VAR|IS_VAR) == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -82243,7 +82257,7 @@ try_assign_dim_array:
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
 			zval_ptr_dtor_nogc(EX_VAR((opline+1)->op1.var));
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -82378,7 +82392,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = _get_zval_ptr_var(opline->op2.var EXECUTE_DATA_CC);
 			if ((IS_TMP_VAR|IS_VAR) == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -82395,7 +82409,7 @@ try_assign_dim_array:
 
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -83505,7 +83519,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = NULL;
 			if (IS_UNUSED == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -83522,7 +83536,7 @@ try_assign_dim_array:
 
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -83657,7 +83671,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = NULL;
 			if (IS_UNUSED == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -83675,7 +83689,7 @@ try_assign_dim_array:
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
 			zval_ptr_dtor_nogc(EX_VAR((opline+1)->op1.var));
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -83810,7 +83824,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = NULL;
 			if (IS_UNUSED == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -83828,7 +83842,7 @@ try_assign_dim_array:
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
 			zval_ptr_dtor_nogc(EX_VAR((opline+1)->op1.var));
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -83963,7 +83977,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = NULL;
 			if (IS_UNUSED == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -83980,7 +83994,7 @@ try_assign_dim_array:
 
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -84722,7 +84736,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_NEW_SPEC_VAR_UNUSE
 			constructor,
 			opline->extended_value,
 			Z_OBJ_P(result));
-		Z_ADDREF_P(result);
+		GC_ADDREF_OBJ(Z_OBJ_P(result));
 	}
 
 	call->prev_execute_data = EX(call);
@@ -86274,7 +86288,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = EX_VAR(opline->op2.var);
 			if (IS_CV == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -86291,7 +86305,7 @@ try_assign_dim_array:
 
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -86426,7 +86440,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = EX_VAR(opline->op2.var);
 			if (IS_CV == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -86444,7 +86458,7 @@ try_assign_dim_array:
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
 			zval_ptr_dtor_nogc(EX_VAR((opline+1)->op1.var));
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -86579,7 +86593,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = EX_VAR(opline->op2.var);
 			if (IS_CV == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -86597,7 +86611,7 @@ try_assign_dim_array:
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
 			zval_ptr_dtor_nogc(EX_VAR((opline+1)->op1.var));
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -86732,7 +86746,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = EX_VAR(opline->op2.var);
 			if (IS_CV == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -86749,7 +86763,7 @@ try_assign_dim_array:
 
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -89205,7 +89219,7 @@ static ZEND_VM_HOT ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_M
 			CACHE_POLYMORPHIC_PTR(opline->result.num, called_scope, fbc);
 		}
 		if ((IS_UNUSED & (IS_VAR|IS_TMP_VAR)) && UNEXPECTED(obj != orig_obj)) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 			if (GC_DELREF(orig_obj) == 0) {
 				zend_objects_store_del(orig_obj);
 			}
@@ -89221,7 +89235,7 @@ static ZEND_VM_HOT ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_M
 
 	call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS;
 	if (UNEXPECTED((fbc->common.fn_flags & ZEND_ACC_STATIC) != 0)) {
-		if ((IS_UNUSED & (IS_VAR|IS_TMP_VAR)) && GC_DELREF(obj) == 0) {
+		if ((IS_UNUSED & (IS_VAR|IS_TMP_VAR)) && GC_DELREF_OBJ(obj) == 0) {
 			zend_objects_store_del(obj);
 			if (UNEXPECTED(EG(exception))) {
 				HANDLE_EXCEPTION();
@@ -89232,7 +89246,7 @@ static ZEND_VM_HOT ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_M
 		call_info = ZEND_CALL_NESTED_FUNCTION;
 	} else if (IS_UNUSED & (IS_VAR|IS_TMP_VAR|IS_CV)) {
 		if (IS_UNUSED == IS_CV) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 		}
 		/* CV may be changed indirectly (e.g. when it's a reference) */
 		call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS | ZEND_CALL_RELEASE_THIS;
@@ -91389,7 +91403,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_METHOD_CALL_S
 			CACHE_POLYMORPHIC_PTR(opline->result.num, called_scope, fbc);
 		}
 		if ((IS_UNUSED & (IS_VAR|IS_TMP_VAR)) && UNEXPECTED(obj != orig_obj)) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 			if (GC_DELREF(orig_obj) == 0) {
 				zend_objects_store_del(orig_obj);
 			}
@@ -91405,7 +91419,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_METHOD_CALL_S
 
 	call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS;
 	if (UNEXPECTED((fbc->common.fn_flags & ZEND_ACC_STATIC) != 0)) {
-		if ((IS_UNUSED & (IS_VAR|IS_TMP_VAR)) && GC_DELREF(obj) == 0) {
+		if ((IS_UNUSED & (IS_VAR|IS_TMP_VAR)) && GC_DELREF_OBJ(obj) == 0) {
 			zend_objects_store_del(obj);
 			if (UNEXPECTED(EG(exception))) {
 				HANDLE_EXCEPTION();
@@ -91416,7 +91430,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_METHOD_CALL_S
 		call_info = ZEND_CALL_NESTED_FUNCTION;
 	} else if (IS_UNUSED & (IS_VAR|IS_TMP_VAR|IS_CV)) {
 		if (IS_UNUSED == IS_CV) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 		}
 		/* CV may be changed indirectly (e.g. when it's a reference) */
 		call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS | ZEND_CALL_RELEASE_THIS;
@@ -92188,7 +92202,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_NEW_SPEC_UNUSED_UN
 			constructor,
 			opline->extended_value,
 			Z_OBJ_P(result));
-		Z_ADDREF_P(result);
+		GC_ADDREF_OBJ(Z_OBJ_P(result));
 	}
 
 	call->prev_execute_data = EX(call);
@@ -92345,7 +92359,7 @@ static ZEND_VM_HOT ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_FETCH_
 		zval *result = EX_VAR(opline->result.var);
 
 		ZVAL_OBJ(result, Z_OBJ(EX(This)));
-		Z_ADDREF_P(result);
+		GC_ADDREF_OBJ(Z_OBJ_P(result));
 		ZEND_VM_NEXT_OPCODE();
 	} else {
 		ZEND_VM_TAIL_CALL(zend_this_not_in_object_context_helper_SPEC_TAILCALL(ZEND_OPCODE_HANDLER_ARGS_PASSTHRU));
@@ -94035,7 +94049,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_METHOD_CALL_S
 			CACHE_POLYMORPHIC_PTR(opline->result.num, called_scope, fbc);
 		}
 		if ((IS_UNUSED & (IS_VAR|IS_TMP_VAR)) && UNEXPECTED(obj != orig_obj)) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 			if (GC_DELREF(orig_obj) == 0) {
 				zend_objects_store_del(orig_obj);
 			}
@@ -94051,7 +94065,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_METHOD_CALL_S
 
 	call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS;
 	if (UNEXPECTED((fbc->common.fn_flags & ZEND_ACC_STATIC) != 0)) {
-		if ((IS_UNUSED & (IS_VAR|IS_TMP_VAR)) && GC_DELREF(obj) == 0) {
+		if ((IS_UNUSED & (IS_VAR|IS_TMP_VAR)) && GC_DELREF_OBJ(obj) == 0) {
 			zend_objects_store_del(obj);
 			if (UNEXPECTED(EG(exception))) {
 				HANDLE_EXCEPTION();
@@ -94062,7 +94076,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_METHOD_CALL_S
 		call_info = ZEND_CALL_NESTED_FUNCTION;
 	} else if (IS_UNUSED & (IS_VAR|IS_TMP_VAR|IS_CV)) {
 		if (IS_UNUSED == IS_CV) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 		}
 		/* CV may be changed indirectly (e.g. when it's a reference) */
 		call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS | ZEND_CALL_RELEASE_THIS;
@@ -95700,7 +95714,7 @@ yield_from_try_again:
 		if (ce == zend_ce_generator) {
 			zend_generator *new_gen = (zend_generator *) Z_OBJ_P(val);
 
-			Z_ADDREF_P(val);
+			GC_ADDREF_OBJ(Z_OBJ_P(val));
 
 			if (UNEXPECTED(new_gen->execute_data == NULL)) {
 				zend_throw_error(NULL, "Generator passed to yield from was aborted without proper return and is unable to continue");
@@ -98212,7 +98226,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = RT_CONSTANT(opline, opline->op2);
 			if (IS_CONST == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -98229,7 +98243,7 @@ try_assign_dim_array:
 
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -98364,7 +98378,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = RT_CONSTANT(opline, opline->op2);
 			if (IS_CONST == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -98382,7 +98396,7 @@ try_assign_dim_array:
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
 			zval_ptr_dtor_nogc(EX_VAR((opline+1)->op1.var));
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -98517,7 +98531,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = RT_CONSTANT(opline, opline->op2);
 			if (IS_CONST == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -98535,7 +98549,7 @@ try_assign_dim_array:
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
 			zval_ptr_dtor_nogc(EX_VAR((opline+1)->op1.var));
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -98670,7 +98684,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = RT_CONSTANT(opline, opline->op2);
 			if (IS_CONST == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -98687,7 +98701,7 @@ try_assign_dim_array:
 
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -99110,7 +99124,7 @@ static ZEND_VM_HOT ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_M
 			CACHE_POLYMORPHIC_PTR(opline->result.num, called_scope, fbc);
 		}
 		if ((IS_CV & (IS_VAR|IS_TMP_VAR)) && UNEXPECTED(obj != orig_obj)) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 			if (GC_DELREF(orig_obj) == 0) {
 				zend_objects_store_del(orig_obj);
 			}
@@ -99126,7 +99140,7 @@ static ZEND_VM_HOT ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_M
 
 	call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS;
 	if (UNEXPECTED((fbc->common.fn_flags & ZEND_ACC_STATIC) != 0)) {
-		if ((IS_CV & (IS_VAR|IS_TMP_VAR)) && GC_DELREF(obj) == 0) {
+		if ((IS_CV & (IS_VAR|IS_TMP_VAR)) && GC_DELREF_OBJ(obj) == 0) {
 			zend_objects_store_del(obj);
 			if (UNEXPECTED(EG(exception))) {
 				HANDLE_EXCEPTION();
@@ -99137,7 +99151,7 @@ static ZEND_VM_HOT ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_M
 		call_info = ZEND_CALL_NESTED_FUNCTION;
 	} else if (IS_CV & (IS_VAR|IS_TMP_VAR|IS_CV)) {
 		if (IS_CV == IS_CV) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 		}
 		/* CV may be changed indirectly (e.g. when it's a reference) */
 		call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS | ZEND_CALL_RELEASE_THIS;
@@ -102165,7 +102179,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = _get_zval_ptr_var(opline->op2.var EXECUTE_DATA_CC);
 			if ((IS_TMP_VAR|IS_VAR) == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -102182,7 +102196,7 @@ try_assign_dim_array:
 
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -102317,7 +102331,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = _get_zval_ptr_var(opline->op2.var EXECUTE_DATA_CC);
 			if ((IS_TMP_VAR|IS_VAR) == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -102335,7 +102349,7 @@ try_assign_dim_array:
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
 			zval_ptr_dtor_nogc(EX_VAR((opline+1)->op1.var));
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -102470,7 +102484,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = _get_zval_ptr_var(opline->op2.var EXECUTE_DATA_CC);
 			if ((IS_TMP_VAR|IS_VAR) == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -102488,7 +102502,7 @@ try_assign_dim_array:
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
 			zval_ptr_dtor_nogc(EX_VAR((opline+1)->op1.var));
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -102623,7 +102637,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = _get_zval_ptr_var(opline->op2.var EXECUTE_DATA_CC);
 			if ((IS_TMP_VAR|IS_VAR) == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -102640,7 +102654,7 @@ try_assign_dim_array:
 
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -103005,7 +103019,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_METHOD_CALL_S
 			CACHE_POLYMORPHIC_PTR(opline->result.num, called_scope, fbc);
 		}
 		if ((IS_CV & (IS_VAR|IS_TMP_VAR)) && UNEXPECTED(obj != orig_obj)) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 			if (GC_DELREF(orig_obj) == 0) {
 				zend_objects_store_del(orig_obj);
 			}
@@ -103021,7 +103035,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_METHOD_CALL_S
 
 	call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS;
 	if (UNEXPECTED((fbc->common.fn_flags & ZEND_ACC_STATIC) != 0)) {
-		if ((IS_CV & (IS_VAR|IS_TMP_VAR)) && GC_DELREF(obj) == 0) {
+		if ((IS_CV & (IS_VAR|IS_TMP_VAR)) && GC_DELREF_OBJ(obj) == 0) {
 			zend_objects_store_del(obj);
 			if (UNEXPECTED(EG(exception))) {
 				HANDLE_EXCEPTION();
@@ -103032,7 +103046,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_METHOD_CALL_S
 		call_info = ZEND_CALL_NESTED_FUNCTION;
 	} else if (IS_CV & (IS_VAR|IS_TMP_VAR|IS_CV)) {
 		if (IS_CV == IS_CV) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 		}
 		/* CV may be changed indirectly (e.g. when it's a reference) */
 		call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS | ZEND_CALL_RELEASE_THIS;
@@ -104108,7 +104122,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = NULL;
 			if (IS_UNUSED == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -104125,7 +104139,7 @@ try_assign_dim_array:
 
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -104260,7 +104274,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = NULL;
 			if (IS_UNUSED == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -104278,7 +104292,7 @@ try_assign_dim_array:
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
 			zval_ptr_dtor_nogc(EX_VAR((opline+1)->op1.var));
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -104413,7 +104427,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = NULL;
 			if (IS_UNUSED == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -104431,7 +104445,7 @@ try_assign_dim_array:
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
 			zval_ptr_dtor_nogc(EX_VAR((opline+1)->op1.var));
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -104566,7 +104580,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = NULL;
 			if (IS_UNUSED == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -104583,7 +104597,7 @@ try_assign_dim_array:
 
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -107565,7 +107579,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = EX_VAR(opline->op2.var);
 			if (IS_CV == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -107582,7 +107596,7 @@ try_assign_dim_array:
 
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -107717,7 +107731,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = EX_VAR(opline->op2.var);
 			if (IS_CV == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -107735,7 +107749,7 @@ try_assign_dim_array:
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
 			zval_ptr_dtor_nogc(EX_VAR((opline+1)->op1.var));
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -107870,7 +107884,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = EX_VAR(opline->op2.var);
 			if (IS_CV == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -107888,7 +107902,7 @@ try_assign_dim_array:
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
 			zval_ptr_dtor_nogc(EX_VAR((opline+1)->op1.var));
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -108023,7 +108037,7 @@ try_assign_dim_array:
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = EX_VAR(opline->op2.var);
 			if (IS_CV == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -108040,7 +108054,7 @@ try_assign_dim_array:
 
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -108501,7 +108515,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_METHOD_CALL_S
 			CACHE_POLYMORPHIC_PTR(opline->result.num, called_scope, fbc);
 		}
 		if ((IS_CV & (IS_VAR|IS_TMP_VAR)) && UNEXPECTED(obj != orig_obj)) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 			if (GC_DELREF(orig_obj) == 0) {
 				zend_objects_store_del(orig_obj);
 			}
@@ -108517,7 +108531,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_METHOD_CALL_S
 
 	call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS;
 	if (UNEXPECTED((fbc->common.fn_flags & ZEND_ACC_STATIC) != 0)) {
-		if ((IS_CV & (IS_VAR|IS_TMP_VAR)) && GC_DELREF(obj) == 0) {
+		if ((IS_CV & (IS_VAR|IS_TMP_VAR)) && GC_DELREF_OBJ(obj) == 0) {
 			zend_objects_store_del(obj);
 			if (UNEXPECTED(EG(exception))) {
 				HANDLE_EXCEPTION();
@@ -108528,7 +108542,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_METHOD_CALL_S
 		call_info = ZEND_CALL_NESTED_FUNCTION;
 	} else if (IS_CV & (IS_VAR|IS_TMP_VAR|IS_CV)) {
 		if (IS_CV == IS_CV) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 		}
 		/* CV may be changed indirectly (e.g. when it's a reference) */
 		call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS | ZEND_CALL_RELEASE_THIS;

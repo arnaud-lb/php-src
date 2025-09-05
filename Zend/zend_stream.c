@@ -161,7 +161,7 @@ ZEND_API zend_result zend_stream_fixup(zend_file_handle *file_handle, char **buf
 	if (file_size) {
 		ssize_t read;
 		size_t size = 0;
-		*buf = safe_emalloc(1, file_size, ZEND_MMAP_AHEAD);
+		*buf = safe_emalloc_atomic(1, file_size, ZEND_MMAP_AHEAD);
 		while ((read = zend_stream_read(file_handle, *buf + size, file_size - size)) > 0) {
 			size += read;
 		}
@@ -174,7 +174,7 @@ ZEND_API zend_result zend_stream_fixup(zend_file_handle *file_handle, char **buf
 	} else {
 		size_t size = 0, remain = 4*1024;
 		ssize_t read;
-		*buf = emalloc(remain);
+		*buf = emalloc_atomic(remain);
 
 		while ((read = zend_stream_read(file_handle, *buf + size, remain)) > 0) {
 			size   += read;

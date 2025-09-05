@@ -728,6 +728,8 @@ static zend_always_inline uint8_t zval_get_type(const zval* pz) {
 #define GC_SET_REFCOUNT(p, rc)		zend_gc_set_refcount(&(p)->gc, rc)
 #define GC_ADDREF(p)				zend_gc_addref(&(p)->gc)
 #define GC_DELREF(p)				zend_gc_delref(&(p)->gc)
+#define GC_ADDREF_OBJ(p)            zend_gc_addref_obj(&(p)->gc)
+#define GC_DELREF_OBJ(p)            zend_gc_delref_obj(&(p)->gc)
 #define GC_ADDREF_EX(p, rc)			zend_gc_addref_ex(&(p)->gc, rc)
 #define GC_DELREF_EX(p, rc)			zend_gc_delref_ex(&(p)->gc, rc)
 #define GC_TRY_ADDREF(p)			zend_gc_try_addref(&(p)->gc)
@@ -838,7 +840,11 @@ static zend_always_inline uint32_t zval_gc_info(uint32_t gc_type_info) {
 
 #define IS_STRING_EX				(IS_STRING         | (IS_TYPE_REFCOUNTED << Z_TYPE_FLAGS_SHIFT))
 #define IS_ARRAY_EX					(IS_ARRAY          | (IS_TYPE_REFCOUNTED << Z_TYPE_FLAGS_SHIFT) | (IS_TYPE_COLLECTABLE << Z_TYPE_FLAGS_SHIFT))
-#define IS_OBJECT_EX				(IS_OBJECT         | (IS_TYPE_REFCOUNTED << Z_TYPE_FLAGS_SHIFT) | (IS_TYPE_COLLECTABLE << Z_TYPE_FLAGS_SHIFT))
+#ifdef USE_LIBGC
+# define IS_OBJECT_EX				IS_OBJECT
+#else
+# define IS_OBJECT_EX				(IS_OBJECT         | (IS_TYPE_REFCOUNTED << Z_TYPE_FLAGS_SHIFT) | (IS_TYPE_COLLECTABLE << Z_TYPE_FLAGS_SHIFT))
+#endif
 #define IS_RESOURCE_EX				(IS_RESOURCE       | (IS_TYPE_REFCOUNTED << Z_TYPE_FLAGS_SHIFT))
 #define IS_REFERENCE_EX				(IS_REFERENCE      | (IS_TYPE_REFCOUNTED << Z_TYPE_FLAGS_SHIFT) | (IS_TYPE_COLLECTABLE << Z_TYPE_FLAGS_SHIFT))
 
@@ -1077,9 +1083,16 @@ static zend_always_inline uint32_t zval_gc_info(uint32_t gc_type_info) {
 #define Z_PTR(zval)					(zval).value.ptr
 #define Z_PTR_P(zval_p)				Z_PTR(*(zval_p))
 
-#define ZVAL_UNDEF(z) do {				\
+#ifdef USE_LIBGC
+# define ZVAL_UNDEF(z) do {				\
+		Z_TYPE_INFO_P(z) = IS_UNDEF;	\
+		Z_PTR_P(z) = NULL;              \
+	} while (0)
+#else
+# define ZVAL_UNDEF(z) do {				\
 		Z_TYPE_INFO_P(z) = IS_UNDEF;	\
 	} while (0)
+#endif
 
 #define ZVAL_NULL(z) do {				\
 		Z_TYPE_INFO_P(z) = IS_NULL;		\
@@ -1365,6 +1378,13 @@ static zend_always_inline uint32_t zend_gc_addref(zend_refcounted_h *p) {
 	return ++(p->refcount);
 }
 
+static zend_always_inline uint32_t zend_gc_addref_obj(zend_refcounted_h *p) {
+	if (!(IS_OBJECT_EX & (IS_TYPE_REFCOUNTED << Z_TYPE_FLAGS_SHIFT))) {
+		return 2;
+	}
+	return zend_gc_addref(p);
+}
+
 static zend_always_inline void zend_gc_try_addref(zend_refcounted_h *p) {
 	if (!(p->u.type_info & GC_IMMUTABLE)) {
 		ZEND_RC_MOD_CHECK(p);
@@ -1381,8 +1401,16 @@ static zend_always_inline void zend_gc_try_delref(zend_refcounted_h *p) {
 
 static zend_always_inline uint32_t zend_gc_delref(zend_refcounted_h *p) {
 	ZEND_ASSERT(p->refcount > 0);
+	ZEND_ASSERT(GC_TYPE((zend_refcounted*)p) != IS_OBJECT || (IS_OBJECT_EX & (IS_TYPE_REFCOUNTED << Z_TYPE_FLAGS_SHIFT)));
 	ZEND_RC_MOD_CHECK(p);
 	return --(p->refcount);
+}
+
+static zend_always_inline uint32_t zend_gc_delref_obj(zend_refcounted_h *p) {
+	if (IS_OBJECT_EX & (IS_TYPE_REFCOUNTED << Z_TYPE_FLAGS_SHIFT)) {
+		return zend_gc_delref(p);
+	}
+	return 2;
 }
 
 static zend_always_inline uint32_t zend_gc_addref_ex(zend_refcounted_h *p, uint32_t rc) {

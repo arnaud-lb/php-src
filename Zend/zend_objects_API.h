@@ -25,16 +25,19 @@
 #include "zend_alloc.h"
 #include "zend_compile.h" /* For zend_property_info */
 
-#define OBJ_BUCKET_INVALID			(1<<0)
+#define OBJ_BUCKET_INVALID			(1<<0) /* Object may have been freed already */
+#define OBJ_BUCKET_PLACEHOLDER		(1<<1) /* Bucket is a placeholder that will be cleared by GC */
 
-#define IS_OBJ_VALID(o)				(!(((uintptr_t)(o)) & OBJ_BUCKET_INVALID))
-
+#define IS_OBJ_VALID(o)				(o && !(((uintptr_t)(o)) & OBJ_BUCKET_INVALID))
 #define SET_OBJ_INVALID(o)			((zend_object*)((((uintptr_t)(o)) | OBJ_BUCKET_INVALID)))
 
-#define GET_OBJ_BUCKET_NUMBER(o)	(((intptr_t)(o)) >> 1)
+#define IS_OBJ_PLACEHOLDER(o)		(((uintptr_t)(o)) & OBJ_BUCKET_PLACEHOLDER)
+#define SET_OBJ_PLACEHOLDER(o)		((zend_object*)((((uintptr_t)(o)) | OBJ_BUCKET_PLACEHOLDER)))
+
+#define GET_OBJ_BUCKET_NUMBER(o)	(((intptr_t)(o)) >> 2)
 
 #define SET_OBJ_BUCKET_NUMBER(o, n)	do { \
-		(o) = (zend_object*)((((uintptr_t)(n)) << 1) | OBJ_BUCKET_INVALID); \
+		(o) = (zend_object*)((((uintptr_t)(n)) << 2) | OBJ_BUCKET_INVALID); \
 	} while (0)
 
 #define ZEND_OBJECTS_STORE_ADD_TO_FREE_LIST(h) do { \
@@ -73,6 +76,10 @@ END_EXTERN_C()
 
 static zend_always_inline void zend_object_release(zend_object *obj)
 {
+	if (!(IS_OBJECT_EX & (IS_TYPE_REFCOUNTED << Z_TYPE_FLAGS_SHIFT))) {
+		return;
+	}
+
 	if (GC_DELREF(obj) == 0) {
 		zend_objects_store_del(obj);
 	} else if (UNEXPECTED(GC_MAY_LEAK((zend_refcounted*)obj))) {
@@ -148,5 +155,9 @@ static zend_always_inline bool zend_check_method_accessible(const zend_function 
 
 	return true;
 }
+
+#ifdef USE_LIBGC
+void ZEND_FASTCALL zend_objects_store_set_weakref_finalizer(zend_object *object);
+#endif
 
 #endif /* ZEND_OBJECTS_H */

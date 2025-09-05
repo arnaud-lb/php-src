@@ -168,7 +168,7 @@ ZEND_METHOD(Closure, call)
 		zend_call_function(&fci, &fci_cache);
 
 		/* copied upon generator creation */
-		GC_DELREF(&closure->std);
+		GC_DELREF_OBJ(&closure->std);
 	} else {
 		zend_closure *fake_closure;
 		zend_function *my_function;

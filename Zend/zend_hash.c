@@ -445,6 +445,9 @@ ZEND_API void ZEND_FASTCALL zend_hash_discard(HashTable *ht, uint32_t nNumUsed)
 		p--;
 		if (UNEXPECTED(Z_TYPE(p->val) == IS_UNDEF)) continue;
 		ht->nNumOfElements--;
+#ifdef USE_LIBGC
+		ZVAL_UNDEF(&p->val);
+#endif
 		/* Collision pointers always directed from higher to lower buckets */
 #if 0
 		if (!(Z_NEXT(p->val) == HT_INVALID_IDX || HT_HASH_TO_BUCKET_EX(arData, Z_NEXT(p->val)) < p)) {

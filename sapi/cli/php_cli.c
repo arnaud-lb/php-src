@@ -1200,6 +1200,11 @@ int main(int argc, char *argv[])
 	BOOL using_wide_argv = 0;
 #endif
 
+#ifdef USE_LIBGC
+	/* Must be called before any GC_malloc() */
+	init_memory_manager();
+#endif
+
 	int c;
 	int exit_status = SUCCESS;
 	int module_started = 0, sapi_started = 0;

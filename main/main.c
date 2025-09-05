@@ -418,7 +418,7 @@ static void php_binary_init(void)
 {
 	char *binary_location = NULL;
 #ifdef PHP_WIN32
-	binary_location = (char *)pemalloc(MAXPATHLEN, 1);
+	binary_location = (char *)pemalloc_atomic(MAXPATHLEN, 1);
 	if (GetModuleFileName(0, binary_location, MAXPATHLEN) == 0) {
 		pefree(binary_location, 1);
 		binary_location = NULL;
@@ -1914,6 +1914,8 @@ zend_result php_request_startup(void)
 	} zend_end_try();
 
 	SG(sapi_started) = 1;
+
+	prepare_memory_manager();
 
 	return retval;
 }

@@ -2025,7 +2025,7 @@ static inline void set_user_save_handler_ini(void) {
 
 #define SESSION_SET_USER_HANDLER_OO(struct_name, zstr_method_name) \
 	array_init_size(&PS(mod_user_names).struct_name, 2); \
-	Z_ADDREF_P(obj); \
+	GC_ADDREF_OBJ(Z_OBJ_P(obj)); \
 	add_next_index_zval(&PS(mod_user_names).struct_name, obj); \
 	add_next_index_str(&PS(mod_user_names).struct_name, zstr_method_name);
 
@@ -2034,7 +2034,7 @@ static inline void set_user_save_handler_ini(void) {
 		zval_ptr_dtor(&PS(mod_user_names).struct_name); \
 	} \
 	array_init_size(&PS(mod_user_names).struct_name, 2); \
-	Z_ADDREF_P(obj); \
+	GC_ADDREF_OBJ(Z_OBJ_P(obj)); \
 	add_next_index_zval(&PS(mod_user_names).struct_name, obj); \
 	add_next_index_str(&PS(mod_user_names).struct_name, zend_string_init(method_name, strlen(method_name), false));
 

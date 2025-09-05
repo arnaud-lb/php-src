@@ -1801,10 +1801,12 @@ static void jit_ZVAL_DTOR(zend_jit_ctx *jit, ir_ref ref, uint32_t op_info, const
 			}
 			return;
 		} else if (type == IS_OBJECT) {
-			if (opline) {
-				jit_SET_EX_OPLINE(jit, opline);
+			if (IS_OBJECT_EX & (IS_TYPE_REFCOUNTED << Z_TYPE_FLAGS_SHIFT)) {
+				if (opline) {
+					jit_SET_EX_OPLINE(jit, opline);
+				}
+				ir_CALL_1(IR_VOID, ir_CONST_FC_FUNC(zend_objects_store_del), ref);
 			}
-			ir_CALL_1(IR_VOID, ir_CONST_FC_FUNC(zend_objects_store_del), ref);
 			return;
 		}
 	}
@@ -1902,10 +1904,14 @@ static void jit_FREE_OP(zend_jit_ctx  *jit,
 
 static void jit_OBJ_RELEASE(zend_jit_ctx  *jit, ir_ref ref)
 {
+	if (!(IS_OBJECT_EX & (IS_TYPE_REFCOUNTED << Z_TYPE_FLAGS_SHIFT))) {
+		return;
+	}
+
 	ir_ref end_inputs = IR_UNUSED;
     ir_ref if_not_zero, if_may_not_leak;
 
-	// JIT: if (GC_DELREF(obj) == 0) {
+	// JIT: if (GC_DELREF_OBJ(obj) == 0) {
 	if_not_zero = ir_IF(jit_GC_DELREF(jit, ref));
 	ir_IF_FALSE(if_not_zero);
 
@@ -8620,7 +8626,7 @@ static int zend_jit_push_call_frame(zend_jit_ctx *jit, const zend_op *opline, co
 			}
 	    } else {
 			if (opline->op1_type == IS_CV) {
-				// JIT: GC_ADDREF(obj);
+				// JIT: GC_ADDREF_OBJ(obj);
 				jit_GC_ADDREF(jit, this_ref);
 			}
 

@@ -137,7 +137,7 @@ static spl_SplObjectStorageElement *spl_object_storage_create_element(zend_objec
 {
 	spl_SplObjectStorageElement *pelement = emalloc(sizeof(spl_SplObjectStorageElement));
 	pelement->obj = obj;
-	GC_ADDREF(obj);
+	GC_ADDREF_OBJ(obj);
 	if (inf) {
 		ZVAL_COPY(&pelement->inf, inf);
 	} else {
@@ -206,7 +206,7 @@ static spl_SplObjectStorageElement *spl_object_storage_attach(spl_SplObjectStora
 	}
 
 	element.obj = obj;
-	GC_ADDREF(obj);
+	GC_ADDREF_OBJ(obj);
 	if (inf) {
 		ZVAL_COPY(&element.inf, inf);
 	} else {

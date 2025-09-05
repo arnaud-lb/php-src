@@ -87,6 +87,7 @@ size_t zend_gc_globals_size(void);
 
 static zend_always_inline void gc_check_possible_root(zend_refcounted *ref)
 {
+#ifndef USE_LIBGC
 	if (EXPECTED(GC_TYPE_INFO(ref) == GC_REFERENCE)) {
 		zval *zv = &((zend_reference*)ref)->val;
 
@@ -98,14 +99,17 @@ static zend_always_inline void gc_check_possible_root(zend_refcounted *ref)
 	if (UNEXPECTED(GC_MAY_LEAK(ref))) {
 		gc_possible_root(ref);
 	}
+#endif
 }
 
 static zend_always_inline void gc_check_possible_root_no_ref(zend_refcounted *ref)
 {
 	ZEND_ASSERT(GC_TYPE_INFO(ref) != GC_REFERENCE);
+#ifndef USE_LIBGC
 	if (UNEXPECTED(GC_MAY_LEAK(ref))) {
 		gc_possible_root(ref);
 	}
+#endif
 }
 
 /* These APIs can be used to simplify object get_gc implementations

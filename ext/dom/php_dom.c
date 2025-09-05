@@ -714,7 +714,7 @@ static zend_object *dom_object_namespace_node_clone_obj(zend_object *zobject)
 
 	if (intern->parent_intern) {
 		clone_intern->parent_intern = intern->parent_intern;
-		GC_ADDREF(&clone_intern->parent_intern->std);
+		GC_ADDREF_OBJ(&clone_intern->parent_intern->std);
 	}
 	dom_update_refcount_after_clone(&intern->dom, original_node, &clone_intern->dom, cloned_node);
 

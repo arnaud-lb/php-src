@@ -60,12 +60,12 @@ static zend_always_inline void zend_weakrefs_hash_destroy(HashTable *ht) {
 static zend_always_inline zend_ulong zend_object_to_weakref_key(const zend_object *object)
 {
 	ZEND_ASSERT(((uintptr_t)object) % ZEND_MM_ALIGNMENT == 0);
-	return ((uintptr_t) object) >> ZEND_MM_ALIGNMENT_LOG2;
+	return MASK_PTR(((uintptr_t) object) >> ZEND_MM_ALIGNMENT_LOG2);
 }
 
 static zend_always_inline zend_object *zend_weakref_key_to_object(zend_ulong key)
 {
-	return (zend_object *) (((uintptr_t) key) << ZEND_MM_ALIGNMENT_LOG2);
+	return (zend_object *) UNMASK_PTR(((uintptr_t) key) << ZEND_MM_ALIGNMENT_LOG2);
 }
 
 HashTable *zend_weakmap_get_gc(zend_object *object, zval **table, int *n);

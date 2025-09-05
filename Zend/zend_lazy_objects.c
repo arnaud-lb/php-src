@@ -66,6 +66,7 @@ typedef struct _zend_lazy_object_info {
 	int lazy_properties_count;
 } zend_lazy_object_info;
 
+#ifndef USE_LIBGC
 /* zend_hash dtor_func_t for zend_lazy_objects_store.infos */
 static void zend_lazy_object_info_dtor_func(zval *pElement)
 {
@@ -81,25 +82,80 @@ static void zend_lazy_object_info_dtor_func(zval *pElement)
 
 	efree(info);
 }
+#endif
 
 void zend_lazy_objects_init(zend_lazy_objects_store *store)
 {
+#ifdef USE_LIBGC
+	zend_hash_init(&store->infos, 8, NULL, NULL, false);
+#else
 	zend_hash_init(&store->infos, 8, NULL, zend_lazy_object_info_dtor_func, false);
+#endif
 }
 
 void zend_lazy_objects_destroy(zend_lazy_objects_store *store)
 {
+#ifdef USE_LIBGC
+	ZEND_HASH_FOREACH_VAL(&store->infos, zval *zv) {
+		if (Z_PTR_P(zv)) {
+			if (GC_unregister_long_link(&Z_PTR_P(zv)) != 1) {
+				ZEND_UNREACHABLE();
+			}
+		}
+	} ZEND_HASH_FOREACH_END();
+#else
 	ZEND_ASSERT(zend_hash_num_elements(&store->infos) == 0 || CG(unclean_shutdown));
 	zend_hash_destroy(&store->infos);
+#endif
+}
+
+static void zlo_move_links(Bucket *prev_buckets)
+{
+	if (HT_IS_PACKED(&EG(lazy_objects_store).infos)) {
+		zval *zvs = EG(lazy_objects_store).infos.arPacked;
+		zval *prev_zvs = (zval*)prev_buckets;
+		for (uint32_t i = 0, l = EG(lazy_objects_store).infos.nNumUsed - 1; i < l; i++) {
+			if (!Z_ISUNDEF(zvs[i])) {
+				if (GC_move_long_link(&Z_PTR(prev_zvs[i]), &Z_PTR(zvs[i])) != GC_SUCCESS) {
+					ZEND_UNREACHABLE();
+				}
+			}
+		}
+	} else {
+		Bucket *buckets = EG(lazy_objects_store).infos.arData;
+		for (uint32_t i = 0, l = EG(lazy_objects_store).infos.nNumUsed - 1; i < l; i++) {
+			if (!Z_ISUNDEF(buckets[i].val)) {
+				if (GC_move_long_link(&Z_PTR(prev_buckets[i].val), &Z_PTR(buckets[i].val)) != GC_SUCCESS) {
+					ZEND_UNREACHABLE();
+				}
+			}
+		}
+	}
 }
 
 static void zend_lazy_object_set_info(const zend_object *obj, zend_lazy_object_info *info)
 {
 	ZEND_ASSERT(zend_object_is_lazy(obj));
 
+#ifdef USE_LIBGC
+	Bucket *prev_buckets = EG(lazy_objects_store).infos.arData;
+	zval *zv = zend_hash_index_lookup(&EG(lazy_objects_store).infos, obj->handle);
+	ZEND_ASSERT(Z_TYPE_P(zv) == IS_NULL || (Z_TYPE_P(zv) == IS_PTR && Z_PTR_P(zv) == NULL));
+	ZVAL_PTR(zv, info);
+
+	if (UNEXPECTED(EG(lazy_objects_store).infos.arData != prev_buckets)) {
+		zlo_move_links(prev_buckets);
+	}
+
+	if (GC_REGISTER_LONG_LINK_SAFE(&Z_PTR_P(zv),
+			GC_base((char*)obj - obj->handlers->offset)) != GC_SUCCESS) {
+		ZEND_UNREACHABLE();
+	}
+#else
 	zval *zv = zend_hash_index_add_new_ptr(&EG(lazy_objects_store).infos, obj->handle, info);
 	ZEND_ASSERT(zv);
 	(void)zv;
+#endif
 }
 
 static zend_lazy_object_info* zend_lazy_object_get_info(const zend_object *obj)
@@ -161,8 +217,17 @@ zend_lazy_object_flags_t zend_lazy_object_get_flags(const zend_object *obj)
 
 void zend_lazy_object_del_info(const zend_object *obj)
 {
+#ifdef USE_LIBGC
+	zval *zv = zend_hash_index_find(&EG(lazy_objects_store).infos, obj->handle);
+	ZEND_ASSERT(zv && Z_TYPE_P(zv) == IS_PTR && Z_PTR_P(zv) != NULL);
+	Z_PTR_P(zv) = NULL;
+	if (GC_unregister_long_link(&Z_PTR_P(zv)) != 1) {
+		ZEND_UNREACHABLE();
+	}
+#else
 	zend_result res = zend_hash_index_del(&EG(lazy_objects_store).infos, obj->handle);
 	ZEND_ASSERT(res == SUCCESS);
+#endif
 }
 
 bool zend_lazy_object_decr_lazy_props(const zend_object *obj)
@@ -301,9 +366,9 @@ ZEND_API zend_object *zend_object_make_lazy(zend_object *obj,
 				if (obj->handlers->dtor_obj != zend_objects_destroy_object
 						|| obj->ce->destructor) {
 					GC_ADD_FLAGS(obj, IS_OBJ_DESTRUCTOR_CALLED);
-					GC_ADDREF(obj);
+					GC_ADDREF_OBJ(obj);
 					obj->handlers->dtor_obj(obj);
-					GC_DELREF(obj);
+					GC_DELREF_OBJ(obj);
 					if (EG(exception)) {
 						return NULL;
 					}
@@ -472,7 +537,7 @@ static zend_object *zend_lazy_object_init_proxy(zend_object *obj)
 	ZEND_ASSERT(!zend_lazy_object_initialized(obj));
 
 	/* Prevent object from being released during initialization */
-	GC_ADDREF(obj);
+	GC_ADDREF_OBJ(obj);
 
 	zend_lazy_object_info *info = zend_lazy_object_get_info(obj);
 
@@ -545,7 +610,7 @@ static zend_object *zend_lazy_object_init_proxy(zend_object *obj)
 	instance = Z_OBJ(retval);
 
 exit:
-	if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+	if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 		zend_throw_error(NULL, "Lazy object was released during initialization");
 		zend_objects_store_del(obj);
 		instance = NULL;
@@ -586,7 +651,7 @@ ZEND_API zend_object *zend_lazy_object_init(zend_object *obj)
 	}
 
 	/* Prevent object from being released during initialization */
-	GC_ADDREF(obj);
+	GC_ADDREF_OBJ(obj);
 
 	zend_fcall_info_cache *initializer = zend_lazy_object_get_initializer_fcc(obj);
 
@@ -661,7 +726,7 @@ ZEND_API zend_object *zend_lazy_object_init(zend_object *obj)
 	instance = obj;
 
 exit:
-	if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+	if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 		zend_throw_error(NULL, "Lazy object was released during initialization");
 		zend_objects_store_del(obj);
 		instance = NULL;

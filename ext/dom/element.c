@@ -671,7 +671,7 @@ PHP_METHOD(DOMElement, getAttributeNode)
 	if (attrp->type == XML_NAMESPACE_DECL) {
 		xmlNsPtr original = (xmlNsPtr) attrp;
 		/* Keep parent alive, because we're a fake child. */
-		GC_ADDREF(&intern->std);
+		GC_ADDREF_OBJ(&intern->std);
 		(void) php_dom_create_fake_namespace_decl(nodep, original, return_value, intern);
 	} else {
 		DOM_RET_OBJ((xmlNodePtr) attrp, intern);
@@ -1237,7 +1237,7 @@ PHP_METHOD(DOMElement, getAttributeNodeNS)
 			nsptr = dom_get_nsdecl(elemp, BAD_CAST name);
 			if (nsptr != NULL) {
 				/* Keep parent alive, because we're a fake child. */
-				GC_ADDREF(&intern->std);
+				GC_ADDREF_OBJ(&intern->std);
 				(void) php_dom_create_fake_namespace_decl(elemp, nsptr, return_value, intern);
 			} else {
 				RETURN_NULL();

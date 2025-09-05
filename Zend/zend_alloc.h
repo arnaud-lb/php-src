@@ -62,6 +62,147 @@ typedef struct _zend_mm_debug_info {
 
 BEGIN_EXTERN_C()
 
+#ifdef USE_LIBGC
+
+#if ZEND_DEBUG && !defined(GC_DEBUG)
+# define GC_DEBUG
+#endif
+#ifdef GC_H
+# error gc/gh.h included before zend_alloc.h
+#endif
+#include <gc/gc.h>
+#include <gc/gc_backptr.h>
+
+typedef struct _zend_mm_heap zend_mm_heap;
+
+ZEND_API void* ZEND_FASTCALL _emalloc(size_t size ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC);
+ZEND_API void ZEND_FASTCALL _efree(void *ptr ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC);
+ZEND_API void* ZEND_FASTCALL _safe_emalloc(size_t nmemb, size_t size, size_t offset ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC);
+ZEND_API void* ZEND_FASTCALL _ecalloc(size_t nmemb, size_t size ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC);
+ZEND_API void* ZEND_FASTCALL _safe_erealloc(void *ptr, size_t nmemb, size_t size, size_t offset ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC);
+ZEND_API char *_estrdup(const char *s ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC);
+ZEND_API char* _estrndup(const char *s, size_t len ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC);
+ZEND_API void* ZEND_FASTCALL _safe_emalloc_atomic(size_t nmemb, size_t size, size_t offset ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC);
+
+ZEND_API char* ZEND_FASTCALL zend_strndup(const char *s, size_t length);
+
+ZEND_API zend_result zend_set_memory_limit(size_t memory_limit);
+ZEND_API size_t zend_memory_usage(bool real_usage);
+ZEND_API size_t zend_memory_peak_usage(bool real_usage);
+
+ZEND_API size_t zend_mm_gc(zend_mm_heap *heap);
+
+ZEND_API void shutdown_memory_manager(bool silent, bool full_shutdown);
+ZEND_API void init_memory_manager(void);
+ZEND_API void start_memory_manager(void);
+ZEND_API void prepare_memory_manager(void);
+
+ZEND_API bool is_zend_ptr(const void *ptr);
+
+#define is_zend_mm() false
+#define zend_memory_reset_peak_usage() do { } while (0)
+#define zend_alloc_in_memory_limit_error_reporting() false
+#define refresh_memory_manager() do { } while (0)
+
+#define emalloc(size)                       GC_MALLOC(size)
+#define emalloc_large(size)                 GC_MALLOC(size)
+#define emalloc_huge(size)                  GC_MALLOC(size)
+#define safe_emalloc(nmemb, size, offset)   _safe_emalloc(nmemb, size, offset ZEND_FILE_LINE_CC ZEND_FILE_LINE_EMPTY_CC)
+#define efree(ptr)                          ((void)(ptr))
+#define efree_large(ptr)                    ((void)(ptr))
+#define efree_huge(ptr)                     ((void)(ptr))
+#define ecalloc(nmemb, size)                _ecalloc(nmemb, size ZEND_FILE_LINE_CC ZEND_FILE_LINE_EMPTY_CC)
+#define erealloc(ptr, size)                 GC_REALLOC(ptr, size)
+#define erealloc2(ptr, size, copy_size)     GC_REALLOC(ptr, size)
+#define safe_erealloc(ptr, nmemb, size, offset) _safe_erealloc(ptr, nmemb, size, offset ZEND_FILE_LINE_CC ZEND_FILE_LINE_EMPTY_CC)
+#define erealloc_recoverable(ptr, size)     GC_REALLOC(ptr, size)
+#define erealloc2_recoverable(ptr, size, copy_size) GC_REALLOC(ptr, size)
+#define estrdup(s)                          _estrdup(s ZEND_FILE_LINE_CC ZEND_FILE_LINE_EMPTY_CC)
+#define estrndup(s, length)                 _estrndup(s, length ZEND_FILE_LINE_CC ZEND_FILE_LINE_EMPTY_CC)
+#define emalloc_atomic(size)                GC_MALLOC_ATOMIC(size)
+#define safe_emalloc_atomic(nmemb, size, offset) _safe_emalloc_atomic(nmemb, size, offset ZEND_FILE_LINE_CC ZEND_FILE_LINE_EMPTY_CC)
+
+#define emalloc_rel(size)                       emalloc(size)
+#define safe_emalloc_rel(nmemb, size, offset)   safe_emalloc(nmemb, size, offset)
+#define efree_rel(ptr)                          efree(ptr)
+#define ecalloc_rel(nmemb, size)                ecalloc(nmemb, size)
+#define erealloc_rel(ptr, size)                 erealloc(ptr, size)
+#define erealloc2_rel(ptr, size, copy_size)     erealloc2(ptr, size, copy_size)
+#define erealloc_recoverable_rel(ptr, size)     erealloc_recoverable(ptr, size)
+#define erealloc2_recoverable_rel(ptr, size, copy_size) erealloc2_recoverable(ptr, size, copy_size)
+#define safe_erealloc_rel(ptr, nmemb, size, offset) safe_erealloc(ptr, nmemb, size, offset)
+#define estrdup_rel(s)                          estrdup(s)
+#define estrndup_rel(s, length)                 estrndup(s, length)
+
+#define efree_size(ptr, size)
+#define efree_size_rel(ptr, size)
+
+#define pemalloc(size, persistent)                      emalloc(size)
+#define safe_pemalloc(nmemb, size, offset, persistent)  safe_emalloc(nmemb, size, offset)
+#define pefree(ptr, persistent)                         efree(ptr)
+#define pefree_size(ptr, size, persistent)              efree_size(ptr, size)
+#define pecalloc(nmemb, size, persistent)               ecalloc(nmemb, size)
+#define perealloc(ptr, size, persistent)                erealloc(ptr, size)
+#define perealloc2(ptr, size, copy_size, persistent)    erealloc2(ptr, size, copy_size)
+#define safe_perealloc(ptr, nmemb, size, offset, persistent) safe_erealloc(ptr, nmemb, size, offset)
+#define perealloc_recoverable(ptr, size, persistent)    erealloc_recoverable(ptr, size)
+#define perealloc2_recoverable(ptr, size, persistent)   erealloc2_recoverable(ptr, size)
+#define pestrdup(s, persistent)                         estrdup(s)
+#define pestrndup(s, length, persistent)                estrndup(s, length)
+#define pemalloc_atomic(size, persistent)               emalloc_atomic(size)
+#define safe_pemalloc_atomic(nmemb, size, offset, persistent) safe_emalloc_atomic(nmemb, size, offset)
+
+#define pemalloc_rel(size, persistent)                      pemalloc(size, persistent)
+#define pefree_rel(ptr, persistent)                         pefree(ptr, persistent)
+#define pecalloc_rel(nmemb, size, persistent)               pecalloc(nmemb, size, persistent)
+#define perealloc_rel(ptr, size, persistent)                perealloc(ptr, size, persistent)
+#define perealloc2_rel(ptr, size, copy_size, persistent)    perealloc2(ptr, size, copy_size, persistent)
+#define perealloc_recoverable_rel(ptr, size, persistent)    perealloc_recoverable(ptr, size, persistent)
+#define perealloc2_recoverable_rel(ptr, size, copy_size, persistent) perealloc2_recoverable(ptr, size, copy_size, persistent)
+#define pestrdup_rel(s, persistent)                         pestrdup(s, persistent)
+
+/* fast cache for HashTables */
+#define ALLOC_HASHTABLE(ht)	\
+	(ht) = (HashTable *) emalloc(sizeof(HashTable))
+
+#define FREE_HASHTABLE(ht)	\
+	efree_size(ht, sizeof(HashTable))
+
+#define ALLOC_HASHTABLE_REL(ht)	\
+	(ht) = (HashTable *) emalloc_rel(sizeof(HashTable))
+
+#define FREE_HASHTABLE_REL(ht)	\
+	efree_size_rel(ht, sizeof(HashTable))
+
+// TODO: should fix call site instead
+#define malloc(size)        emalloc(size)
+#define free(size)          efree(size)
+#define realloc(ptr, size)  erealloc(ptr, size)
+#define calloc(nmemb, size) ecalloc(nmemb, size)
+#define strdup(s)           estrdup(s)
+#define strndup(s)          estrndup(s)
+
+/* Hide ptr from libgc */
+#define MASK_PTR(ptr) ((uintptr_t)(ptr) | (1ULL<<63))
+#define UNMASK_PTR(ptr) ((uintptr_t)(ptr) & ~(1ULL<<63))
+
+#include "zend_alloc_sizes.h"
+
+/* _emalloc() & _efree() specialization */
+# if !ZEND_DEBUG
+#  define _ZEND_BIN_ALLOCATOR_DEF(_num, _size, _elements, _pages, x, y) \
+	ZEND_API ZEND_ATTRIBUTE_MALLOC void* ZEND_FASTCALL _emalloc_  ## _size(void);
+
+ZEND_MM_BINS_INFO(_ZEND_BIN_ALLOCATOR_DEF, x, y)
+
+#  define _ZEND_BIN_DEALLOCATOR_DEF(_num, _size, _elements, _pages, x, y) \
+	ZEND_API void ZEND_FASTCALL _efree_ ## _size(void *);
+
+ZEND_MM_BINS_INFO(_ZEND_BIN_DEALLOCATOR_DEF, x, y)
+# endif
+
+#else /* USE_LIBGC */
+
 ZEND_API ZEND_ATTRIBUTE_MALLOC char*  ZEND_FASTCALL zend_strndup(const char *s, size_t length);
 
 ZEND_API ZEND_ATTRIBUTE_MALLOC void*  ZEND_FASTCALL _emalloc(size_t size ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC) ZEND_ATTRIBUTE_ALLOC_SIZE(1);
@@ -407,6 +548,8 @@ static void apc_init_heap(void)
 #ifdef ZTS
 size_t zend_mm_globals_size(void);
 #endif
+
+#endif /* LIBGC */
 
 END_EXTERN_C()
 

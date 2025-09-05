@@ -1749,6 +1749,11 @@ int main(int argc, char *argv[])
 	char *query_string;
 	int skip_getopt = 0;
 
+#ifdef USE_LIBGC
+	/* Must be called before any GC_malloc() */
+	init_memory_manager();
+#endif
+
 #if defined(SIGPIPE) && defined(SIG_IGN)
 	signal(SIGPIPE, SIG_IGN); /* ignore SIGPIPE in standalone mode so
 								that sockets created via fsockopen()

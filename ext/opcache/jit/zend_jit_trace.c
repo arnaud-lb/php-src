@@ -8679,7 +8679,7 @@ int ZEND_FASTCALL zend_jit_trace_exit(uint32_t exit_num, zend_jit_registers_buf 
 		} else if (STACK_FLAGS(stack, i) == ZREG_THIS) {
 			zend_object *obj = Z_OBJ(EX(This));
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			ZVAL_OBJ(EX_VAR_NUM(i), obj);
 		} else if (STACK_FLAGS(stack, i) == ZREG_ZVAL_ADDREF) {
 			Z_TRY_ADDREF_P(EX_VAR_NUM(i));

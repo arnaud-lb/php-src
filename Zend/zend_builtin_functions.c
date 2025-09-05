@@ -157,7 +157,11 @@ ZEND_FUNCTION(gc_mem_caches)
 {
 	ZEND_PARSE_PARAMETERS_NONE();
 
+#if USE_LIBGC
+	RETURN_LONG(zend_mm_gc(NULL));
+#else
 	RETURN_LONG(zend_mm_gc(zend_mm_get_heap()));
+#endif
 }
 /* }}} */
 
@@ -167,7 +171,13 @@ ZEND_FUNCTION(gc_collect_cycles)
 {
 	ZEND_PARSE_PARAMETERS_NONE();
 
+#if USE_LIBGC
+	GC_gcollect();
+	GC_invoke_finalizers();
+	RETURN_LONG(0);
+#else
 	RETURN_LONG(gc_collect_cycles());
+#endif
 }
 /* }}} */
 

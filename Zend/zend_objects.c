@@ -20,6 +20,7 @@
 
 #include "zend.h"
 #include "zend_globals.h"
+#include "zend_types.h"
 #include "zend_variables.h"
 #include "zend_API.h"
 #include "zend_interfaces.h"
@@ -145,7 +146,7 @@ ZEND_API void zend_objects_destroy_object(zend_object *object)
 			}
 		}
 
-		GC_ADDREF(object);
+		GC_ADDREF_OBJ(object);
 
 		/* Make sure that destructors are protected from previously thrown exceptions.
 		 * For example, if an exception was thrown in a function and when the function's

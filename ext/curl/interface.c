@@ -547,7 +547,7 @@ static size_t curl_write(char *data, size_t size, size_t nmemb, void *ctx)
 			zval argv[2];
 			zval retval;
 
-			GC_ADDREF(&ch->std);
+			GC_ADDREF_OBJ(&ch->std);
 			ZVAL_OBJ(&argv[0], &ch->std);
 			ZVAL_STRINGL(&argv[1], data, length);
 
@@ -578,7 +578,7 @@ static int curl_fnmatch(void *ctx, const char *pattern, const char *string)
 	zval argv[3];
 	zval retval;
 
-	GC_ADDREF(&ch->std);
+	GC_ADDREF_OBJ(&ch->std);
 	ZVAL_OBJ(&argv[0], &ch->std);
 	ZVAL_STRING(&argv[1], pattern);
 	ZVAL_STRING(&argv[2], string);
@@ -613,7 +613,7 @@ static size_t curl_progress(void *clientp, double dltotal, double dlnow, double 
 	zval args[5];
 	zval retval;
 
-	GC_ADDREF(&ch->std);
+	GC_ADDREF_OBJ(&ch->std);
 	ZVAL_OBJ(&args[0], &ch->std);
 	ZVAL_LONG(&args[1], (zend_long)dltotal);
 	ZVAL_LONG(&args[2], (zend_long)dlnow);
@@ -651,7 +651,7 @@ static size_t curl_xferinfo(void *clientp, curl_off_t dltotal, curl_off_t dlnow,
 	zval argv[5];
 	zval retval;
 
-	GC_ADDREF(&ch->std);
+	GC_ADDREF_OBJ(&ch->std);
 	ZVAL_OBJ(&argv[0], &ch->std);
 	ZVAL_LONG(&argv[1], dltotal);
 	ZVAL_LONG(&argv[2], dlnow);
@@ -696,7 +696,7 @@ static int curl_prereqfunction(void *clientp, char *conn_primary_ip, char *conn_
 	zval args[5];
 	zval retval;
 
-	GC_ADDREF(&ch->std);
+	GC_ADDREF_OBJ(&ch->std);
 	ZVAL_OBJ(&args[0], &ch->std);
 	ZVAL_STRING(&args[1], conn_primary_ip);
 	ZVAL_STRING(&args[2], conn_local_ip);
@@ -743,7 +743,7 @@ static int curl_ssh_hostkeyfunction(void *clientp, int keytype, const char *key,
 	zval args[4];
 	zval retval;
 
-	GC_ADDREF(&ch->std);
+	GC_ADDREF_OBJ(&ch->std);
 	ZVAL_OBJ(&args[0], &ch->std);
 	ZVAL_LONG(&args[1], keytype);
 	ZVAL_STRINGL(&args[2], key, keylen);
@@ -791,7 +791,7 @@ static size_t curl_read(char *data, size_t size, size_t nmemb, void *ctx)
 			zval argv[3];
 			zval retval;
 
-			GC_ADDREF(&ch->std);
+			GC_ADDREF_OBJ(&ch->std);
 			ZVAL_OBJ(&argv[0], &ch->std);
 			if (read_handler->res) {
 				GC_ADDREF(read_handler->res);
@@ -849,7 +849,7 @@ static size_t curl_write_header(char *data, size_t size, size_t nmemb, void *ctx
 			zval argv[2];
 			zval retval;
 
-			GC_ADDREF(&ch->std);
+			GC_ADDREF_OBJ(&ch->std);
 			ZVAL_OBJ(&argv[0], &ch->std);
 			ZVAL_STRINGL(&argv[1], data, length);
 
@@ -904,7 +904,7 @@ static int curl_debug(CURL *handle, curl_infotype type, char *data, size_t size,
 
     zval args[3];
 
-    GC_ADDREF(&ch->std);
+    GC_ADDREF_OBJ(&ch->std);
     ZVAL_OBJ(&args[0], &ch->std);
     ZVAL_LONG(&args[1], type);
     ZVAL_STRINGL(&args[2], data, size);
@@ -2269,7 +2269,7 @@ static zend_result _php_curl_setopt(php_curl *ch, zend_long option, zval *zvalue
 					OBJ_RELEASE(&ch->share->std);
 				}
 
-				GC_ADDREF(&sh->std);
+				GC_ADDREF_OBJ(&sh->std);
 				ch->share = sh;
 			}
 			break;

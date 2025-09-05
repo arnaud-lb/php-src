@@ -24,6 +24,7 @@
 #include "zend_builtin_functions.h"
 #include "zend_interfaces.h"
 #include "zend_exceptions.h"
+#include "zend_types.h"
 #include "zend_vm.h"
 #include "zend_dtrace.h"
 #include "zend_smart_str.h"
@@ -350,7 +351,7 @@ ZEND_API zend_result zend_update_exception_properties(INTERNAL_FUNCTION_PARAMETE
 	}
 
 	if (previous) {
-		Z_ADDREF_P(previous);
+		GC_ADDREF_OBJ(Z_OBJ_P(previous));
 		zend_update_property_num_checked(zend_ce_exception, Z_OBJ_P(object), ZEND_EXCEPTION_PREVIOUS_OFF, ZSTR_KNOWN(ZEND_STR_PREVIOUS), previous);
 		if (UNEXPECTED(EG(exception))) {
 			return FAILURE;

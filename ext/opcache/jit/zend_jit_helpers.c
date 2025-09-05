@@ -173,12 +173,12 @@ static zend_function* ZEND_FASTCALL zend_jit_find_method_tmp_helper(zend_object 
 
 	fbc = zend_jit_find_method_helper(obj, function_name, obj_ptr);
 	if (!fbc) {
-		if (GC_DELREF(obj) == 0) {
+		if (GC_DELREF_OBJ(obj) == 0) {
 			zend_objects_store_del(obj);
 		}
 	} else if (obj != *obj_ptr) {
 		GC_ADDREF(*obj_ptr);
-		if (GC_DELREF(obj) == 0) {
+		if (GC_DELREF_OBJ(obj) == 0) {
 			zend_objects_store_del(obj);
 		}
 	}
@@ -282,7 +282,7 @@ static zend_execute_data* ZEND_FASTCALL zend_jit_push_static_method_call_frame_t
 {
 	zend_class_entry *scope = obj->ce;
 
-	if (GC_DELREF(obj) == 0) {
+	if (GC_DELREF_OBJ(obj) == 0) {
 		zend_objects_store_del(obj);
 		if (UNEXPECTED(EG(exception))) {
 			return NULL;
@@ -1335,7 +1335,7 @@ static void ZEND_FASTCALL zend_jit_fetch_dim_obj_r_helper(zval *container, zval 
 	zval *retval;
 	zend_object *obj = Z_OBJ_P(container);
 
-	GC_ADDREF(obj);
+	GC_ADDREF_OBJ(obj);
 	if (UNEXPECTED(Z_TYPE_P(dim) == IS_UNDEF)) {
 		zend_jit_undefined_op_helper(EG(current_execute_data)->opline->op2.var);
 		dim = &EG(uninitialized_zval);
@@ -1352,7 +1352,7 @@ static void ZEND_FASTCALL zend_jit_fetch_dim_obj_r_helper(zval *container, zval 
 	} else {
 		ZVAL_NULL(result);
 	}
-	if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+	if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 		zend_objects_store_del(obj);
 	}
 }
@@ -1362,7 +1362,7 @@ static void ZEND_FASTCALL zend_jit_fetch_dim_obj_is_helper(zval *container, zval
 	zval *retval;
 	zend_object *obj = Z_OBJ_P(container);
 
-	GC_ADDREF(obj);
+	GC_ADDREF_OBJ(obj);
 	if (UNEXPECTED(Z_TYPE_P(dim) == IS_UNDEF)) {
 		zend_jit_undefined_op_helper(EG(current_execute_data)->opline->op2.var);
 		dim = &EG(uninitialized_zval);
@@ -1379,7 +1379,7 @@ static void ZEND_FASTCALL zend_jit_fetch_dim_obj_is_helper(zval *container, zval
 	} else {
 		ZVAL_NULL(result);
 	}
-	if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+	if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 		zend_objects_store_del(obj);
 	}
 }
@@ -1535,7 +1535,7 @@ static zend_always_inline void ZEND_FASTCALL zend_jit_fetch_dim_obj_helper(zval 
 	if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 		zend_object *obj = Z_OBJ_P(object_ptr);
 
-		GC_ADDREF(obj);
+		GC_ADDREF_OBJ(obj);
 		if (dim && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 			const zend_op *opline = EG(current_execute_data)->opline;
 			zend_jit_undefined_op_helper(opline->op2.var);
@@ -1568,7 +1568,7 @@ static zend_always_inline void ZEND_FASTCALL zend_jit_fetch_dim_obj_helper(zval 
 			ZEND_ASSERT(EG(exception) && "read_dimension() returned NULL without exception");
 			ZVAL_UNDEF(result);
 		}
-		if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+		if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 			zend_objects_store_del(obj);
 		}
 	} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -1640,7 +1640,7 @@ static void ZEND_FASTCALL zend_jit_assign_dim_helper(zval *object_ptr, zval *dim
 	if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 		zend_object *obj = Z_OBJ_P(object_ptr);
 
-		GC_ADDREF(obj);
+		GC_ADDREF_OBJ(obj);
 		if (dim && UNEXPECTED(Z_TYPE_P(dim) == IS_UNDEF)) {
 			const zend_op *opline = EG(current_execute_data)->opline;
 			zend_jit_undefined_op_helper(opline->op2.var);
@@ -1664,7 +1664,7 @@ static void ZEND_FASTCALL zend_jit_assign_dim_helper(zval *object_ptr, zval *dim
 				ZVAL_UNDEF(result);
 			}
 		}
-		if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+		if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 			zend_objects_store_del(obj);
 		}
 		return;
@@ -1733,7 +1733,7 @@ static void ZEND_FASTCALL zend_jit_assign_dim_op_helper(zval *container, zval *d
 		zval *z;
 		zval rv, res;
 
-		GC_ADDREF(obj);
+		GC_ADDREF_OBJ(obj);
 		if (dim && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 			const zend_op *opline = EG(current_execute_data)->opline;
 			zend_jit_undefined_op_helper(opline->op2.var);
@@ -1752,10 +1752,10 @@ static void ZEND_FASTCALL zend_jit_assign_dim_op_helper(zval *container, zval *d
 			zval_ptr_dtor(&res);
 		} else {
 			/* Exception is thrown in this case */
-			GC_DELREF(obj);
+			GC_DELREF_OBJ(obj);
 			return;
 		}
-		if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+		if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 			zend_objects_store_del(obj);
 //???		if (retval) {
 //???			ZVAL_NULL(retval);
@@ -2863,7 +2863,7 @@ static zend_never_inline void _zend_jit_assign_op_overloaded_property(zend_objec
 	zval *z;
 	zval rv, res;
 
-	GC_ADDREF(object);
+	GC_ADDREF_OBJ(object);
 	z = object->handlers->read_property(object, name, BP_VAR_R, cache_slot, &rv);
 	if (UNEXPECTED(EG(exception))) {
 		OBJ_RELEASE(object);

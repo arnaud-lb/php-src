@@ -657,7 +657,7 @@ PHP_METHOD(PDO, prepare)
 	stmt->default_fetch_type = dbh->default_fetch_type;
 	stmt->dbh = dbh;
 	/* give it a reference to me */
-	GC_ADDREF(&dbh_obj->std);
+	GC_ADDREF_OBJ(&dbh_obj->std);
 	stmt->database_object_handle = &dbh_obj->std;
 
 	if (dbh->methods->preparer(dbh, statement, stmt, options)) {
@@ -1221,7 +1221,7 @@ PHP_METHOD(PDO, query)
 	stmt->default_fetch_type = dbh->default_fetch_type;
 	stmt->dbh = dbh;
 	/* give it a reference to me */
-	GC_ADDREF(&dbh_obj->std);
+	GC_ADDREF_OBJ(&dbh_obj->std);
 	stmt->database_object_handle = &dbh_obj->std;
 
 	if (dbh->methods->preparer(dbh, statement, stmt, NULL)) {

@@ -23,6 +23,7 @@
  * php zend_vm_gen.php
  */
 
+#include "zend_types.h"
 ZEND_VM_HELPER(zend_add_helper, ANY, ANY, zval *op_1, zval *op_2)
 {
 	USE_OPLINE
@@ -2733,7 +2734,7 @@ ZEND_VM_C_LABEL(try_assign_dim_array):
 		if (EXPECTED(Z_TYPE_P(object_ptr) == IS_OBJECT)) {
 			zend_object *obj = Z_OBJ_P(object_ptr);
 
-			GC_ADDREF(obj);
+			GC_ADDREF_OBJ(obj);
 			dim = GET_OP2_ZVAL_PTR_UNDEF(BP_VAR_R);
 			if (OP2_TYPE == IS_CV && UNEXPECTED(Z_ISUNDEF_P(dim))) {
 				dim = ZVAL_UNDEFINED_OP2();
@@ -2751,7 +2752,7 @@ ZEND_VM_C_LABEL(try_assign_dim_array):
 			zend_assign_to_object_dim(obj, dim, value OPLINE_CC EXECUTE_DATA_CC);
 
 			FREE_OP_DATA();
-			if (UNEXPECTED(GC_DELREF(obj) == 0)) {
+			if (UNEXPECTED(GC_DELREF_OBJ(obj) == 0)) {
 				zend_objects_store_del(obj);
 			}
 		} else if (EXPECTED(Z_TYPE_P(object_ptr) == IS_STRING)) {
@@ -3692,7 +3693,7 @@ ZEND_VM_HOT_OBJ_HANDLER(112, ZEND_INIT_METHOD_CALL, CONST|TMPVAR|UNUSED|THIS|CV,
 			CACHE_POLYMORPHIC_PTR(opline->result.num, called_scope, fbc);
 		}
 		if ((OP1_TYPE & (IS_VAR|IS_TMP_VAR)) && UNEXPECTED(obj != orig_obj)) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 			if (GC_DELREF(orig_obj) == 0) {
 				zend_objects_store_del(orig_obj);
 			}
@@ -3708,7 +3709,7 @@ ZEND_VM_HOT_OBJ_HANDLER(112, ZEND_INIT_METHOD_CALL, CONST|TMPVAR|UNUSED|THIS|CV,
 
 	call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS;
 	if (UNEXPECTED((fbc->common.fn_flags & ZEND_ACC_STATIC) != 0)) {
-		if ((OP1_TYPE & (IS_VAR|IS_TMP_VAR)) && GC_DELREF(obj) == 0) {
+		if ((OP1_TYPE & (IS_VAR|IS_TMP_VAR)) && GC_DELREF_OBJ(obj) == 0) {
 			zend_objects_store_del(obj);
 			if (UNEXPECTED(EG(exception))) {
 				HANDLE_EXCEPTION();
@@ -3719,7 +3720,7 @@ ZEND_VM_HOT_OBJ_HANDLER(112, ZEND_INIT_METHOD_CALL, CONST|TMPVAR|UNUSED|THIS|CV,
 		call_info = ZEND_CALL_NESTED_FUNCTION;
 	} else if (OP1_TYPE & (IS_VAR|IS_TMP_VAR|IS_CV)) {
 		if (OP1_TYPE == IS_CV) {
-			GC_ADDREF(obj); /* For $this pointer */
+			GC_ADDREF_OBJ(obj); /* For $this pointer */
 		}
 		/* CV may be changed indirectly (e.g. when it's a reference) */
 		call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS | ZEND_CALL_RELEASE_THIS;
@@ -4695,7 +4696,7 @@ ZEND_VM_HANDLER(139, ZEND_GENERATOR_CREATE, ANY, ANY)
 			 /* Bug #72523 */
 			|| UNEXPECTED(zend_execute_ex != execute_ex))) {
 			ZEND_ADD_CALL_FLAG_EX(call_info, ZEND_CALL_RELEASE_THIS);
-			Z_ADDREF(gen_execute_data->This);
+			GC_ADDREF_OBJ(Z_OBJ(gen_execute_data->This));
 		}
 		ZEND_ADD_CALL_FLAG_EX(call_info, (ZEND_CALL_TOP_FUNCTION | ZEND_CALL_ALLOCATED | ZEND_CALL_GENERATOR));
 		Z_TYPE_INFO(gen_execute_data->This) = call_info;
@@ -5994,7 +5995,7 @@ ZEND_VM_HANDLER(68, ZEND_NEW, UNUSED|CLASS_FETCH|CONST|VAR, UNUSED|CACHE_SLOT, N
 			constructor,
 			opline->extended_value,
 			Z_OBJ_P(result));
-		Z_ADDREF_P(result);
+		GC_ADDREF_OBJ(Z_OBJ_P(result));
 	}
 
 	call->prev_execute_data = EX(call);
@@ -8527,7 +8528,7 @@ ZEND_VM_C_LABEL(yield_from_try_again):
 		if (ce == zend_ce_generator) {
 			zend_generator *new_gen = (zend_generator *) Z_OBJ_P(val);
 
-			Z_ADDREF_P(val);
+			GC_ADDREF_OBJ(Z_OBJ_P(val));
 			FREE_OP1();
 
 			if (UNEXPECTED(new_gen->execute_data == NULL)) {
@@ -9198,7 +9199,7 @@ ZEND_VM_HOT_HANDLER(184, ZEND_FETCH_THIS, UNUSED, UNUSED)
 		zval *result = EX_VAR(opline->result.var);
 
 		ZVAL_OBJ(result, Z_OBJ(EX(This)));
-		Z_ADDREF_P(result);
+		GC_ADDREF_OBJ(Z_OBJ_P(result));
 		ZEND_VM_NEXT_OPCODE();
 	} else {
 		ZEND_VM_DISPATCH_TO_HELPER(zend_this_not_in_object_context_helper);
@@ -10504,25 +10505,32 @@ ZEND_VM_HELPER(zend_interrupt_helper, ANY, ANY)
 {
 	zend_atomic_bool_store_ex(&EG(vm_interrupt), false);
 	SAVE_OPLINE();
+	bool expected = true;
 	if (zend_atomic_bool_load_ex(&EG(timed_out))) {
 		zend_timeout();
+		ZEND_VM_CONTINUE();
 	} else if (zend_interrupt_function) {
 		zend_interrupt_function(execute_data);
-		if (EG(exception)) {
-			/* We have to UNDEF result, because ZEND_HANDLE_EXCEPTION is going to free it */
-			const zend_op *throw_op = EG(opline_before_exception);
-
-			if (throw_op
-			 && throw_op->result_type & (IS_TMP_VAR|IS_VAR)
-			 && throw_op->opcode != ZEND_ADD_ARRAY_ELEMENT
-			 && throw_op->opcode != ZEND_ADD_ARRAY_UNPACK
-			 && throw_op->opcode != ZEND_ROPE_INIT
-			 && throw_op->opcode != ZEND_ROPE_ADD) {
-				ZVAL_UNDEF(ZEND_CALL_VAR(EG(current_execute_data), throw_op->result.var));
-
-			}
-		}
-		ZEND_VM_ENTER();
+#ifdef USE_LIBGC
+	} else if (zend_atomic_bool_compare_exchange_ex(&EG(pending_finalizations), &expected, false)) {
+		GC_invoke_finalizers();
+#endif
+	} else {
+		ZEND_VM_CONTINUE();
 	}
-	ZEND_VM_CONTINUE();
+	if (EG(exception)) {
+		/* We have to UNDEF result, because ZEND_HANDLE_EXCEPTION is going to free it */
+		const zend_op *throw_op = EG(opline_before_exception);
+
+		if (throw_op
+		 && throw_op->result_type & (IS_TMP_VAR|IS_VAR)
+		 && throw_op->opcode != ZEND_ADD_ARRAY_ELEMENT
+		 && throw_op->opcode != ZEND_ADD_ARRAY_UNPACK
+		 && throw_op->opcode != ZEND_ROPE_INIT
+		 && throw_op->opcode != ZEND_ROPE_ADD) {
+			ZVAL_UNDEF(ZEND_CALL_VAR(EG(current_execute_data), throw_op->result.var));
+
+		}
+	}
+	ZEND_VM_ENTER();
 }
