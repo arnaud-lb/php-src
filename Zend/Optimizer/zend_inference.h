@@ -206,13 +206,27 @@ DEFINE_SSA_OP_DEF_INFO(result)
 #define OP2_DATA_DEF_INFO()  (_ssa_op2_def_info(op_array, ssa, (opline+1), ssa_op ? (ssa_op+1) : NULL))
 #define RES_INFO()           (_ssa_result_def_info(op_array, ssa, opline, ssa_op))
 
+static zend_always_inline bool zend_add_will_strictly_overflow(zend_long a, zend_long b) {
+	return b > 0 && a > ZEND_LONG_MAX - b;
+}
+static zend_always_inline bool zend_add_will_strictly_underflow(zend_long a, zend_long b) {
+	return b < 0 && a < ZEND_LONG_MIN - b;
+}
+
+static zend_always_inline bool zend_sub_will_strictly_overflow(zend_long a, zend_long b) {
+	return b < 0 && a > ZEND_LONG_MAX + b;
+}
+static zend_always_inline bool zend_sub_will_strictly_underflow(zend_long a, zend_long b) {
+	return b > 0 && a < ZEND_LONG_MIN + b;
+}
+
 static zend_always_inline bool zend_add_will_overflow(zend_long a, zend_long b) {
-	return (b > 0 && a > ZEND_LONG_MAX - b)
-		|| (b < 0 && a < ZEND_LONG_MIN - b);
+	return zend_add_will_strictly_overflow(a, b)
+		|| zend_add_will_strictly_underflow(a, b);
 }
 static zend_always_inline bool zend_sub_will_overflow(zend_long a, zend_long b) {
-	return (b > 0 && a < ZEND_LONG_MIN + b)
-		|| (b < 0 && a > ZEND_LONG_MAX + b);
+	return zend_sub_will_strictly_overflow(a, b)
+		|| zend_sub_will_strictly_underflow(a, b);
 }
 
 BEGIN_EXTERN_C()

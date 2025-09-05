@@ -797,17 +797,21 @@ static bool zend_inference_calc_binary_op_range(
 				op2_max = OP2_MAX_RANGE();
 				if (OP1_RANGE_UNDERFLOW() ||
 					OP2_RANGE_UNDERFLOW() ||
-					zend_add_will_overflow(op1_min, op2_min)) {
+					zend_add_will_strictly_underflow(op1_min, op2_min)) {
 					tmp->underflow = 1;
 					tmp->min = ZEND_LONG_MIN;
+				} else if (zend_add_will_strictly_overflow(op1_min, op2_min)) {
+					tmp->min = ZEND_LONG_MAX;
 				} else {
 					tmp->min = op1_min + op2_min;
 				}
 				if (OP1_RANGE_OVERFLOW() ||
 					OP2_RANGE_OVERFLOW() ||
-					zend_add_will_overflow(op1_max, op2_max)) {
+					zend_add_will_strictly_overflow(op1_max, op2_max)) {
 					tmp->overflow = 1;
 					tmp->max = ZEND_LONG_MAX;
+				} else if (zend_add_will_strictly_underflow(op1_max, op2_max)) {
+					tmp->min = ZEND_LONG_MIN;
 				} else {
 					tmp->max = op1_max + op2_max;
 				}
@@ -822,17 +826,21 @@ static bool zend_inference_calc_binary_op_range(
 				op2_max = OP2_MAX_RANGE();
 				if (OP1_RANGE_UNDERFLOW() ||
 					OP2_RANGE_OVERFLOW() ||
-					zend_sub_will_overflow(op1_min, op2_max)) {
+					zend_sub_will_strictly_underflow(op1_min, op2_max)) {
 					tmp->underflow = 1;
 					tmp->min = ZEND_LONG_MIN;
+				} else if (zend_sub_will_strictly_overflow(op1_min, op2_max)) {
+					tmp->min = ZEND_LONG_MAX;
 				} else {
 					tmp->min = op1_min - op2_max;
 				}
 				if (OP1_RANGE_OVERFLOW() ||
 					OP2_RANGE_UNDERFLOW() ||
-					zend_sub_will_overflow(op1_max, op2_min)) {
+					zend_sub_will_strictly_overflow(op1_max, op2_min)) {
 					tmp->overflow = 1;
 					tmp->max = ZEND_LONG_MAX;
+				} else if (zend_sub_will_strictly_underflow(op1_max, op2_min)) {
+					tmp->max = ZEND_LONG_MIN;
 				} else {
 					tmp->max = op1_max - op2_min;
 				}
