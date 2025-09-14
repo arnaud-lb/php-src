@@ -204,16 +204,28 @@ static void zp_assign_names(zend_string **names, uint32_t num_names,
 		zend_string_release(orig_name);
 	}
 
-	/* Assign name for extra_named_params */
+	/* Assign name for $extra_named_params */
 	if (extra_named_params) {
 		int n = 1;
 		zend_string *new_name = ZSTR_INIT_LITERAL("extra_named_params", 0);
 		while (zp_name_exists(names, num_names, new_name)) {
 			zend_string_release(new_name);
 			n++;
-			new_name = zend_strpprintf_unchecked(0, "%S%d", "extra_named_params", n);
+			new_name = zend_strpprintf(0, "%s%d", "extra_named_params", n);
 		}
 		names[argc + variadic_partial] = new_name;
+	}
+
+	/* Assign name for $fn */
+	if (function->common.fn_flags & ZEND_ACC_CLOSURE) {
+		int n = 1;
+		zend_string *new_name = ZSTR_INIT_LITERAL("fn", 0);
+		while (zp_name_exists(names, num_names, new_name)) {
+			zend_string_release(new_name);
+			n++;
+			new_name = zend_strpprintf(0, "%s%d", "fn", n);
+		}
+		names[argc + variadic_partial + (extra_named_params != NULL)] = new_name;
 	}
 }
 
@@ -513,7 +525,8 @@ zend_op_array *zp_compile(zval *this_ptr, zend_function *function,
 
 	/* Assign param names */
 	ALLOCA_FLAG(use_heap);
-	uint32_t num_names = argc + variadic_partial + (extra_named_params != NULL);
+	uint32_t num_names = argc + variadic_partial + (extra_named_params != NULL)
+		+ (function->common.fn_flags & ZEND_ACC_CLOSURE);
 	zend_string **param_names = do_alloca(
 			sizeof(zend_string*) * num_names, use_heap);
 	memset(param_names, 0, sizeof(zend_string*) * num_names);
@@ -595,6 +608,11 @@ zend_op_array *zp_compile(zval *this_ptr, zend_function *function,
 		lexical_vars_ast = zend_ast_list_add(lexical_vars_ast, lexical_var_ast);
 	}
 
+	if (function->common.fn_flags & ZEND_ACC_CLOSURE) {
+		zend_ast *lexical_var_ast = zend_ast_create_zval_from_str(param_names[argc + variadic_partial + (extra_named_params != NULL)]);
+		lexical_vars_ast = zend_ast_list_add(lexical_vars_ast, lexical_var_ast);
+	}
+
 	/* If we have a variadic placeholder and the underlying function is
 	 * variadic, add a variadic param. */
 	if (variadic_partial
@@ -651,9 +669,9 @@ zend_op_array *zp_compile(zval *this_ptr, zend_function *function,
 
 	zend_ast *call_ast;
 	if (function->common.fn_flags & ZEND_ACC_CLOSURE) {
-		zend_ast *this_ast = zend_ast_create(ZEND_AST_VAR,
-					zend_ast_create_zval_from_str(ZSTR_KNOWN(ZEND_STR_THIS)));
-		call_ast = zend_ast_create(ZEND_AST_CALL, this_ast, args_ast);
+		zend_ast *fn_ast = zend_ast_create(ZEND_AST_VAR,
+					zend_ast_create_zval_from_str(zend_string_copy(param_names[argc + variadic_partial + (extra_named_params != NULL)])));
+		call_ast = zend_ast_create(ZEND_AST_CALL, fn_ast, args_ast);
 	} else if (Z_TYPE_P(this_ptr) == IS_OBJECT) {
 		zend_ast *this_ast = zend_ast_create(ZEND_AST_VAR,
 					zend_ast_create_zval_from_str(ZSTR_KNOWN(ZEND_STR_THIS)));
@@ -662,8 +680,8 @@ zend_op_array *zp_compile(zval *this_ptr, zend_function *function,
 		call_ast = zend_ast_create(ZEND_AST_METHOD_CALL, this_ast,
 				method_name_ast, args_ast);
 	} else if (called_scope) {
-		zend_ast *class_name_ast = zend_ast_create_zval_from_str(zend_string_copy(called_scope->name));
-		class_name_ast->attr = ZEND_NAME_FQ;
+		zend_ast *class_name_ast = zend_ast_create_zval_from_str(ZSTR_KNOWN(ZEND_STR_STATIC));
+		class_name_ast->attr = ZEND_NAME_NOT_FQ;
 		zend_ast *method_name_ast = zend_ast_create_zval_from_str(
 				zend_string_copy(function->common.function_name));
 		call_ast = zend_ast_create(ZEND_AST_STATIC_CALL, class_name_ast,
@@ -709,6 +727,10 @@ zend_op_array *zp_compile(zval *this_ptr, zend_function *function,
 			closure_flags, CG(zend_lineno), NULL,
 			NULL, params_ast, lexical_vars_ast, stmts_ast,
 			return_type_ast, attributes_ast);
+
+	if (Z_TYPE_P(this_ptr) != IS_OBJECT || (function->common.fn_flags & ZEND_ACC_CLOSURE)) {
+		((zend_ast_decl*)closure_ast)->flags |= ZEND_ACC_STATIC;
+	}
 
 #if ZEND_DEBUG
 	{
@@ -762,10 +784,7 @@ void zend_partial_create(zval *result, zval *this_ptr, zend_function *function,
 
 	zval object;
 
-	/* $this is the Closure object when function is a Closure */
-	if (function->common.fn_flags & ZEND_ACC_CLOSURE) {
-		ZVAL_OBJ(&object, ZEND_CLOSURE_OBJECT(function));
-	} else if (Z_TYPE_P(this_ptr) == IS_OBJECT) {
+	if (Z_TYPE_P(this_ptr) == IS_OBJECT && !(function->common.fn_flags & ZEND_ACC_CLOSURE)) {
 		ZVAL_COPY_VALUE(&object, this_ptr);
 	} else {
 		ZVAL_UNDEF(&object);
@@ -807,6 +826,14 @@ void zend_partial_create(zval *result, zval *this_ptr, zend_function *function,
 	if (extra_named_params) {
 		zval var;
 		ZVAL_ARR(&var, extra_named_params);
+		Z_ADDREF(var);
+		zend_closure_bind_var_ex(result, bind_offset, &var);
+		bind_offset += sizeof(Bucket);
+	}
+
+	if (function->common.fn_flags & ZEND_ACC_CLOSURE) {
+		zval var;
+		ZVAL_OBJ(&var, ZEND_CLOSURE_OBJECT(function));
 		Z_ADDREF(var);
 		zend_closure_bind_var_ex(result, bind_offset, &var);
 	}
