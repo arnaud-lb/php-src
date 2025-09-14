@@ -21,8 +21,12 @@ echo (string) new ReflectionFunction($function);
 var_dump($function(10));
 ?>
 --EXPECTF--
-Closure [ <user, prototype Closure> public method {closure:%s} ] {
+Closure [ <user> public method {closure:%s:%d} ] {
   @@ %svariation_closure_003.php 14 - 14
+
+  - Bound Variables [1] {
+      Variable #0 [ $a ]
+  }
 
   - Parameters [1] {
     Parameter #0 [ <required> $b ]
@@ -40,4 +44,3 @@ array(2) {
     int(10)
   }
 }
-

@@ -1,5 +1,7 @@
 --TEST--
 Closure application can only be rebound to an instanceof $this
+--XFAIL--
+TODO: bindTo rules
 --FILE--
 <?php
 

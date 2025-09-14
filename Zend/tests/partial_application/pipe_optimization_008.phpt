@@ -34,7 +34,7 @@ $_main:
 0006 SEND_PLACEHOLDER
 0007 SEND_VAL_EX int(1) string("a")
 0008 CHECK_PARTIAL_ARGS
-0009 T1 = CALLABLE_CONVERT_PARTIAL string("{closure:%s}")
+0009 T1 = CALLABLE_CONVERT_PARTIAL 32
 0010 INIT_DYNAMIC_CALL 1 T1
 0011 SEND_VAL_EX int(2) 1
 0012 DO_FCALL
@@ -59,5 +59,28 @@ foo:
 0004 SEND_VAR CV1($b) 2
 0005 DO_ICALL
 0006 RETURN null
+
+$_main:
+     ; (lines=4, args=0, vars=1, tmps=1)
+     ; (after optimizer)
+     ; %s:1-10
+0000 T1 = DECLARE_LAMBDA_FUNCTION 0
+0001 BIND_LEXICAL T1 CV0($a)
+0002 FREE T1
+0003 RETURN int(1)
+LIVE RANGES:
+     1: 0001 - 0002 (tmp/var)
+
+{closure:%s:%d}:
+     ; (lines=7, args=1, vars=2, tmps=1)
+     ; (after optimizer)
+     ; %s:10-10
+0000 CV0($b) = RECV 1
+0001 BIND_STATIC CV1($a)
+0002 INIT_FCALL 2 112 string("foo")
+0003 SEND_VAR CV1($a) 1
+0004 SEND_VAR CV0($b) 2
+0005 V2 = DO_UCALL
+0006 RETURN V2
 int(1)
 int(2)

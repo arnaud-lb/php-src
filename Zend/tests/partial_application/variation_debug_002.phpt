@@ -12,17 +12,8 @@ object(Closure)#%d (5) {
   string(83) "%svariation_debug_002.php"
   ["line"]=>
   int(2)
-  ["parameter"]=>
-  array(2) {
-    ["$callback"]=>
-    string(10) "<required>"
-    ["$arrays"]=>
-    string(10) "<optional>"
-  }
-  ["args"]=>
+  ["static"]=>
   array(3) {
-    ["callback"]=>
-    NULL
     ["array"]=>
     array(3) {
       [0]=>
@@ -32,20 +23,27 @@ object(Closure)#%d (5) {
       [2]=>
       int(3)
     }
-    ["arrays"]=>
-    array(2) {
+    ["arrays0"]=>
+    array(3) {
       [0]=>
-      array(3) {
-        [0]=>
-        int(4)
-        [1]=>
-        int(5)
-        [2]=>
-        int(6)
-      }
+      int(4)
+      [1]=>
+      int(5)
+      [2]=>
+      int(6)
+    }
+    ["extra_named_params"]=>
+    array(1) {
       ["four"]=>
       object(stdClass)#%d (0) {
       }
     }
+  }
+  ["parameter"]=>
+  array(2) {
+    ["$callback"]=>
+    string(10) "<required>"
+    ["$arrays"]=>
+    string(10) "<optional>"
   }
 }

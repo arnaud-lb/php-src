@@ -17,30 +17,46 @@ $baz = $bar(20, ...);
 var_dump($baz, $baz());
 ?>
 --EXPECTF--
-object(Closure)#%d (6) {
+object(Closure)#%d (5) {
   ["name"]=>
   string(%d) "{closure:%s}"
   ["file"]=>
   string(84) "%svariation_parent_001.php"
   ["line"]=>
   int(12)
-  ["this"]=>
-  object(Foo)#%d (0) {
+  ["static"]=>
+  array(2) {
+    ["b"]=>
+    int(20)
+    ["fn"]=>
+    object(Closure)#%d (6) {
+      ["name"]=>
+      string(%d) "{closure:%s:%d}"
+      ["file"]=>
+      string(%d) "%s"
+      ["line"]=>
+      int(11)
+      ["static"]=>
+      array(1) {
+        ["a"]=>
+        int(10)
+      }
+      ["this"]=>
+      object(Foo)#%d (0) {
+      }
+      ["parameter"]=>
+      array(2) {
+        ["$b"]=>
+        string(10) "<required>"
+        ["$c"]=>
+        string(10) "<optional>"
+      }
+    }
   }
   ["parameter"]=>
   array(1) {
     ["$c"]=>
     string(10) "<optional>"
-  }
-  ["args"]=>
-  array(3) {
-    ["a"]=>
-    int(10)
-    ["b"]=>
-    int(20)
-    ["c"]=>
-    array(0) {
-    }
   }
 }
 object(Closure)#%d (4) {

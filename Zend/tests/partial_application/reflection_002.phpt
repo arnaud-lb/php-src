@@ -23,14 +23,14 @@ $foo = foo(?, ?, ?);
 echo (string) new ReflectionFunction($foo);
 ?>
 --EXPECTF--
-Closure [ <user> function {closure:%s} ] {
+Closure [ <user> static function {closure:%s:%d} ] {
   @@ %s 6 - 6
 
   - Parameters [1] {
     Parameter #0 [ <required> $a ]
   }
 }
-Closure [ <user> function {closure:%s} ] {
+Closure [ <user> static function {closure:%s:%d} ] {
   @@ %s 10 - 10
 
   - Parameters [2] {
@@ -38,7 +38,7 @@ Closure [ <user> function {closure:%s} ] {
     Parameter #1 [ <optional> ...$b ]
   }
 }
-Closure [ <user> function {closure:%s} ] {
+Closure [ <user> static function {closure:%s:%d} ] {
   @@ %s 14 - 14
 
   - Parameters [2] {
@@ -46,7 +46,7 @@ Closure [ <user> function {closure:%s} ] {
     Parameter #1 [ <required> $b0 ]
   }
 }
-Closure [ <user> function {closure:%s} ] {
+Closure [ <user> static function {closure:%s:%d} ] {
   @@ %s 18 - 18
 
   - Parameters [3] {

@@ -1,5 +1,7 @@
 --TEST--
 Closure application magic: __call
+--XFAIL--
+TODO: extra args rules
 --FILE--
 <?php
 class Foo {

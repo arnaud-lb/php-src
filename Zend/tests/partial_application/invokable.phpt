@@ -23,7 +23,7 @@ $f(1);
 
 ?>
 --EXPECTF--
-Closure [ <user, prototype C> public method {closure:%s} ] {
+Closure [ <user> public method {closure:%s:%d} ] {
   @@ %s.php 11 - 11
 
   - Parameters [2] {
@@ -33,8 +33,12 @@ Closure [ <user, prototype C> public method {closure:%s} ] {
   - Return [ C ]
 }
 
-Closure [ <user, prototype C> public method {closure:%s} ] {
+Closure [ <user> public method {closure:%s:%d} ] {
   @@ %s.php 15 - 15
+
+  - Bound Variables [1] {
+      Variable #0 [ $b ]
+  }
 
   - Parameters [1] {
     Parameter #0 [ <required> int $a ]

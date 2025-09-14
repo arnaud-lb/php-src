@@ -54,7 +54,7 @@ try {
 
 ?>
 --EXPECTF--
-Closure [ <user> function {closure:%s} ] {
+Closure [ <user> static function {closure:%s:%d} ] {
   @@ %snamed_placeholder_001.php 11 - 11
 
   - Parameters [1] {
@@ -65,19 +65,12 @@ int(1)
 object(B)#%d (0) {
 }
 int(3)
-Closure [ <user> function {closure:%s} ] {
+Closure [ <user> static function {closure:%s:%d} ] {
   @@ %snamed_placeholder_001.php 17 - 17
 
-  - Parameters [1] {
-    Parameter #0 [ <optional> $b = 2 ]
+  - Bound Variables [1] {
+      Variable #0 [ $fn ]
   }
-}
-int(1)
-object(B)#%d (0) {
-}
-int(3)
-Closure [ <user> function {closure:%s} ] {
-  @@ %snamed_placeholder_001.php 24 - 24
 
   - Parameters [1] {
     Parameter #0 [ <optional> $b = 2 ]
@@ -87,7 +80,22 @@ int(1)
 object(B)#%d (0) {
 }
 int(3)
-Closure [ <user> function {closure:%s} ] {
+Closure [ <user> static function {closure:%s:%d} ] {
+  @@ %snamed_placeholder_001.php 24 - 24
+
+  - Bound Variables [1] {
+      Variable #0 [ $fn ]
+  }
+
+  - Parameters [1] {
+    Parameter #0 [ <optional> $b = 2 ]
+  }
+}
+int(1)
+object(B)#%d (0) {
+}
+int(3)
+Closure [ <user> static function {closure:%s:%d} ] {
   @@ %snamed_placeholder_001.php 34 - 34
 
   - Parameters [3] {

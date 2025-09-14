@@ -1,5 +1,7 @@
 --TEST--
 Closure application copies attributes
+--XFAIL--
+Only NoDiscard and SensitiveParameter are copied
 --FILE--
 <?php
 

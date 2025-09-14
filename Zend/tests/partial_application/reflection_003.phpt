@@ -15,7 +15,7 @@ $foo = sprintf(?, ?);
 echo (string) new ReflectionFunction($foo);
 ?>
 --EXPECTF--
-Closure [ <user> function {closure:%s} ] {
+Closure [ <user> static function {closure:%s:%d} ] {
   @@ %sreflection_003.php 2 - 2
 
   - Parameters [1] {
@@ -23,7 +23,7 @@ Closure [ <user> function {closure:%s} ] {
   }
   - Return [ string ]
 }
-Closure [ <user> function {closure:%s} ] {
+Closure [ <user> static function {closure:%s:%d} ] {
   @@ %sreflection_003.php 6 - 6
 
   - Parameters [2] {
@@ -32,7 +32,7 @@ Closure [ <user> function {closure:%s} ] {
   }
   - Return [ string ]
 }
-Closure [ <user> function {closure:%s} ] {
+Closure [ <user> static function {closure:%s:%d} ] {
   @@ %sreflection_003.php 10 - 10
 
   - Parameters [2] {

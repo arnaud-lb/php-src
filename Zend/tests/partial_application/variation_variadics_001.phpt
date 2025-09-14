@@ -13,8 +13,13 @@ echo (string) new ReflectionFunction($foo);
 $foo(1000, 10000);
 ?>
 --EXPECTF--
-Closure [ <user> function {closure:%s} ] {
+Closure [ <user> static function {closure:%s:%d} ] {
   @@ %s 6 - 6
+
+  - Bound Variables [2] {
+      Variable #0 [ $a ]
+      Variable #1 [ $b0 ]
+  }
 
   - Parameters [1] {
     Parameter #0 [ <optional> ...$b ]

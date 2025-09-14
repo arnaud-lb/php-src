@@ -75,7 +75,7 @@ try {
 
 ?>
 --EXPECTF--
-Closure [ <user, prototype C> public method {closure:%s} ] {
+Closure [ <user> public method {closure:%s:%d} ] {
   @@ %s.php 23 - 23
 
   - Parameters [1] {
@@ -89,7 +89,7 @@ object(C)#%d (0) {
 object(D)#%d (0) {
 }
 C::getSelf(): Return value must be of type C, stdClass returned
-Closure [ <user, prototype C> public method {closure:%s} ] {
+Closure [ <user> public method {closure:%s:%d} ] {
   @@ %s.php 35 - 35
 
   - Parameters [1] {
@@ -103,7 +103,7 @@ object(C)#%d (0) {
 object(D)#%d (0) {
 }
 C::getStatic(): Return value must be of type C, stdClass returned
-Closure [ <user, prototype C> public method {closure:%s} ] {
+Closure [ <user> public method {closure:%s:%d} ] {
   @@ %s.php 49 - 49
 
   - Parameters [1] {
@@ -117,7 +117,7 @@ object(D)#%d (0) {
 object(D)#%d (0) {
 }
 C::getSelf(): Return value must be of type C, stdClass returned
-Closure [ <user, prototype C> public method {closure:%s} ] {
+Closure [ <user> public method {closure:%s:%d} ] {
   @@ %s.php 61 - 61
 
   - Parameters [1] {

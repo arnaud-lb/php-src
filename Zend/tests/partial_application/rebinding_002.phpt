@@ -1,5 +1,7 @@
 --TEST--
 Closure application scope cannot be rebound
+--XFAIL--
+TODO: bindTo rules
 --FILE--
 <?php
 

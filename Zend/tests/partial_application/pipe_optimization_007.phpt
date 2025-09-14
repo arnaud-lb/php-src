@@ -34,7 +34,7 @@ $_main:
 0006 SEND_PLACEHOLDER string("a")
 0007 SEND_PLACEHOLDER string("b")
 0008 CHECK_PARTIAL_ARGS
-0009 T1 = CALLABLE_CONVERT_PARTIAL string("{closure:%s}")
+0009 T1 = CALLABLE_CONVERT_PARTIAL 48
 0010 INIT_DYNAMIC_CALL 1 T1
 0011 SEND_VAL_EX int(2) 1
 0012 DO_FCALL
@@ -59,4 +59,24 @@ foo:
 0004 SEND_VAR CV1($b) 2
 0005 DO_ICALL
 0006 RETURN null
-not enough arguments for application of foo, 1 given and exactly 2 expected
+
+$_main:
+     ; (lines=3, args=0, vars=0, tmps=1)
+     ; (after optimizer)
+     ; %s:1-10
+0000 T0 = DECLARE_LAMBDA_FUNCTION 0
+0001 FREE T0
+0002 RETURN int(1)
+
+{closure:%s:%d}:
+     ; (lines=7, args=2, vars=2, tmps=1)
+     ; (after optimizer)
+     ; %s:10-10
+0000 CV0($a) = RECV 1
+0001 CV1($b) = RECV 2
+0002 INIT_FCALL 2 112 string("foo")
+0003 SEND_VAR CV0($a) 1
+0004 SEND_VAR CV1($b) 2
+0005 V2 = DO_UCALL
+0006 RETURN V2
+Too few arguments to function {closure:%s:%d}(), 1 passed in %s on line %d and exactly 2 expected

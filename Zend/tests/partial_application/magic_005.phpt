@@ -12,7 +12,7 @@ $bar = $foo->method(?);
 var_dump($bar);
 ?>
 --EXPECTF--
-object(Closure)#%d (6) {
+object(Closure)#%d (%d) {
   ["name"]=>
   string(%d) "{closure:%s}"
   ["file"]=>
@@ -24,15 +24,7 @@ object(Closure)#%d (6) {
   }
   ["parameter"]=>
   array(1) {
-    ["$"]=>
+    ["$args0"]=>
     string(10) "<required>"
-  }
-  ["args"]=>
-  array(1) {
-    ["args"]=>
-    array(1) {
-      [0]=>
-      NULL
-    }
   }
 }

@@ -69,10 +69,9 @@ try {
 }
 ?>
 --EXPECTF--
-not enough arguments for application of foo, 0 given and exactly 1 expected, declared in %s on line 8
-not enough arguments for application of foo, 1 given and exactly 2 expected, declared in %s on line 16
-not enough arguments for application of bar, 1 given and at least 3 expected, declared in %s on line 24
-not enough arguments for application of Foo::bar, 0 given and exactly 1 expected, declared in %s on line 38
-not enough arguments for application of str_repeat, 0 given and at least 1 expected, declared in %s on line 46
-not enough arguments for application of usleep, 0 given and exactly 1 expected, declared in %s on line 54
-too many arguments for application of usleep, 2 given and a maximum of 1 expected, declared in %s on line 54
+Too few arguments to function {closure:%s:%d}(), 0 passed in %s on line %d and exactly 1 expected
+Too few arguments to function {closure:%s:%d}(), 1 passed in %s on line %d and exactly 2 expected
+Too few arguments to function {closure:%s:%d}(), 1 passed in %s on line %d and exactly 3 expected
+Too few arguments to function Foo::{closure:%s:%d}(), 0 passed in %s on line %d and exactly 1 expected
+Too few arguments to function {closure:%s:%d}(), 0 passed in %s on line %d and exactly 1 expected
+Too few arguments to function {closure:%s:%d}(), 0 passed in %s on line %d and exactly 1 expected

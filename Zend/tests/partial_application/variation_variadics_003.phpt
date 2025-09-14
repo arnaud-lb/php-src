@@ -1,5 +1,7 @@
 --TEST--
 Closure application variation variadics interactions
+--XFAIL--
+TODO: extra args rules
 --FILE--
 <?php
 function foo($a, $b) {

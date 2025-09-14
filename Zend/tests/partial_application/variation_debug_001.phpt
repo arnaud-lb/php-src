@@ -16,27 +16,25 @@ object(Closure)#%d (5) {
   string(83) "%svariation_debug_001.php"
   ["line"]=>
   int(6)
-  ["parameter"]=>
-  array(1) {
-    ["$a"]=>
-    string(10) "<optional>"
-  }
-  ["args"]=>
-  array(3) {
-    ["a"]=>
-    NULL
+  ["static"]=>
+  array(4) {
     ["b"]=>
     object(stdClass)#%d (0) {
     }
     ["c"]=>
-    array(3) {
-      [0]=>
-      int(20)
-      [1]=>
-      object(stdClass)#%d (0) {
-      }
+    int(20)
+    ["c0"]=>
+    object(stdClass)#%d (0) {
+    }
+    ["extra_named_params"]=>
+    array(1) {
       ["four"]=>
       int(4)
     }
+  }
+  ["parameter"]=>
+  array(1) {
+    ["$a"]=>
+    string(10) "<optional>"
   }
 }

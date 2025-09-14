@@ -2013,6 +2013,8 @@ static char *accel_uintptr_hex(char *dest, uintptr_t n)
 	return dest + sizeof(uintptr_t)*2;
 }
 
+// TODO: We only need 'called_function' to be part of the key,
+// not 'called_scope', as the generated code only depends on the function.
 static zend_string *zend_accel_pfa_key(const zend_op *declaring_opline,
 		const zend_function *called_function,
 		const zend_class_entry *called_scope)

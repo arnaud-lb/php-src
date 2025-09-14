@@ -19,7 +19,7 @@ $foo = foo(?, ?, ?);
 echo (string) new ReflectionFunction($foo);
 ?>
 --EXPECTF--
-Closure [ <user> function {closure:%s} ] {
+Closure [ <user> static function {closure:%s:%d} ] {
   @@ %sreflection_001.php 6 - 6
 
   - Parameters [3] {
@@ -28,7 +28,7 @@ Closure [ <user> function {closure:%s} ] {
     Parameter #2 [ <optional> $c = 10 ]
   }
 }
-Closure [ <user> function {closure:%s} ] {
+Closure [ <user> static function {closure:%s:%d} ] {
   @@ %sreflection_001.php 10 - 10
 
   - Parameters [3] {
@@ -37,7 +37,7 @@ Closure [ <user> function {closure:%s} ] {
     Parameter #2 [ <optional> $c = 10 ]
   }
 }
-Closure [ <user> function {closure:%s} ] {
+Closure [ <user> static function {closure:%s:%d} ] {
   @@ %sreflection_001.php 14 - 14
 
   - Parameters [3] {
