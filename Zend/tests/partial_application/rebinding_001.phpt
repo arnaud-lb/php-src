@@ -1,7 +1,5 @@
 --TEST--
 Closure application can only be rebound to an instanceof $this
---XFAIL--
-TODO: bindTo rules
 --FILE--
 <?php
 
@@ -55,13 +53,11 @@ object(SubClass)#%d (0) {
 }
 # Cannot be rebound to an unrelated class:
 
-Warning: Cannot bind method C::{closure:%s}() to object of class Unrelated in %s on line %d
+Warning: Cannot bind method C::{closure:%s:%d}() to object of class Unrelated, this will be an error in PHP 9 in %s on line %d
 Value of type null is not callable
 # Cannot unbind $this on instance method:
 
-Warning: Cannot unbind $this of method in %s on line %d
+Warning: Cannot unbind $this of method, this will be an error in PHP 9 in %s on line %d
 Value of type null is not callable
 # Can unbind $this on static method:
-
-Warning: Cannot unbind $this of method in %s on line %d
-Value of type null is not callable
+string(1) "C"

@@ -33,6 +33,9 @@
 #define Z_IS_PLACEHOLDER_P(p) \
 	(Z_IS_PLACEHOLDER_ARG_P(p) || Z_IS_PLACEHOLDER_VARIADIC_P(p))
 
+#define IS_STATIC_CLOSURE(function) \
+	(((function)->common.fn_flags & (ZEND_ACC_STATIC|ZEND_ACC_CLOSURE)) == (ZEND_ACC_STATIC|ZEND_ACC_CLOSURE))
+
 static zend_string* zend_partial_symbol_name(zend_execute_data *call, zend_function *function) {
 	zend_string *name = function->common.function_name,
 				*scope = (function->common.scope ? function->common.scope->name : NULL),
@@ -730,7 +733,7 @@ zend_op_array *zp_compile(zval *this_ptr, zend_function *function,
 			NULL, params_ast, lexical_vars_ast, stmts_ast,
 			return_type_ast, attributes_ast);
 
-	if (Z_TYPE_P(this_ptr) != IS_OBJECT || (function->common.fn_flags & ZEND_ACC_CLOSURE)) {
+	if (Z_TYPE_P(this_ptr) != IS_OBJECT || IS_STATIC_CLOSURE(function)) {
 		((zend_ast_decl*)closure_ast)->flags |= ZEND_ACC_STATIC;
 	}
 
@@ -791,14 +794,14 @@ void zend_partial_create(zval *result, zval *this_ptr, zend_function *function,
 
 	zval object;
 
-	if (Z_TYPE_P(this_ptr) == IS_OBJECT && !(function->common.fn_flags & ZEND_ACC_CLOSURE)) {
+	if (Z_TYPE_P(this_ptr) == IS_OBJECT && !IS_STATIC_CLOSURE(function)) {
 		ZVAL_COPY_VALUE(&object, this_ptr);
 	} else {
 		ZVAL_UNDEF(&object);
 	}
 
-	zend_create_closure(result, (zend_function*)op_array,
-			called_scope, called_scope, &object);
+	zend_create_partial_closure(result, (zend_function*)op_array,
+			function->common.scope, called_scope, &object);
 
 	destroy_op_array(op_array);
 

@@ -1,7 +1,5 @@
 --TEST--
 Closure application scope cannot be rebound
---XFAIL--
-TODO: bindTo rules
 --FILE--
 <?php
 
@@ -39,9 +37,9 @@ try {
 string(1) "C"
 # Method cannot be rebound to a different scope:
 
-Warning: Cannot rebind scope of closure created from method in %s on line %d
+Warning: Cannot rebind scope of closure created from method, this will be an error in PHP 9 in %s on line %d
 Value of type null is not callable
 # Function cannot be refound to a different scope:
 
-Warning: Cannot rebind scope of closure created from function in %s on line %d
+Warning: Cannot bind an instance to a static closure, this will be an error in PHP 9 in %s on line %d
 Value of type null is not callable

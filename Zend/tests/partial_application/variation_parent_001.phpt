@@ -17,7 +17,7 @@ $baz = $bar(20, ...);
 var_dump($baz, $baz());
 ?>
 --EXPECTF--
-object(Closure)#%d (5) {
+object(Closure)#%d (6) {
   ["name"]=>
   string(%d) "{closure:%s}"
   ["file"]=>
@@ -52,6 +52,9 @@ object(Closure)#%d (5) {
         string(10) "<optional>"
       }
     }
+  }
+  ["this"]=>
+  object(Foo)#%d (0) {
   }
   ["parameter"]=>
   array(1) {
