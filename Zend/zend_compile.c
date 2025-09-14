@@ -4015,7 +4015,7 @@ void zend_compile_call_partial(znode *result, zend_ast *call_ast,
 	opline = zend_emit_op_tmp(result, ZEND_CALLABLE_CONVERT_PARTIAL,
 				NULL, NULL);
 
-	opline->op1.num = zend_alloc_cache_slots(3);
+	opline->op1.num = zend_alloc_cache_slots(2);
 
 	if (may_have_extra_named_args) {
 		opline->extended_value = ZEND_FCALL_MAY_HAVE_EXTRA_NAMED_PARAMS;

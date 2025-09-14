@@ -749,8 +749,8 @@ void zend_optimizer_compact_literals(zend_op_array *op_array, zend_optimizer_ctx
 					}
 					break;
 				case ZEND_CALLABLE_CONVERT_PARTIAL:
-					opline->extended_value = cache_size;
-					cache_size += 3 * sizeof(void *);
+					opline->op1.num = cache_size;
+					cache_size += 2 * sizeof(void *);
 					break;
 			}
 			opline++;

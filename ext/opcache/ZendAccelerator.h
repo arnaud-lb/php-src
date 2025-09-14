@@ -338,14 +338,12 @@ uint32_t zend_accel_get_class_name_map_ptr(zend_string *type_name);
 
 zend_op_array *zend_accel_pfa_cache_get(const zend_op_array *declaring_op_array,
 		const zend_op *declaring_opline,
-		const zend_function *called_function,
-		const zend_class_entry *called_scope);
+		const zend_function *called_function);
 
 zend_op_array *zend_accel_compile_pfa(zend_ast *ast,
 		const zend_op_array *declaring_op_array,
 		const zend_op *declaring_opline,
-		const zend_function *called_function,
-		const zend_class_entry *called_scope);
+		const zend_function *called_function);
 
 END_EXTERN_C()
 

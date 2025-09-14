@@ -2013,21 +2013,16 @@ static char *accel_uintptr_hex(char *dest, uintptr_t n)
 	return dest + sizeof(uintptr_t)*2;
 }
 
-// TODO: We only need 'called_function' to be part of the key,
-// not 'called_scope', as the generated code only depends on the function.
 static zend_string *zend_accel_pfa_key(const zend_op *declaring_opline,
-		const zend_function *called_function,
-		const zend_class_entry *called_scope)
+		const zend_function *called_function)
 {
-	size_t key_len = strlen("partial") + (strlen(":")+sizeof(uintptr_t)*2)*3;
+	size_t key_len = strlen("partial") + (strlen(":")+sizeof(uintptr_t)*2)*2;
 	zend_string *key = zend_string_alloc(key_len, 0);
 	char *dest = ZSTR_VAL(key);
 
 	dest = mempcpy(ZSTR_VAL(key), "partial", strlen("partial"));
 	*dest++ = ':';
 	dest = accel_uintptr_hex(dest, (uintptr_t)declaring_opline);
-	*dest++ = ':';
-	dest = accel_uintptr_hex(dest, (uintptr_t)called_scope);
 	*dest++ = ':';
 	dest = accel_uintptr_hex(dest, (uintptr_t)called_function);
 
@@ -2040,25 +2035,24 @@ static zend_string *zend_accel_pfa_key(const zend_op *declaring_opline,
 }
 
 zend_op_array *zend_accel_pfa_cache_get(const zend_op_array *declaring_op_array,
-		const zend_op *declaring_opline,
-		const zend_function *called_function,
-		const zend_class_entry *called_scope)
+		const zend_op *declaring_opline, const zend_function *called_function)
 {
 	if (!ZCG(accelerator_enabled)) {
 		return NULL;
 	}
 
-	/* The PFA is not cached if either the declaring op array, called_function,
-	 * or called_scope is not cached. */
+	/* The PFA is not cached if either the declaring op array
+	 * or called_function is not cached. */
 
 	if (declaring_op_array->refcount
-			|| (called_function->type == ZEND_USER_FUNCTION && called_function->op_array.refcount)
-			|| (called_scope && called_scope->type == ZEND_USER_CLASS && !(called_scope->ce_flags & ZEND_ACC_IMMUTABLE))) {
+			|| (called_function->type == ZEND_USER_FUNCTION && called_function->op_array.refcount)) {
 		return NULL;
 	}
 
-	zend_string *key = zend_accel_pfa_key(declaring_opline,
-			called_function, called_scope);
+	// TODO: Storing PFAs in ZCSG(hash) is not ideal as this may clash with
+	// legit scripts. Should store PFAs in the declaring_op_array.
+
+	zend_string *key = zend_accel_pfa_key(declaring_opline, called_function);
 	zend_persistent_script *persistent_script =
 		zend_accel_hash_find(&ZCSG(hash), key);
 	zend_string_release(key);
@@ -2077,8 +2071,7 @@ zend_op_array *zend_accel_pfa_cache_get(const zend_op_array *declaring_op_array,
 zend_op_array *zend_accel_compile_pfa(zend_ast *ast,
 		const zend_op_array *declaring_op_array,
 		const zend_op *declaring_opline,
-		const zend_function *called_function,
-		const zend_class_entry *called_scope)
+		const zend_function *called_function)
 {
 	// TODO: file cache support
 
@@ -2124,12 +2117,11 @@ zend_op_array *zend_accel_compile_pfa(zend_ast *ast,
 		return NULL;
 	}
 
-	/* Cache op_array only if the declaring op_array, the called function, and
-	 * the called_scope are cached */
+	/* Cache op_array only if the declaring op_array and the called function
+	 * are cached */
 	if (!ZCG(accelerator_enabled)
 			|| declaring_op_array->refcount
-			|| (called_function->type == ZEND_USER_FUNCTION && called_function->op_array.refcount)
-			|| (called_scope && called_scope->type == ZEND_USER_CLASS && !(called_scope->ce_flags & ZEND_ACC_IMMUTABLE))) {
+			|| (called_function->type == ZEND_USER_FUNCTION && called_function->op_array.refcount)) {
 		zend_op_array *closure = op_array->dynamic_func_defs[0];
 		(*closure->refcount)++;
 		destroy_op_array(op_array);
@@ -2141,8 +2133,7 @@ zend_op_array *zend_accel_compile_pfa(zend_ast *ast,
 	new_persistent_script->script.main_op_array = *op_array;
 	efree_size(op_array, sizeof(zend_op_array));
 
-	zend_string *key = zend_accel_pfa_key(declaring_opline,
-			called_function, called_scope);
+	zend_string *key = zend_accel_pfa_key(declaring_opline, called_function);
 
 	new_persistent_script->script.filename = key;
 

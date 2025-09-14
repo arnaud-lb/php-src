@@ -465,14 +465,16 @@ zend_op_array *zp_compile(zval *this_ptr, zend_function *function,
 		called_scope = Z_CE_P(this_ptr);
 	}
 
-	if (EXPECTED(cache_slot[0] == called_scope && cache_slot[1] == function)) {
+	if (EXPECTED(cache_slot[0] == function)) {
 		return cache_slot[1];
 	}
 
 	zend_op_array *op_array = zend_accel_pfa_cache_get(declaring_op_array,
-			declaring_opline, function, called_scope);
+			declaring_opline, function);
 
 	if (EXPECTED(op_array)) {
+		cache_slot[0] = function;
+		cache_slot[1] = op_array;
 		return op_array;
 	}
 
@@ -744,7 +746,7 @@ zend_op_array *zp_compile(zval *this_ptr, zend_function *function,
 #endif
 
 	op_array = zend_accel_compile_pfa(closure_ast, declaring_op_array,
-			declaring_opline, function, called_scope);
+			declaring_opline, function);
 
 	zend_ast_destroy(closure_ast);
 
@@ -756,6 +758,11 @@ clean_argv:
 	zend_arena_destroy(CG(ast_arena));
 	CG(ast_arena) = orig_ast_arena;
 	CG(zend_lineno) = orig_lineno;
+
+	if (op_array) {
+		cache_slot[0] = function;
+		cache_slot[1] = op_array;
+	}
 
 	return op_array;
 }
