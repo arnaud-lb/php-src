@@ -641,12 +641,12 @@ ZEND_API zend_object *zend_enum_get_case_cstr(zend_class_entry *ce, const char *
 void zend_enum_startup(void)
 {
 	for (size_t i = 0; i < sizeof(zarginfo_class_UnitEnum_cases)/sizeof(zend_arg_info); i++) {
-		zend_convert_internal_arg_info(&zarginfo_class_UnitEnum_cases[i], &arginfo_class_UnitEnum_cases[i], i == 0);
+		zend_convert_internal_arg_info(&zarginfo_class_UnitEnum_cases[i], &arginfo_class_UnitEnum_cases[i], i == 0, true);
 	}
 	for (size_t i = 0; i < sizeof(zarginfo_class_BackedEnum_from)/sizeof(zend_arg_info); i++) {
-		zend_convert_internal_arg_info(&zarginfo_class_BackedEnum_from[i], &arginfo_class_BackedEnum_from[i], i == 0);
+		zend_convert_internal_arg_info(&zarginfo_class_BackedEnum_from[i], &arginfo_class_BackedEnum_from[i], i == 0, true);
 	}
 	for (size_t i = 0; i < sizeof(zarginfo_class_BackedEnum_tryFrom)/sizeof(zend_arg_info); i++) {
-		zend_convert_internal_arg_info(&zarginfo_class_BackedEnum_tryFrom[i], &arginfo_class_BackedEnum_tryFrom[i], i == 0);
+		zend_convert_internal_arg_info(&zarginfo_class_BackedEnum_tryFrom[i], &arginfo_class_BackedEnum_tryFrom[i], i == 0, true);
 	}
 }

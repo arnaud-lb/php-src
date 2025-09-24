@@ -2971,13 +2971,13 @@ static void zend_convert_internal_arg_info_type(zend_type *type, bool persistent
 
 		if (num_types == 1) {
 			/* Simple class type */
-			zend_string *str = zend_string_init_interned(class_name, strlen(class_name), true);
+			zend_string *str = zend_string_init_interned(class_name, strlen(class_name), persistent);
 			zend_alloc_ce_cache(str);
 			ZEND_TYPE_SET_PTR(*type, str);
 			type->type_mask |= _ZEND_TYPE_NAME_BIT;
 		} else {
 			/* Union type */
-			zend_type_list *list = pemalloc(ZEND_TYPE_LIST_SIZE(num_types), true);
+			zend_type_list *list = pemalloc(ZEND_TYPE_LIST_SIZE(num_types), persistent);
 			list->num_types = num_types;
 			ZEND_TYPE_SET_LIST(*type, list);
 			ZEND_TYPE_FULL_MASK(*type) |= _ZEND_TYPE_UNION_BIT;
@@ -2986,7 +2986,7 @@ static void zend_convert_internal_arg_info_type(zend_type *type, bool persistent
 			uint32_t j = 0;
 			while (true) {
 				const char *end = strchr(start, '|');
-				zend_string *str = zend_string_init_interned(start, end ? end - start : strlen(start), true);
+				zend_string *str = zend_string_init_interned(start, end ? end - start : strlen(start), persistent);
 				zend_alloc_ce_cache(str);
 				list->types[j] = (zend_type) ZEND_TYPE_INIT_CLASS(str, 0, 0);
 				if (!end) {
@@ -3010,12 +3010,12 @@ static void zend_convert_internal_arg_info_type(zend_type *type, bool persistent
 	}
 }
 
-ZEND_API void zend_convert_internal_arg_info(zend_arg_info *new_arg_info, const zend_internal_arg_info *arg_info, bool is_return_info)
+ZEND_API void zend_convert_internal_arg_info(zend_arg_info *new_arg_info, const zend_internal_arg_info *arg_info, bool is_return_info, bool persistent)
 {
 	if (!is_return_info) {
-		new_arg_info->name = zend_string_init_interned(arg_info->name, strlen(arg_info->name), true);
+		new_arg_info->name = zend_string_init_interned(arg_info->name, strlen(arg_info->name), persistent);
 		if (arg_info->default_value) {
-			new_arg_info->default_value = zend_string_init_interned(arg_info->default_value, strlen(arg_info->default_value), true);
+			new_arg_info->default_value = zend_string_init_interned(arg_info->default_value, strlen(arg_info->default_value), persistent);
 		} else {
 			new_arg_info->default_value = NULL;
 		}
@@ -3024,7 +3024,7 @@ ZEND_API void zend_convert_internal_arg_info(zend_arg_info *new_arg_info, const 
 		new_arg_info->default_value = NULL;
 	}
 	new_arg_info->type = arg_info->type;
-	zend_convert_internal_arg_info_type(&new_arg_info->type);
+	zend_convert_internal_arg_info_type(&new_arg_info->type, persistent);
 }
 
 /* registers all functions in *library_functions in the function hash */
@@ -3236,7 +3236,8 @@ ZEND_API zend_result zend_register_functions(zend_class_entry *scope, const zend
 			new_arg_info = malloc(sizeof(zend_arg_info) * num_args);
 			reg_function->arg_info = new_arg_info + 1;
 			for (i = 0; i < num_args; i++) {
-				zend_convert_internal_arg_info(&new_arg_info[i], &arg_info[i], i == 0);
+				zend_convert_internal_arg_info(&new_arg_info[i], &arg_info[i],
+						i == 0, true);
 			}
 		}
 
