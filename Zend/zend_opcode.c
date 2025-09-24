@@ -123,7 +123,7 @@ ZEND_API void zend_type_release(zend_type type, bool persistent) {
 	}
 }
 
-void zend_free_internal_arg_info(zend_internal_function *function) {
+ZEND_API void zend_free_internal_arg_info(zend_internal_function *function) {
 	if (function->arg_info) {
 		uint32_t i;
 		uint32_t num_args = function->num_args + 1;

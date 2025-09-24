@@ -2953,7 +2953,7 @@ static zend_always_inline void zend_normalize_internal_type(zend_type *type) {
 	} ZEND_TYPE_FOREACH_END();
 }
 
-ZEND_API void zend_convert_internal_arg_info_type(zend_type *type)
+static void zend_convert_internal_arg_info_type(zend_type *type, bool persistent)
 {
 	if (ZEND_TYPE_HAS_LITERAL_NAME(*type)) {
 		// gen_stubs.php does not support codegen for DNF types in arg infos.
@@ -3010,7 +3010,7 @@ ZEND_API void zend_convert_internal_arg_info_type(zend_type *type)
 	}
 }
 
-void zend_convert_internal_arg_info(zend_arg_info *new_arg_info, const zend_internal_arg_info *arg_info, bool is_return_info)
+ZEND_API void zend_convert_internal_arg_info(zend_arg_info *new_arg_info, const zend_internal_arg_info *arg_info, bool is_return_info)
 {
 	if (!is_return_info) {
 		new_arg_info->name = zend_string_init_interned(arg_info->name, strlen(arg_info->name), true);
