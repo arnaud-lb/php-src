@@ -425,7 +425,7 @@ ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_arg_list_1(zend_ast_kind kind,
 }
 
 ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_arg_list_2(zend_ast_kind kind, zend_ast *arg1, zend_ast *arg2) {
-	zend_ast *list = zend_ast_create_list(1, kind, arg1, arg2);
+	zend_ast *list = zend_ast_create_list(2, kind, arg1, arg2);
 
 	if (zend_ast_is_placeholder_arg(arg1) || zend_ast_is_placeholder_arg(arg2)) {
 		zend_ast_fcc *fcc_ast = (zend_ast_fcc*)zend_ast_create_fcc();
