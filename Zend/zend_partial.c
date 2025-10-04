@@ -510,7 +510,7 @@ zend_op_array *zp_compile(zval *this_ptr, zend_function *function,
 		new_argc = MAX(new_argc, function->common.num_args);
 	}
 
-	zval *tmp = emalloc(new_argc * sizeof(zval));
+	zval *tmp = zend_arena_alloc(&CG(arena), new_argc * sizeof(zval));
 	memcpy(tmp, argv, new_argc * sizeof(zval));
 	argv = tmp;
 
@@ -529,11 +529,10 @@ zend_op_array *zp_compile(zval *this_ptr, zend_function *function,
 	argc = new_argc;
 
 	/* Assign param names */
-	ALLOCA_FLAG(use_heap);
 	uint32_t num_names = argc + variadic_partial + (extra_named_params != NULL)
-		+ (function->common.fn_flags & ZEND_ACC_CLOSURE);
-	zend_string **param_names = do_alloca(
-			sizeof(zend_string*) * num_names, use_heap);
+		+ ((function->common.fn_flags & ZEND_ACC_CLOSURE) != 0);
+	zend_string **param_names = zend_arena_alloc(&CG(arena),
+			sizeof(zend_string*) * num_names);
 	memset(param_names, 0, sizeof(zend_string*) * num_names);
 	zp_assign_names(param_names, num_names, argc, argv, function,
 			variadic_partial, extra_named_params);
@@ -753,11 +752,7 @@ zend_op_array *zp_compile(zval *this_ptr, zend_function *function,
 
 	zend_ast_destroy(closure_ast);
 
-	/* Names themselves are owned by the ZEND_AST_PARAM node */
-	free_alloca(param_names, use_heap);
-
 clean_argv:
-	efree(argv);
 	zend_arena_destroy(CG(ast_arena));
 	CG(ast_arena) = orig_ast_arena;
 	CG(zend_lineno) = orig_lineno;
