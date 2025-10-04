@@ -4,21 +4,23 @@ Closure application clone
 <?php
 
 class C {
-    public $a;
-    public $b;
+    public function __construct(
+        public mixed $a,
+        public mixed $b,
+    ) { }
 }
 
 $clone = clone(?);
-var_dump($clone(new C));
+var_dump($clone(new C(1, 2)));
 
 $clone = clone(...);
-var_dump($clone(new C));
+var_dump($clone(new C(3, 4)));
 
-$clone = clone(new C, ?);
-var_dump($clone(['a' => 1]));
+$clone = clone(new C(5, 6), ?);
+var_dump($clone(['a' => 7]));
 
-$clone = clone(?, ['a' => 1]);
-var_dump($clone(new C));
+$clone = clone(?, ['a' => 8]);
+var_dump($clone(new C(9, 10)));
 
 ?>
 --EXPECTF--
