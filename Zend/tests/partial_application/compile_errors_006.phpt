@@ -6,4 +6,3 @@ foo(...["foo" => "bar"], ...);
 ?>
 --EXPECTF--
 Fatal error: Cannot combine partial application and unpacking in %s on line %d
-

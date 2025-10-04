@@ -14,4 +14,3 @@ try {
 ?>
 --EXPECT--
 Named parameter $a overwrites previous placeholder
-

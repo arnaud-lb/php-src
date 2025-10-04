@@ -6,4 +6,3 @@ foo(..., $a);
 ?>
 --EXPECTF--
 Fatal error: Only named arguments may follow variadic placeholder in %s on line %d
-

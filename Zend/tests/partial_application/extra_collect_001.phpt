@@ -47,4 +47,3 @@ array(2) {
   ["bar"]=>
   string(3) "bar"
 }
-

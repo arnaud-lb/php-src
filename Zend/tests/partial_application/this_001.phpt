@@ -19,4 +19,3 @@ var_dump($baz());
 --EXPECTF--
 object(Foo)#%d (0) {
 }
-

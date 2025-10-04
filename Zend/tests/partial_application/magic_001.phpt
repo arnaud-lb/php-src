@@ -77,4 +77,3 @@ Foo::method
 object(Foo)#%d (0) {
 }
 int(100)
-

@@ -14,4 +14,3 @@ try {
 ?>
 --EXPECTF--
 too many arguments or placeholders for application of {closure:%s}, 2 given and a maximum of 1 expected
-
