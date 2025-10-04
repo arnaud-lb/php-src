@@ -445,9 +445,6 @@ static zend_ast *zp_param_attributes_to_ast(zend_function *function,
 	if (attr) {
 		attributes_ast = zend_ast_create_list(1, ZEND_AST_ATTRIBUTE_GROUP,
 				zp_attribute_to_ast(attr));
-	}
-
-	if (attributes_ast) {
 		attributes_ast = zend_ast_create_list(1, ZEND_AST_ATTRIBUTE_LIST,
 				attributes_ast);
 	}
@@ -719,8 +716,6 @@ zend_op_array *zp_compile(zval *this_ptr, zend_function *function,
 		if (attr) {
 			attributes_ast = zend_ast_create_list(1, ZEND_AST_ATTRIBUTE_GROUP,
 					zp_attribute_to_ast(attr));
-		}
-		if (attributes_ast) {
 			attributes_ast = zend_ast_create_list(1, ZEND_AST_ATTRIBUTE_LIST,
 					attributes_ast);
 		}
