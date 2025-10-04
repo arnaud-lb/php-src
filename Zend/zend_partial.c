@@ -770,42 +770,33 @@ clean_argv:
 	return op_array;
 }
 
-void zend_partial_create(zval *result, zval *this_ptr, zend_function *function,
+zend_op_array *zp_get_op_array(zval *this_ptr, zend_function *function,
 		uint32_t argc, zval *argv, zend_array *extra_named_params,
 		const zend_op_array *declaring_op_array,
 		const zend_op *declaring_opline, void **cache_slot) {
 
-	zend_class_entry *called_scope;
-
-	if (Z_TYPE_P(this_ptr) == IS_OBJECT) {
-		called_scope = Z_OBJCE_P(this_ptr);
-	} else {
-		called_scope = Z_CE_P(this_ptr);
+	if (EXPECTED(cache_slot[0] == function)) {
+		return cache_slot[1];
 	}
 
-	zend_op_array *op_array = zp_compile(this_ptr, function, argc, argv,
+	zend_op_array *op_array = zend_accel_pfa_cache_get(declaring_op_array,
+			declaring_opline, function);
+
+	if (EXPECTED(op_array)) {
+		cache_slot[0] = function;
+		cache_slot[1] = op_array;
+		return op_array;
+	}
+
+	return zp_compile(this_ptr, function, argc, argv,
 			extra_named_params, declaring_op_array, declaring_opline,
 			cache_slot);
+}
 
-	if (UNEXPECTED(!op_array)) {
-		ZEND_ASSERT(EG(exception));
-		return;
-	}
+/* Bind pre-bound arguments as lexical vars */
+void zp_bind(zval *result, zend_function *function, uint32_t argc, zval *argv,
+		zend_array *extra_named_params) {
 
-	zval object;
-
-	if (Z_TYPE_P(this_ptr) == IS_OBJECT && !IS_STATIC_CLOSURE(function)) {
-		ZVAL_COPY_VALUE(&object, this_ptr);
-	} else {
-		ZVAL_UNDEF(&object);
-	}
-
-	zend_create_partial_closure(result, (zend_function*)op_array,
-			function->common.scope, called_scope, &object);
-
-	destroy_op_array(op_array);
-
-	/* Bind pre-bound arguments as lexical vars */
 	zend_arg_info *arg_infos = function->common.arg_info;
 	uint32_t bind_offset = 0;
 	for (uint32_t offset = 0; offset < argc; offset++) {
@@ -847,4 +838,41 @@ void zend_partial_create(zval *result, zval *this_ptr, zend_function *function,
 		Z_ADDREF(var);
 		zend_closure_bind_var_ex(result, bind_offset, &var);
 	}
+}
+
+void zend_partial_create(zval *result, zval *this_ptr, zend_function *function,
+		uint32_t argc, zval *argv, zend_array *extra_named_params,
+		const zend_op_array *declaring_op_array,
+		const zend_op *declaring_opline, void **cache_slot) {
+
+	zend_op_array *op_array = zp_get_op_array(this_ptr, function, argc, argv,
+			extra_named_params, declaring_op_array, declaring_opline,
+			cache_slot);
+
+	if (UNEXPECTED(!op_array)) {
+		ZEND_ASSERT(EG(exception));
+		return;
+	}
+
+	zend_class_entry *called_scope;
+	zval object;
+
+	if (Z_TYPE_P(this_ptr) == IS_OBJECT) {
+		called_scope = Z_OBJCE_P(this_ptr);
+	} else {
+		called_scope = Z_CE_P(this_ptr);
+	}
+
+	if (Z_TYPE_P(this_ptr) == IS_OBJECT && !IS_STATIC_CLOSURE(function)) {
+		ZVAL_COPY_VALUE(&object, this_ptr);
+	} else {
+		ZVAL_UNDEF(&object);
+	}
+
+	zend_create_partial_closure(result, (zend_function*)op_array,
+			function->common.scope, called_scope, &object);
+
+	destroy_op_array(op_array);
+
+	zp_bind(result, function, argc, argv, extra_named_params);
 }
