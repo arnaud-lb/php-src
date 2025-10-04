@@ -7,8 +7,8 @@ assert.exception=1
 try {
     assert(0 && foo(?) && foo(new stdClass, ...));
 } catch (Error $ex) {
-    printf("%s\n", $ex->getMessage());
+    printf("%s: %s\n", $ex::class, $ex->getMessage());
 }
 ?>
 --EXPECT--
-assert(0 && foo(?) && foo(new stdClass(), ...))
+AssertionError: assert(0 && foo(?) && foo(new stdClass(), ...))

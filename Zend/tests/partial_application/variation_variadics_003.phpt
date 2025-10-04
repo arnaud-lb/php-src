@@ -13,13 +13,13 @@ $foo = foo(?, ?);
 try {
     $foo(1, 2, 3); // FAIL, 2 expected, 3 given
 } catch (Error $ex) {
-    printf("%s\n", $ex->getMessage());
+    printf("%s: %s\n", $ex::class, $ex->getMessage());
 }
 
 try {
     $foo = foo(?, ?, ?); // FAIL 2 expected, 3 given
 } catch (Error $ex) {
-    printf("%s\n", $ex->getMessage());
+    printf("%s: %s\n", $ex::class, $ex->getMessage());
 }
 
 function bar($a, $b, ...$c) {
@@ -31,22 +31,30 @@ $bar = bar(?, ?);
 try {
     $bar(1, 2, 3); // FAIL 3 given, maximum 2 expected
 } catch (Error $ex) {
-    printf("%s\n", $ex->getMessage());
+    printf("%s: %s\n", $ex::class, $ex->getMessage());
 }
 
 $foo = foo(?, ?, ...);
 
 $foo(1, 2, 3); // OK
 ?>
---EXPECTF--
-too many arguments for application of foo, 3 given and a maximum of 2 expected
-too many arguments or placeholders for application of foo, 3 given and a maximum of 2 expected
-too many arguments for application of bar, 3 given and a maximum of 2 expected
-array(3) {
+--EXPECT--
+array(2) {
   [0]=>
   int(1)
   [1]=>
   int(2)
-  [2]=>
-  int(3)
+}
+Error: too many arguments or placeholders for application of foo, 3 given and a maximum of 2 expected
+array(2) {
+  [0]=>
+  int(1)
+  [1]=>
+  int(2)
+}
+array(2) {
+  [0]=>
+  int(1)
+  [1]=>
+  int(2)
 }

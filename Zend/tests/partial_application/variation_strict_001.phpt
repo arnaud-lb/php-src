@@ -13,8 +13,8 @@ $foo = foo(?);
 try {
     $foo("42");
 } catch (TypeError $ex) {
-    printf("%s\n", $ex->getMessage());
+    printf("%s: %s\n", $ex::class, $ex->getMessage());
 }
 ?>
 --EXPECTF--
-{closure:%s:%d}(): Argument #1 ($int) must be of type int, string given, called in %s on line %d
+TypeError: {closure:%s:%d}(): Argument #1 ($int) must be of type int, string given, called in %s on line %d
