@@ -1,5 +1,5 @@
 --TEST--
-Closure application references 002
+Closure application references 003
 --FILE--
 <?php
 

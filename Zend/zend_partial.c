@@ -586,7 +586,7 @@ zend_op_array *zp_compile(zval *this_ptr, zend_function *function,
 				ZEND_ASSERT(function->common.fn_flags & ZEND_ACC_VARIADIC);
 				zend_arg_info *arg_info = &function->common.arg_info[function->common.num_args];
 				int param_flags = 0;
-				if (zp_arg_must_be_sent_by_ref(function, function->common.num_args)) {
+				if (zp_arg_must_be_sent_by_ref(function, offset+1)) {
 					param_flags |= ZEND_PARAM_REF;
 				}
 				zend_ast *param_type_ast = zp_type_to_ast(arg_info->type);
@@ -623,7 +623,7 @@ zend_op_array *zp_compile(zval *this_ptr, zend_function *function,
 			&& (function->common.fn_flags & ZEND_ACC_VARIADIC)) {
 		zend_arg_info *arg_info = &function->common.arg_info[function->common.num_args];
 		int param_flags = ZEND_PARAM_VARIADIC;
-		if (zp_arg_must_be_sent_by_ref(function, function->common.num_args)) {
+		if (zp_arg_must_be_sent_by_ref(function, function->common.num_args+1)) {
 			param_flags |= ZEND_PARAM_REF;
 		}
 		zend_ast *param_type_ast = zp_type_to_ast(arg_info->type);
