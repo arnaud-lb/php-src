@@ -4,6 +4,8 @@ Closure application pipe optimization: References
 opcache
 --INI--
 opcache.opt_debug_level=0x20000
+opcache.enable=1
+opcache.enable_cli=1
 --FILE--
 <?php
 
