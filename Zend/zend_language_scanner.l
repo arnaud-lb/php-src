@@ -683,6 +683,7 @@ ZEND_API zend_op_array *compile_file(zend_file_handle *file_handle, int type)
 ZEND_API zend_op_array *zend_compile_ast(
 	zend_ast *ast, int type, zend_string *filename)
 {
+	zend_string *original_compiled_filename = CG(compiled_filename);
 	bool original_in_compilation = CG(in_compilation);
 	CG(in_compilation) = 1;
 	CG(ast) = ast;
@@ -691,6 +692,7 @@ ZEND_API zend_op_array *zend_compile_ast(
 	zend_op_array *op_array = zend_compile_ast_internal(type);
 
 	CG(in_compilation) = original_in_compilation;
+	zend_restore_compiled_filename(original_compiled_filename);
 
 	return op_array;
 }
