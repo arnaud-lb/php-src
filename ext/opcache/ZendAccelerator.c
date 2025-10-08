@@ -2123,6 +2123,7 @@ zend_op_array *zend_accel_compile_pfa(zend_ast *ast,
 			|| declaring_op_array->refcount
 			|| (called_function->type == ZEND_USER_FUNCTION && called_function->op_array.refcount)) {
 		zend_op_array *closure = op_array->dynamic_func_defs[0];
+		GC_ADDREF(closure->function_name);
 		(*closure->refcount)++;
 		destroy_op_array(op_array);
 		efree(op_array);
