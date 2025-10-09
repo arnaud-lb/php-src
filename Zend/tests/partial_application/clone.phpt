@@ -26,25 +26,25 @@ var_dump($clone(new C(9, 10)));
 --EXPECTF--
 object(C)#%d (2) {
   ["a"]=>
-  NULL
-  ["b"]=>
-  NULL
-}
-object(C)#%d (2) {
-  ["a"]=>
-  NULL
-  ["b"]=>
-  NULL
-}
-object(C)#%d (2) {
-  ["a"]=>
   int(1)
   ["b"]=>
-  NULL
+  int(2)
 }
 object(C)#%d (2) {
   ["a"]=>
-  int(1)
+  int(3)
   ["b"]=>
-  NULL
+  int(4)
+}
+object(C)#%d (2) {
+  ["a"]=>
+  int(7)
+  ["b"]=>
+  int(6)
+}
+object(C)#%d (2) {
+  ["a"]=>
+  int(8)
+  ["b"]=>
+  int(10)
 }
