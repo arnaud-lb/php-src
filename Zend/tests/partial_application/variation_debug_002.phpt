@@ -2,7 +2,7 @@
 Closure application variation debug internal
 --FILE--
 <?php
-var_dump(array_map(?, [1,2,3], [4,5, 6], ..., four: new stdClass));
+var_dump(array_map(?, [1,2,3], [4,5, 6], four: new stdClass, ...));
 ?>
 --EXPECTF--
 object(Closure)#%d (5) {

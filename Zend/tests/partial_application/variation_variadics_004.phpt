@@ -6,13 +6,13 @@ function foo(int $day = 1, int $month = 1, int $year = 2005) {
     return ["day" => $day, "month" => $month, "year" => $year];
 }
 
-$foo = foo(..., year: 2006);
+$foo = foo(year: 2006, ...);
 
 var_dump($foo(2));
 
-$foo = foo(..., month: 12);
+$foo = foo(month: 12, ...);
 
-$bar = $foo(..., year: 2016);
+$bar = $foo(year: 2016, ...);
 
 var_dump($foo(2));
 

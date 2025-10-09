@@ -1,8 +1,8 @@
 --TEST--
-Closure application compile errors: mix application with unpack (placeholder before)
+Closure application compile errors: mix application with unpack
 --FILE--
 <?php
-foo(..., ...["foo" => "bar"]);
+foo(...["foo" => "bar"], ...);
 ?>
 --EXPECTF--
 Fatal error: Cannot combine partial application and unpacking %s on line %d

@@ -6,23 +6,23 @@ function foo(...$args) {
     var_dump($args);
 }
 
-$foo = foo(..., foo: "foo");
+$foo = foo(foo: "foo", ...);
 
-$bar = $foo(..., bar: "bar");
+$bar = $foo(bar: "bar", ...);
 
-$baz = $bar(..., baz: "baz");
+$baz = $bar(baz: "baz", ...);
 
 $baz();
 
 $foo = foo(...);
 
-$bar = $foo(..., bar: "bar");
+$bar = $foo(bar: "bar", ...);
 
-$baz = $bar(..., baz: "baz");
+$baz = $bar(baz: "baz", ...);
 
 $baz();
 
-$foo = foo(..., foo: "foo");
+$foo = foo(foo: "foo", ...);
 
 $foo(bar: "bar");
 ?>

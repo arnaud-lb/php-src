@@ -6,7 +6,7 @@ Closure application fuzz 007
 function foo(int $day = 1, int $month = UNDEFINED, int $year = 2005) {
 }
 
-$foo = foo(..., year: 2006);
+$foo = foo(year: 2006, ...);
 
 try {
     $foo(2);

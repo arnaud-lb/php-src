@@ -3790,13 +3790,20 @@ static uint32_t zend_compile_args(
 				may_have_undef = true;
 				*may_have_extra_named_args = true;
 			}
+
+			if (uses_variadic_placeholder) {
+				zend_error_noreturn(E_COMPILE_ERROR,
+					"Variadic placeholder must be last");
+			}
 		} else {
 			if (uses_arg_unpack) {
 				zend_error_noreturn(E_COMPILE_ERROR,
 					"Cannot use positional argument after argument unpacking");
 			}
 
-			if (uses_named_args) {
+			if (uses_named_args
+					&& (arg->kind != ZEND_AST_PLACEHOLDER_ARG
+						|| arg->attr != _IS_PLACEHOLDER_VARIADIC)) {
 				zend_error_noreturn(E_COMPILE_ERROR,
 					"Cannot use positional argument after named argument");
 			}
@@ -3808,11 +3815,14 @@ static uint32_t zend_compile_args(
 						"Variadic placeholder may only appear once");
 				} else {
 					zend_error_noreturn(E_COMPILE_ERROR,
-						"Only named arguments may follow variadic placeholder");
+						"Variadic placeholder must be last");
 				}
 			}
 
-			arg_count++;
+			if (arg->kind != ZEND_AST_PLACEHOLDER_ARG
+					|| arg->attr != _IS_PLACEHOLDER_VARIADIC) {
+				arg_count++;
+			}
 		}
 
 		if (arg->kind == ZEND_AST_PLACEHOLDER_ARG) {
@@ -3834,7 +3844,7 @@ static uint32_t zend_compile_args(
 				zend_string_addref(arg_name);
 				opline->op2.constant = zend_add_literal_string(&arg_name);
 				opline->result.num = zend_alloc_cache_slots(2);
-			} else {
+			} else if (arg->attr != _IS_PLACEHOLDER_VARIADIC) {
 				opline->op2.opline_num = arg_num;
 				opline->result.var = EX_NUM_TO_VAR(arg_num - 1);
 			}
@@ -6692,20 +6702,12 @@ static zend_ast *zend_partial_apply(zend_ast *callable_ast, zend_ast *pipe_arg)
 	zend_ast_list *arg_list = zend_ast_get_list(((zend_ast_fcc*)args_ast)->args);
 
 	zend_ast *first_placeholder = NULL;
-	bool uses_variadic_placeholder = false;
+	bool uses_named_args = false;
 
 	for (uint32_t i = 0; i < arg_list->children; i++) {
 		zend_ast *arg = arg_list->child[i];
 		if (arg->kind == ZEND_AST_NAMED_ARG) {
-			if (uses_variadic_placeholder) {
-				/* PFAs with both a variadic placeholder and named args can not
-				 * be optimized because the named arg may resolve to the
-				 * position of the placeholder: f(..., name: $v).
-				 * Arg placeholders ('?') are safe, as named args are not
-				 * allowed to override them. */
-				return NULL;
-			}
-
+			uses_named_args = true;
 			arg = arg->child[1];
 		}
 
@@ -6718,8 +6720,13 @@ static zend_ast *zend_partial_apply(zend_ast *callable_ast, zend_ast *pipe_arg)
 				 * so we don't optimize those. */
 				return NULL;
 			}
-			if (arg->attr == _IS_PLACEHOLDER_VARIADIC) {
-				uses_variadic_placeholder = true;
+			if (arg->attr == _IS_PLACEHOLDER_VARIADIC && uses_named_args) {
+				/* PFAs with both a variadic placeholder and named args can not
+				 * be optimized because the named arg may resolve to the
+				 * position of the placeholder: f(..., name: $v).
+				 * Arg placeholders ('?') are safe, as named args are not
+				 * allowed to override them. */
+				return NULL;
 			}
 		}
 	}

@@ -5,4 +5,4 @@ Closure application compile errors: follow variadic with un-named arg
 foo(..., $a);
 ?>
 --EXPECTF--
-Fatal error: Only named arguments may follow variadic placeholder in %s on line %d
+Fatal error: Variadic placeholder must be last in %s on line %d

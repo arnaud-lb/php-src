@@ -58,19 +58,19 @@ $tests = [
         fn(int $i, string $s): array => stuff($i, $s, 3.5, $point),
     ],
     'The ... "everything else" placeholder respects named arguments' => [
-        stuff(?, ?, ..., f: 3.5, p: $point),
+        stuff(?, ?, f: 3.5, p: $point, ...),
         fn(int $i, string $s, int $m = 0): array => stuff($i, $s, 3.5, $point, $m),
     ],
     'Prefill all parameters, making a "delayed call" or "thunk"' => [
         stuff(1, 'hi', 3.4, $point, 5, ...),
         fn(): array => stuff(1, 'hi', 3.4, $point, 5),
     ],
-    'Placeholders may be named, too.  Their order doesn\'t matter as long as they come after the ..., if any' => [
+    'Placeholders may be named, too.  Their order doesn\'t matter as long as they come before the ..., if any' => [
         stuff(?, p: $point, f: ?, s: ?, m: 4),
         fn(int $i, string $s, float $f): array => stuff($i, $s, $f, $point, 4),
     ],
-    'Placeholders may be named, too.  Their order doesn\'t matter as long as they come after the ..., if any (2)' => [
-        stuff(..., m: 4, p: $point, i: ?),
+    'Placeholders may be named, too.  Their order doesn\'t matter as long as they come before the ..., if any (2)' => [
+        stuff(m: 4, p: $point, i: ?, ...),
         fn(int $i, string $s, float $f): array => stuff($i, $s, $f, $point, 4),
     ],
 ];
@@ -148,5 +148,5 @@ foreach ($tests as $test => [$pfa, $closure]) {
 # Named arguments can be pulled "out of order", and still work (2)
 # The ... "everything else" placeholder respects named arguments
 # Prefill all parameters, making a "delayed call" or "thunk"
-# Placeholders may be named, too.  Their order doesn't matter as long as they come after the ..., if any
-# Placeholders may be named, too.  Their order doesn't matter as long as they come after the ..., if any (2)
+# Placeholders may be named, too.  Their order doesn't matter as long as they come before the ..., if any
+# Placeholders may be named, too.  Their order doesn't matter as long as they come before the ..., if any (2)

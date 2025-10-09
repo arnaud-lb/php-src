@@ -9255,15 +9255,15 @@ ZEND_VM_HANDLER(211, ZEND_SEND_PLACEHOLDER, UNUSED, CONST|UNUSED)
 		if (UNEXPECTED(!arg)) {
 			HANDLE_EXCEPTION();
 		}
-	} else {
-		arg = ZEND_CALL_VAR(EX(call), opline->result.var);
-	}
-
-	Z_TYPE_INFO_P(arg) = opline->op1.num;
-
-	if (Z_TYPE_INFO_P(arg) == _IS_PLACEHOLDER_VARIADIC) {
+		ZEND_ASSERT(opline->op1.num == _IS_PLACEHOLDER_ARG);
+		Z_TYPE_INFO_P(arg) = _IS_PLACEHOLDER_ARG;
+		Z_EXTRA_P(arg) = 0;
+	} else if (opline->op1.num == _IS_PLACEHOLDER_VARIADIC) {
 		Z_EXTRA_P(ZEND_CALL_ARG(call, 1)) = _IS_PLACEHOLDER_VARIADIC;
-	} else if (opline->op2.num == 1) {
+	} else {
+		ZEND_ASSERT(opline->op1.num == _IS_PLACEHOLDER_ARG);
+		arg = ZEND_CALL_VAR(EX(call), opline->result.var);
+		Z_TYPE_INFO_P(arg) = _IS_PLACEHOLDER_ARG;
 		Z_EXTRA_P(arg) = 0;
 	}
 

@@ -5576,10 +5576,6 @@ zval * ZEND_FASTCALL zend_handle_named_arg(
 	} else {
 		arg = ZEND_CALL_VAR_NUM(call, arg_offset);
 
-		if (UNEXPECTED(Z_TYPE_P(arg) == _IS_PLACEHOLDER_VARIADIC)) {
-			ZVAL_UNDEF(arg);
-		}
-
 		if (UNEXPECTED(!Z_ISUNDEF_P(arg))) {
 			zend_throw_error(NULL, "Named parameter $%s overwrites previous %s",
 				ZSTR_VAL(arg_name), Z_TYPE_P(arg) == _IS_PLACEHOLDER_ARG ? "placeholder" : "argument");

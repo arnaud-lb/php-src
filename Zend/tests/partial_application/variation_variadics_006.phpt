@@ -6,7 +6,7 @@ function foo($a) {
     var_dump(func_get_args());
 }
 
-$foo = foo(..., a: "a");
+$foo = foo(a: "a", ...);
 
 $foo();
 ?>

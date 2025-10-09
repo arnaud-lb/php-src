@@ -16,7 +16,7 @@ if (time() > 0) {
 }
 
 try {
-    2 |> foo(..., a: 1);
+    2 |> foo(a: 1, ...);
 } catch (\Throwable $e) {
     echo $e->getMessage(), "\n";
 }
@@ -32,9 +32,9 @@ $_main:
 0002 T1 = IS_SMALLER int(0) V2
 0003 JMPZ T1 0005
 0004 DECLARE_FUNCTION string("foo") 0
-0005 INIT_FCALL_BY_NAME 1 string("foo")
-0006 SEND_PLACEHOLDER
-0007 SEND_VAL_EX int(1) string("a")
+0005 INIT_FCALL_BY_NAME 0 string("foo")
+0006 SEND_VAL_EX int(1) string("a")
+0007 SEND_PLACEHOLDER
 0008 CHECK_PARTIAL_ARGS
 0009 T1 = CALLABLE_CONVERT_PARTIAL %d
 0010 INIT_DYNAMIC_CALL 1 T1

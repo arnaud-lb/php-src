@@ -495,15 +495,6 @@ zend_op_array *zp_compile(zval *this_ptr, zend_function *function,
 	/* Z_EXTRA(ZEND_CALL_ARG(call, 1)) is set in ZEND_SEND_PLACEHOLDER */
 	if (Z_EXTRA(argv[0]) == _IS_PLACEHOLDER_VARIADIC) {
 		variadic_partial = true;
-		if (Z_IS_PLACEHOLDER_VARIADIC_P(&argv[argc-1])
-				&& argc > function->common.num_args) {
-			/* A variadic placeholder at this position is only used to mark the
-			 * PFA variadic. We have taken note that the PFA is variadic.
-			 * The placeholder stands for the variadoc placeholder. No other
-			 * placeholders can follow. */
-			argc--;
-			new_argc--;
-		}
 		new_argc = MAX(new_argc, function->common.num_args);
 	}
 

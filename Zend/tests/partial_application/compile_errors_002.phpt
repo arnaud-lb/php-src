@@ -1,8 +1,8 @@
 --TEST--
-Closure application compile errors: only named arguments after ...
+Closure application compile errors: ... must be last
 --FILE--
 <?php
 foo(..., ?);
 ?>
 --EXPECTF--
-Fatal error: Only named arguments may follow variadic placeholder in %s on line %d
+Fatal error: Variadic placeholder must be last in %s on line %d

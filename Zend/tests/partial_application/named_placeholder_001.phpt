@@ -34,7 +34,7 @@ function bar($a = 1, $b = 2, ...$c) {
     var_dump($a, $b, $c);
 }
 
-$bar = bar(..., b: ?);
+$bar = bar(b: ?, ...);
 
 echo (string) new ReflectionFunction($bar);
 
@@ -47,7 +47,7 @@ try {
 }
 
 try {
-    $bar = $bar(..., c: ?);
+    $bar = $bar(c: ?, ...);
 } catch (\Throwable $e) {
     echo $e->getMessage(), "\n";
 }

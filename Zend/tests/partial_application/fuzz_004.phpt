@@ -6,7 +6,7 @@ function foo($a, $b) {
     return $a + $b;
 }
 
-$foo = foo(..., b: 10);
+$foo = foo(b: 10, ...);
 
 try {
     $foo->__invoke(UNDEFINED);

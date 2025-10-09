@@ -6,7 +6,7 @@ function foo($a, $b) {
     return $a + $b;
 }
 
-$foo = foo(..., b: 10);
+$foo = foo(b: 10, ...);
 
 if ($foo->__invoke(32) == 42) {
     echo "OK\n";
