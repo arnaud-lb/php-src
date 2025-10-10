@@ -4653,6 +4653,7 @@ ZEND_API void zend_unfinished_calls_gc(zend_execute_data *execute_data, zend_exe
 				case ZEND_DO_UCALL:
 				case ZEND_DO_FCALL_BY_NAME:
 				case ZEND_CALLABLE_CONVERT:
+				case ZEND_CALLABLE_CONVERT_PARTIAL:
 					level++;
 					break;
 				case ZEND_INIT_FCALL:

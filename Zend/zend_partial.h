@@ -27,6 +27,7 @@ void zend_partial_startup(void);
 
 void zend_partial_create(zval *result, zval *this_ptr, zend_function *function,
 		uint32_t argc, zval *argv, zend_array *extra_named_params,
+		const zend_array *named_positions,
 		const zend_op_array *declaring_op_array,
 		const zend_op *declaring_opline, void **cache_slot);
 

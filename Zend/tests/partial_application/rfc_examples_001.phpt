@@ -65,11 +65,11 @@ $tests = [
         stuff(1, 'hi', 3.4, $point, 5, ...),
         fn(): array => stuff(1, 'hi', 3.4, $point, 5),
     ],
-    'Placeholders may be named, too.  Their order doesn\'t matter as long as they come before the ..., if any' => [
+    'Placeholders may be named, too' => [
         stuff(?, p: $point, f: ?, s: ?, m: 4),
-        fn(int $i, string $s, float $f): array => stuff($i, $s, $f, $point, 4),
+        fn(int $i, float $f, string $s): array => stuff($i, $s, $f, $point, 4),
     ],
-    'Placeholders may be named, too.  Their order doesn\'t matter as long as they come before the ..., if any (2)' => [
+    'Placeholders may be named, too (2)' => [
         stuff(m: 4, p: $point, i: ?, ...),
         fn(int $i, string $s, float $f): array => stuff($i, $s, $f, $point, 4),
     ],
@@ -82,7 +82,11 @@ foreach ($tests as $test => [$pfa, $closure]) {
 
     try {
         if (count($pfaReflector->getParameters()) !== count($closureReflector->getParameters())) {
-            throw new Exception("Arity does not match");
+            throw new Exception(sprintf(
+                "Arity does not match: expected %d, got %d",
+                count($closureReflector->getParameters()),
+                count($pfaReflector->getParameters()),
+            ));
         }
 
         $it = new MultipleIterator();
@@ -148,5 +152,5 @@ foreach ($tests as $test => [$pfa, $closure]) {
 # Named arguments can be pulled "out of order", and still work (2)
 # The ... "everything else" placeholder respects named arguments
 # Prefill all parameters, making a "delayed call" or "thunk"
-# Placeholders may be named, too.  Their order doesn't matter as long as they come before the ..., if any
-# Placeholders may be named, too.  Their order doesn't matter as long as they come before the ..., if any (2)
+# Placeholders may be named, too
+# Placeholders may be named, too (2)

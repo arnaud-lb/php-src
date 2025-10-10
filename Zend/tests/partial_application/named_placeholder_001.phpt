@@ -38,16 +38,16 @@ $bar = bar(b: ?, ...);
 
 echo (string) new ReflectionFunction($bar);
 
-$bar(new A, new B, new C);
+$bar(new B, new A, new C);
 
 try {
-    $bar = $bar(?, a: ?);
+    $bar = bar(?, a: ?);
 } catch (\Throwable $e) {
     echo $e->getMessage(), "\n";
 }
 
 try {
-    $bar = $bar(c: ?, ...);
+    $bar = bar(c: ?, ...);
 } catch (\Throwable $e) {
     echo $e->getMessage(), "\n";
 }
@@ -99,8 +99,8 @@ Closure [ <user> static function {closure:%s:%d} ] {
   @@ %snamed_placeholder_001.php 34 - 34
 
   - Parameters [3] {
-    Parameter #0 [ <optional> $a = 1 ]
-    Parameter #1 [ <optional> $b = 2 ]
+    Parameter #0 [ <optional> $b = 2 ]
+    Parameter #1 [ <optional> $a = 1 ]
     Parameter #2 [ <optional> ...$c ]
   }
 }

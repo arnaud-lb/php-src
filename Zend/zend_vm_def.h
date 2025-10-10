@@ -9257,14 +9257,16 @@ ZEND_VM_HANDLER(211, ZEND_SEND_PLACEHOLDER, UNUSED, CONST|UNUSED)
 		}
 		ZEND_ASSERT(opline->op1.num == _IS_PLACEHOLDER_ARG);
 		Z_TYPE_INFO_P(arg) = _IS_PLACEHOLDER_ARG;
-		Z_EXTRA_P(arg) = 0;
+		Z_EXTRA_P(ZEND_CALL_ARG(call, 1)) = 0;
 	} else if (opline->op1.num == _IS_PLACEHOLDER_VARIADIC) {
+		/* TODO: maybe find another way to pass the variadic flag, as this
+		 * requires to initialize this slot for each placeholder. */
 		Z_EXTRA_P(ZEND_CALL_ARG(call, 1)) = _IS_PLACEHOLDER_VARIADIC;
 	} else {
 		ZEND_ASSERT(opline->op1.num == _IS_PLACEHOLDER_ARG);
 		arg = ZEND_CALL_VAR(EX(call), opline->result.var);
 		Z_TYPE_INFO_P(arg) = _IS_PLACEHOLDER_ARG;
-		Z_EXTRA_P(arg) = 0;
+		Z_EXTRA_P(ZEND_CALL_ARG(call, 1)) = 0;
 	}
 
 	ZEND_VM_NEXT_OPCODE();
@@ -9802,19 +9804,21 @@ ZEND_VM_HANDLER(202, ZEND_CALLABLE_CONVERT, UNUSED, UNUSED, NUM|CACHE_SLOT)
 	ZEND_VM_NEXT_OPCODE();
 }
 
-ZEND_VM_HANDLER(212, ZEND_CALLABLE_CONVERT_PARTIAL, NUM, UNUSED, CACHE_SLOT)
+ZEND_VM_HANDLER(212, ZEND_CALLABLE_CONVERT_PARTIAL, NUM, CONST|UNUSED, CACHE_SLOT)
 {
 	USE_OPLINE
 	SAVE_OPLINE();
 
 	zend_execute_data *call = EX(call);
 	void **cache_slot = CACHE_ADDR(opline->op1.num);
+	zval *named_positions = GET_OP2_ZVAL_PTR();
 
 	zend_partial_create(EX_VAR(opline->result.var),
 		&call->This, call->func,
 		ZEND_CALL_NUM_ARGS(call), ZEND_CALL_ARG(call, 1),
 		ZEND_CALL_INFO(call) & ZEND_CALL_HAS_EXTRA_NAMED_PARAMS ?
 			call->extra_named_params : NULL,
+		OP2_TYPE == IS_CONST ? Z_ARRVAL_P(named_positions) : NULL,
 		&EX(func)->op_array, opline, cache_slot);
 
 	if (ZEND_CALL_INFO(call) & ZEND_CALL_HAS_EXTRA_NAMED_PARAMS) {

@@ -4008,27 +4008,74 @@ ZEND_API uint8_t zend_get_call_op(const zend_op *init_op, const zend_function *f
 }
 /* }}} */
 
-void zend_compile_call_partial(znode *result, zend_ast *call_ast,
+void zend_compile_call_partial(znode *result, const zend_ast *call_ast,
 		uint32_t arg_count, bool may_have_extra_named_args, uint32_t opnum_init,
-		zend_function *fbc) { /* {{{ */
+		const zend_function *fbc) { /* {{{ */
 
-	zend_op *opline = &CG(active_op_array)->opcodes[opnum_init];
+	zend_op *init_opline = &CG(active_op_array)->opcodes[opnum_init];
 
-	opline->extended_value = arg_count;
+	init_opline->extended_value = arg_count;
 
-	ZEND_ASSERT(opline->opcode != ZEND_NEW);
+	ZEND_ASSERT(init_opline->opcode != ZEND_NEW);
 
-	if (opline->opcode == ZEND_INIT_FCALL) {
-		opline->op1.num = zend_vm_calc_used_stack(arg_count, fbc);
+	if (init_opline->opcode == ZEND_INIT_FCALL) {
+		init_opline->op1.num = zend_vm_calc_used_stack(arg_count, fbc);
 	}
 
-	opline = zend_emit_op_tmp(result, ZEND_CALLABLE_CONVERT_PARTIAL,
+	zend_op *opline = zend_emit_op_tmp(result, ZEND_CALLABLE_CONVERT_PARTIAL,
 				NULL, NULL);
 
 	opline->op1.num = zend_alloc_cache_slots(2);
 
 	if (may_have_extra_named_args) {
 		opline->extended_value = ZEND_FCALL_MAY_HAVE_EXTRA_NAMED_PARAMS;
+	}
+
+	/* Collect placeholder order */
+	int level = 0;
+	zval order;
+	ZVAL_UNDEF(&order);
+	for (zend_op *send_op = init_opline+1; send_op < opline; send_op++) {
+		switch (send_op->opcode) {
+			case ZEND_INIT_FCALL:
+			case ZEND_INIT_FCALL_BY_NAME:
+			case ZEND_INIT_NS_FCALL_BY_NAME:
+			case ZEND_INIT_DYNAMIC_CALL:
+			case ZEND_INIT_USER_CALL:
+			case ZEND_INIT_METHOD_CALL:
+			case ZEND_INIT_STATIC_METHOD_CALL:
+			case ZEND_NEW:
+				level++;
+				break;
+			case ZEND_DO_FCALL:
+			case ZEND_DO_ICALL:
+			case ZEND_DO_UCALL:
+			case ZEND_DO_FCALL_BY_NAME:
+			case ZEND_CALLABLE_CONVERT:
+			case ZEND_CALLABLE_CONVERT_PARTIAL:
+				level--;
+				break;
+			case ZEND_SEND_PLACEHOLDER:
+				if (level != 0) {
+					break;
+				}
+				if (send_op->op2_type == IS_CONST) {
+					if (Z_ISUNDEF(order)) {
+						array_init(&order);
+					}
+					zval tmp;
+					ZVAL_LONG(&tmp, zend_hash_num_elements(Z_ARRVAL(order)));
+					zend_hash_add(Z_ARRVAL(order), Z_STR_P(CT_CONSTANT(send_op->op2)), &tmp);
+				}
+				break;
+			default:
+				break;
+		}
+	}
+
+	if (!Z_ISUNDEF(order)) {
+		opline->op2.constant = zend_add_literal(&order);
+		opline->op2_type = IS_CONST;
 	}
 }
 
@@ -4123,7 +4170,7 @@ static bool zend_compile_function_name(znode *name_node, zend_ast *name_ast) /* 
 }
 /* }}} */
 
-static void zend_compile_dynamic_call(znode *result, znode *name_node, zend_ast *call_ast, zend_ast *args_ast, uint32_t lineno) /* {{{ */
+static void zend_compile_dynamic_call(znode *result, znode *name_node, const zend_ast *call_ast, zend_ast *args_ast, uint32_t lineno) /* {{{ */
 {
 	if (name_node->op_type == IS_CONST && Z_TYPE(name_node->u.constant) == IS_STRING) {
 		const char *colon;
@@ -4163,6 +4210,7 @@ static inline bool zend_args_contain_unpack_or_named(const zend_ast_list *args) 
 	for (i = 0; i < args->children; ++i) {
 		const zend_ast *arg = args->child[i];
 		if (arg->kind == ZEND_AST_UNPACK || arg->kind == ZEND_AST_NAMED_ARG) {
+			return 1;
 		}
 	}
 	return 0;
