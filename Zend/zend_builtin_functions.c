@@ -34,10 +34,13 @@
 
 /* }}} */
 
+ZEND_API zend_class_entry *zend_ce_context_manager = NULL;
+
 ZEND_MINIT_FUNCTION(core) { /* {{{ */
 	zend_register_default_classes();
 
 	zend_standard_class_def = register_class_stdClass();
+	zend_ce_context_manager = register_class_ContextManager();
 
 	return SUCCESS;
 }

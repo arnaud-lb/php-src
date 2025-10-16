@@ -4844,12 +4844,17 @@ ZEND_VM_HANDLER(107, ZEND_CATCH, CONST, JMP_ADDR, LAST_CATCH|CACHE_SLOT)
 	exception = EG(exception);
 	EG(exception) = NULL;
 	if (RETURN_VALUE_USED(opline)) {
-		/* Always perform a strict assignment. There is a reasonable expectation that if you
-		 * write "catch (Exception $e)" then $e will actually be instanceof Exception. As such,
-		 * we should not permit coercion to string here. */
-		zval tmp;
-		ZVAL_OBJ(&tmp, exception);
-		zend_assign_to_variable(EX_VAR(opline->result.var), &tmp, IS_TMP_VAR, /* strict */ 1);
+		if (opline->result_type == IS_CV) {
+			/* Always perform a strict assignment. There is a reasonable expectation that if you
+			 * write "catch (Exception $e)" then $e will actually be instanceof Exception. As such,
+			 * we should not permit coercion to string here. */
+			zval tmp;
+			ZVAL_OBJ(&tmp, exception);
+			zend_assign_to_variable(EX_VAR(opline->result.var), &tmp, IS_TMP_VAR, /* strict */ 1);
+		} else {
+			ZEND_ASSERT(opline->result_type == IS_TMP_VAR);
+			ZVAL_OBJ(EX_VAR(opline->result.var), exception);
+		}
 	} else {
 		OBJ_RELEASE(exception);
 	}
@@ -9945,6 +9950,33 @@ ZEND_VM_HANDLER(209, ZEND_INIT_PARENT_PROPERTY_HOOK_CALL, CONST, UNUSED|NUM, NUM
 	call->prev_execute_data = EX(call);
 	EX(call) = call;
 	ZEND_VM_NEXT_OPCODE();
+}
+
+ZEND_VM_HANDLER(211, ZEND_INIT_WITH, CONST|TMP|VAR|CV, UNUSED)
+{
+	USE_OPLINE
+
+	zval *op1 = GET_OP1_ZVAL_PTR_DEREF(BP_VAR_R);
+
+	if (EXPECTED(Z_TYPE_P(op1) == IS_OBJECT)) {
+		if (UNEXPECTED(!instanceof_function_slow(Z_OBJCE_P(op1), zend_ce_context_manager))) {
+			ZEND_VM_C_GOTO(type_error);
+		}
+	} else {
+		/* TODO: resources */
+		ZEND_VM_C_GOTO(type_error);
+	}
+
+	ZVAL_COPY_VALUE(EX_VAR(opline->result.var), op1);
+	ZEND_VM_NEXT_OPCODE();
+
+ZEND_VM_C_LABEL(type_error):
+	SAVE_OPLINE();
+
+	zend_throw_invalid_context_manager_error(op1 OPLINE_CC EXECUTE_DATA_CC);
+
+	FREE_OP1();
+	HANDLE_EXCEPTION();
 }
 
 ZEND_VM_HOT_TYPE_SPEC_HANDLER(ZEND_JMP, (OP_JMP_ADDR(op, op->op1) > op), ZEND_JMP_FORWARD, JMP_ADDR, ANY)

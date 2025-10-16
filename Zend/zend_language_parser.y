@@ -183,6 +183,7 @@ static YYSIZE_T zend_yytnamerr(char*, const char*);
 %token <ident> T_FUNC_C          "'__FUNCTION__'"
 %token <ident> T_PROPERTY_C      "'__PROPERTY__'"
 %token <ident> T_NS_C            "'__NAMESPACE__'"
+%token <ident> T_WITH            "'with'"
 
 %token END 0 "end of file"
 %token T_ATTRIBUTE    "'#['"
@@ -271,7 +272,7 @@ static YYSIZE_T zend_yytnamerr(char*, const char*);
 %type <ast> encaps_var encaps_var_offset isset_variables
 %type <ast> top_statement_list use_declarations const_list inner_statement_list if_stmt
 %type <ast> alt_if_stmt for_cond_exprs for_exprs switch_case_list global_var_list static_var_list
-%type <ast> echo_expr_list unset_variables catch_name_list catch_list optional_variable parameter_list class_statement_list
+%type <ast> echo_expr_list unset_variables catch_name_list catch_list optional_variable optional_with_as_variable parameter_list class_statement_list
 %type <ast> implements_list case_list if_stmt_without_else
 %type <ast> non_empty_parameter_list argument_list non_empty_argument_list property_list
 %type <ast> class_const_list class_const_decl class_name_list trait_adaptations method_body non_empty_for_exprs
@@ -542,7 +543,15 @@ statement:
 	|	T_GOTO T_STRING ';' { $$ = zend_ast_create(ZEND_AST_GOTO, $2); }
 	|	T_STRING ':' { $$ = zend_ast_create(ZEND_AST_LABEL, $1); }
 	|	T_VOID_CAST expr ';' { $$ = zend_ast_create(ZEND_AST_CAST_VOID, $2); }
+	|	T_WITH '(' expr optional_with_as_variable ')' '{' inner_statement_list '}'
+			{ $$ = zend_ast_create(ZEND_AST_WITH, $3, $4, $7); }
 ;
+
+optional_with_as_variable:
+		%empty { $$ = NULL; }
+	|	T_AS variable { $$ = $2; }
+;
+
 
 catch_list:
 		%empty

@@ -630,6 +630,8 @@ EMPTY_SWITCH_DEFAULT_CASE()
 	_(ZEND_STR_AUTOGLOBAL_ENV,         "_ENV") \
 	_(ZEND_STR_AUTOGLOBAL_REQUEST,     "_REQUEST") \
 	_(ZEND_STR_COUNT,                  "count") \
+	_(ZEND_STR_ENTER_CONTEXT,          "enterContext") \
+	_(ZEND_STR_EXIT_CONTEXT,           "exitContext") \
 	_(ZEND_STR_SENSITIVEPARAMETER,     "SensitiveParameter") \
 	_(ZEND_STR_CONST_EXPR_PLACEHOLDER, "[constant expression]") \
 	_(ZEND_STR_DEPRECATED_CAPITALIZED, "Deprecated") \

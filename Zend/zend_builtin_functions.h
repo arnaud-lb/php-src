@@ -23,6 +23,7 @@
 #include "zend_types.h"
 
 typedef struct _zval_struct zval;
+extern ZEND_API zend_class_entry *zend_ce_context_manager;
 
 zend_result zend_startup_builtin_functions(void);
 
