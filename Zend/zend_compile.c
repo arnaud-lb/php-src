@@ -6996,7 +6996,7 @@ static void zend_compile_try(zend_ast *ast) /* {{{ */
 			if (var_name) {
 				opline->result_type = var_name ? IS_CV : IS_UNUSED;
 				opline->result.var = var_name ? lookup_cv(var_name) : -1;
-			} else if (var_ast->kind == ZEND_AST_ZNODE) {
+			} else if (var_ast && var_ast->kind == ZEND_AST_ZNODE) {
 				znode *node = zend_ast_get_znode(var_ast);
 				ZEND_ASSERT(node->op_type == IS_TMP_VAR);
 				opline->result_type = IS_TMP_VAR;
