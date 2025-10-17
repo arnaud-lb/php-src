@@ -12,22 +12,18 @@
    | obtain it through the world-wide-web, please send a note to          |
    | license@zend.com so we can mail you a copy immediately.              |
    +----------------------------------------------------------------------+
-   | Authors: Andi Gutmans <andi@php.net>                                 |
-   |          Zeev Suraski <zeev@php.net>                                 |
-   +----------------------------------------------------------------------+
 */
 
-#ifndef ZEND_BUILTIN_FUNCTIONS_H
-#define ZEND_BUILTIN_FUNCTIONS_H
+#ifndef ZEND_CONTEXT_MANAGERS_H
+#define ZEND_CONTEXT_MANAGERS_H
 
-#include "zend_types.h"
+#include "zend_API.h"
 
-typedef struct _zval_struct zval;
+extern ZEND_API zend_class_entry *zend_ce_context_manager;
+extern ZEND_API zend_class_entry *zend_ce_resource_context_manager;
 
-zend_result zend_startup_builtin_functions(void);
+ZEND_MINIT_FUNCTION(context_managers);
 
-BEGIN_EXTERN_C()
-ZEND_API void zend_fetch_debug_backtrace(zval *return_value, int skip_last, int options, int limit);
-END_EXTERN_C()
+void zend_resource_context_manager_init(zend_object *obj, zend_resource *res);
 
-#endif /* ZEND_BUILTIN_FUNCTIONS_H */
+#endif /* ZEND_CONTEXT_MANAGERS_H */

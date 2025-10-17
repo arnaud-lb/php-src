@@ -11900,14 +11900,18 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_INIT_WITH_SPE
 {
 	USE_OPLINE
 
+	zval obj;
 	zval *op1 = RT_CONSTANT(opline, opline->op1);
 
 	if (EXPECTED(Z_TYPE_P(op1) == IS_OBJECT)) {
 		if (UNEXPECTED(!instanceof_function_slow(Z_OBJCE_P(op1), zend_ce_context_manager))) {
 			goto type_error;
 		}
+	} else if (EXPECTED(Z_TYPE_P(op1) == IS_RESOURCE)) {
+		object_init_ex(&obj, zend_ce_resource_context_manager);
+		zend_resource_context_manager_init(Z_OBJ(obj), Z_RES_P(op1));
+		op1 = &obj;
 	} else {
-		/* TODO: resources */
 		goto type_error;
 	}
 
@@ -22416,14 +22420,18 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_INIT_WITH_SPE
 {
 	USE_OPLINE
 
+	zval obj;
 	zval *op1 = _get_zval_ptr_tmp(opline->op1.var EXECUTE_DATA_CC);
 
 	if (EXPECTED(Z_TYPE_P(op1) == IS_OBJECT)) {
 		if (UNEXPECTED(!instanceof_function_slow(Z_OBJCE_P(op1), zend_ce_context_manager))) {
 			goto type_error;
 		}
+	} else if (EXPECTED(Z_TYPE_P(op1) == IS_RESOURCE)) {
+		object_init_ex(&obj, zend_ce_resource_context_manager);
+		zend_resource_context_manager_init(Z_OBJ(obj), Z_RES_P(op1));
+		op1 = &obj;
 	} else {
-		/* TODO: resources */
 		goto type_error;
 	}
 
@@ -31498,14 +31506,18 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_INIT_WITH_SPE
 {
 	USE_OPLINE
 
+	zval obj;
 	zval *op1 = _get_zval_ptr_var_deref(opline->op1.var EXECUTE_DATA_CC);
 
 	if (EXPECTED(Z_TYPE_P(op1) == IS_OBJECT)) {
 		if (UNEXPECTED(!instanceof_function_slow(Z_OBJCE_P(op1), zend_ce_context_manager))) {
 			goto type_error;
 		}
+	} else if (EXPECTED(Z_TYPE_P(op1) == IS_RESOURCE)) {
+		object_init_ex(&obj, zend_ce_resource_context_manager);
+		zend_resource_context_manager_init(Z_OBJ(obj), Z_RES_P(op1));
+		op1 = &obj;
 	} else {
-		/* TODO: resources */
 		goto type_error;
 	}
 
@@ -52654,14 +52666,18 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_INIT_WITH_SPE
 {
 	USE_OPLINE
 
+	zval obj;
 	zval *op1 = _get_zval_ptr_cv_deref_BP_VAR_R(opline->op1.var EXECUTE_DATA_CC);
 
 	if (EXPECTED(Z_TYPE_P(op1) == IS_OBJECT)) {
 		if (UNEXPECTED(!instanceof_function_slow(Z_OBJCE_P(op1), zend_ce_context_manager))) {
 			goto type_error;
 		}
+	} else if (EXPECTED(Z_TYPE_P(op1) == IS_RESOURCE)) {
+		object_init_ex(&obj, zend_ce_resource_context_manager);
+		zend_resource_context_manager_init(Z_OBJ(obj), Z_RES_P(op1));
+		op1 = &obj;
 	} else {
-		/* TODO: resources */
 		goto type_error;
 	}
 
@@ -67355,14 +67371,18 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_WITH_SPEC_CON
 {
 	USE_OPLINE
 
+	zval obj;
 	zval *op1 = RT_CONSTANT(opline, opline->op1);
 
 	if (EXPECTED(Z_TYPE_P(op1) == IS_OBJECT)) {
 		if (UNEXPECTED(!instanceof_function_slow(Z_OBJCE_P(op1), zend_ce_context_manager))) {
 			goto type_error;
 		}
+	} else if (EXPECTED(Z_TYPE_P(op1) == IS_RESOURCE)) {
+		object_init_ex(&obj, zend_ce_resource_context_manager);
+		zend_resource_context_manager_init(Z_OBJ(obj), Z_RES_P(op1));
+		op1 = &obj;
 	} else {
-		/* TODO: resources */
 		goto type_error;
 	}
 
@@ -77771,14 +77791,18 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_WITH_SPEC_TMP
 {
 	USE_OPLINE
 
+	zval obj;
 	zval *op1 = _get_zval_ptr_tmp(opline->op1.var EXECUTE_DATA_CC);
 
 	if (EXPECTED(Z_TYPE_P(op1) == IS_OBJECT)) {
 		if (UNEXPECTED(!instanceof_function_slow(Z_OBJCE_P(op1), zend_ce_context_manager))) {
 			goto type_error;
 		}
+	} else if (EXPECTED(Z_TYPE_P(op1) == IS_RESOURCE)) {
+		object_init_ex(&obj, zend_ce_resource_context_manager);
+		zend_resource_context_manager_init(Z_OBJ(obj), Z_RES_P(op1));
+		op1 = &obj;
 	} else {
-		/* TODO: resources */
 		goto type_error;
 	}
 
@@ -86853,14 +86877,18 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_WITH_SPEC_VAR
 {
 	USE_OPLINE
 
+	zval obj;
 	zval *op1 = _get_zval_ptr_var_deref(opline->op1.var EXECUTE_DATA_CC);
 
 	if (EXPECTED(Z_TYPE_P(op1) == IS_OBJECT)) {
 		if (UNEXPECTED(!instanceof_function_slow(Z_OBJCE_P(op1), zend_ce_context_manager))) {
 			goto type_error;
 		}
+	} else if (EXPECTED(Z_TYPE_P(op1) == IS_RESOURCE)) {
+		object_init_ex(&obj, zend_ce_resource_context_manager);
+		zend_resource_context_manager_init(Z_OBJ(obj), Z_RES_P(op1));
+		op1 = &obj;
 	} else {
-		/* TODO: resources */
 		goto type_error;
 	}
 
@@ -107907,14 +107935,18 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_INIT_WITH_SPEC_CV_
 {
 	USE_OPLINE
 
+	zval obj;
 	zval *op1 = _get_zval_ptr_cv_deref_BP_VAR_R(opline->op1.var EXECUTE_DATA_CC);
 
 	if (EXPECTED(Z_TYPE_P(op1) == IS_OBJECT)) {
 		if (UNEXPECTED(!instanceof_function_slow(Z_OBJCE_P(op1), zend_ce_context_manager))) {
 			goto type_error;
 		}
+	} else if (EXPECTED(Z_TYPE_P(op1) == IS_RESOURCE)) {
+		object_init_ex(&obj, zend_ce_resource_context_manager);
+		zend_resource_context_manager_init(Z_OBJ(obj), Z_RES_P(op1));
+		op1 = &obj;
 	} else {
-		/* TODO: resources */
 		goto type_error;
 	}
 

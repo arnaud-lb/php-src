@@ -56,6 +56,7 @@ ZEND_API zval* ZEND_FASTCALL zend_list_insert(void *ptr, int type);
 ZEND_API void ZEND_FASTCALL zend_list_free(zend_resource *res);
 ZEND_API zend_result ZEND_FASTCALL zend_list_delete(zend_resource *res);
 ZEND_API void ZEND_FASTCALL zend_list_close(zend_resource *res);
+ZEND_API void ZEND_FASTCALL zend_resource_dtor(zend_resource *res);
 
 ZEND_API zend_resource *zend_register_resource(void *rsrc_pointer, int rsrc_type);
 ZEND_API void *zend_fetch_resource(zend_resource *res, const char *resource_type_name, int resource_type);

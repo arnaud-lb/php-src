@@ -9956,14 +9956,18 @@ ZEND_VM_HANDLER(211, ZEND_INIT_WITH, CONST|TMP|VAR|CV, UNUSED)
 {
 	USE_OPLINE
 
+	zval obj;
 	zval *op1 = GET_OP1_ZVAL_PTR_DEREF(BP_VAR_R);
 
 	if (EXPECTED(Z_TYPE_P(op1) == IS_OBJECT)) {
 		if (UNEXPECTED(!instanceof_function_slow(Z_OBJCE_P(op1), zend_ce_context_manager))) {
 			ZEND_VM_C_GOTO(type_error);
 		}
+	} else if (EXPECTED(Z_TYPE_P(op1) == IS_RESOURCE)) {
+		object_init_ex(&obj, zend_ce_resource_context_manager);
+		zend_resource_context_manager_init(Z_OBJ(obj), Z_RES_P(op1));
+		op1 = &obj;
 	} else {
-		/* TODO: resources */
 		ZEND_VM_C_GOTO(type_error);
 	}
 

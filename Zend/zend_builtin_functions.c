@@ -31,16 +31,16 @@
 #include "zend_generators.h"
 #include "zend_builtin_functions_arginfo.h"
 #include "zend_smart_str.h"
+#include "zend_context_managers.h"
 
 /* }}} */
-
-ZEND_API zend_class_entry *zend_ce_context_manager = NULL;
 
 ZEND_MINIT_FUNCTION(core) { /* {{{ */
 	zend_register_default_classes();
 
 	zend_standard_class_def = register_class_stdClass();
-	zend_ce_context_manager = register_class_ContextManager();
+
+	ZEND_MINIT(context_managers)(INIT_FUNC_ARGS_PASSTHRU);
 
 	return SUCCESS;
 }

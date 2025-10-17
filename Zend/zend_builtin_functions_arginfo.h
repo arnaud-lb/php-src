@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 6b5645c56159c5a49cf0c111f66f3dd03b597709 */
+ * Stub hash: 9b49f527064695c812cd204d9efc63c13681d942 */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_clone, 0, 1, IS_OBJECT, 0)
 	ZEND_ARG_TYPE_INFO(0, object, IS_OBJECT, 0)
@@ -233,13 +233,6 @@ ZEND_END_ARG_INFO()
 
 #define arginfo_gc_status arginfo_func_get_args
 
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_ContextManager_enterContext, 0, 0, IS_MIXED, 0)
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_ContextManager_exitContext, 0, 0, _IS_BOOL, 1)
-	ZEND_ARG_OBJ_INFO_WITH_DEFAULT_VALUE(0, e, Throwable, 1, "null")
-ZEND_END_ARG_INFO()
-
 
 ZEND_FRAMELESS_FUNCTION(property_exists, 2);
 static const zend_frameless_function_info frameless_function_infos_property_exists[] = {
@@ -387,12 +380,6 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_FE_END
 };
 
-static const zend_function_entry class_ContextManager_methods[] = {
-	ZEND_RAW_FENTRY("enterContext", NULL, arginfo_class_ContextManager_enterContext, ZEND_ACC_PUBLIC|ZEND_ACC_ABSTRACT, NULL, NULL)
-	ZEND_RAW_FENTRY("exitContext", NULL, arginfo_class_ContextManager_exitContext, ZEND_ACC_PUBLIC|ZEND_ACC_ABSTRACT, NULL, NULL)
-	ZEND_FE_END
-};
-
 static zend_class_entry *register_class_stdClass(void)
 {
 	zend_class_entry ce, *class_entry;
@@ -403,16 +390,6 @@ static zend_class_entry *register_class_stdClass(void)
 	zend_string *attribute_name_AllowDynamicProperties_class_stdClass_0 = zend_string_init_interned("AllowDynamicProperties", sizeof("AllowDynamicProperties") - 1, true);
 	zend_add_class_attribute(class_entry, attribute_name_AllowDynamicProperties_class_stdClass_0, 0);
 	zend_string_release_ex(attribute_name_AllowDynamicProperties_class_stdClass_0, true);
-
-	return class_entry;
-}
-
-static zend_class_entry *register_class_ContextManager(void)
-{
-	zend_class_entry ce, *class_entry;
-
-	INIT_CLASS_ENTRY(ce, "ContextManager", class_ContextManager_methods);
-	class_entry = zend_register_internal_interface(&ce);
 
 	return class_entry;
 }

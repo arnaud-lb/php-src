@@ -7,13 +7,6 @@ class stdClass
 {
 }
 
-interface ContextManager
-{
-    public function enterContext(): mixed;
-
-    public function exitContext(?\Throwable $e = null): ?bool;
-}
-
 /** @refcount 1 */
 function clone(object $object, array $withProperties = []): object {}
 
