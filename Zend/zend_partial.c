@@ -452,6 +452,113 @@ static zend_ast *zp_param_attributes_to_ast(zend_function *function,
 	return attributes_ast;
 }
 
+zend_ast *zp_compile_forwarding_call(
+	zval *this_ptr, zend_function *function,
+	uint32_t argc, zval *argv, zend_array *extra_named_params,
+	zend_string **param_names, bool variadic_partial, uint32_t num_args,
+	zend_class_entry *called_scope, zend_type return_type,
+	bool forward_superfluous_args,
+	zend_ast *stmts_ast)
+{
+	/* Generate function body */
+	zend_ast *args_ast = zend_ast_create_list(0, ZEND_AST_ARG_LIST);
+	for (uint32_t offset = 0; offset < argc; offset++) {
+		if (Z_ISUNDEF(argv[offset])) {
+			/* Argument was not passed. Pass its default value. */
+			if (offset < function->common.required_num_args) {
+				zend_argument_error(zend_ce_argument_count_error, offset + 1, "not passed");
+				/* TODO: cleanup */
+				return NULL;
+			}
+			zval default_value;
+			if (zp_get_param_default_value(&default_value, function, offset) == FAILURE) {
+				/* TODO: cleanup */
+				return NULL;
+			}
+			zend_ast *default_value_ast;
+			if (Z_TYPE(default_value) == IS_CONSTANT_AST) {
+				default_value_ast = zend_ast_dup(Z_ASTVAL(default_value));
+			} else {
+				default_value_ast = zend_ast_create_zval(&default_value);
+			}
+			args_ast = zend_ast_list_add(args_ast, default_value_ast);
+		} else {
+			args_ast = zend_ast_list_add(args_ast, zend_ast_create(ZEND_AST_VAR,
+						zend_ast_create_zval_from_str(zend_string_copy(param_names[offset]))));
+		}
+	}
+	if (extra_named_params) {
+		args_ast = zend_ast_list_add(args_ast, zend_ast_create(ZEND_AST_UNPACK,
+					zend_ast_create(ZEND_AST_VAR,
+						zend_ast_create_zval_from_str(zend_string_copy(param_names[argc + variadic_partial])))));
+	}
+	if (variadic_partial) {
+		if (function->common.fn_flags & ZEND_ACC_VARIADIC) {
+			args_ast = zend_ast_list_add(args_ast, zend_ast_create(ZEND_AST_UNPACK,
+						zend_ast_create(ZEND_AST_VAR,
+							zend_ast_create_zval_from_str(zend_string_copy(param_names[argc])))));
+		} else if (forward_superfluous_args) {
+			/* When a '...' placeholder is used, and the underlying function is
+			 * not variadic, superfluous arguments are forwarded.
+			 * Add a ...array_slice(func_get_args(), n) argument, which should
+			 * be compiled as ZEND_AST_UNPACK + ZEND_FUNC_GET_ARGS. */
+
+			zend_ast *func_get_args_name_ast = zend_ast_create_zval_from_str(
+					zend_string_copy(ZSTR_KNOWN(ZEND_STR_FUNC_GET_ARGS)));
+			func_get_args_name_ast->attr = ZEND_NAME_FQ;
+
+			zend_ast *array_slice_name_ast = zend_ast_create_zval_from_str(
+					zend_string_copy(ZSTR_KNOWN(ZEND_STR_ARRAY_SLICE)));
+			array_slice_name_ast->attr = ZEND_NAME_FQ;
+
+			args_ast = zend_ast_list_add(args_ast,
+				zend_ast_create(ZEND_AST_UNPACK,
+					zend_ast_create(ZEND_AST_CALL,
+							array_slice_name_ast,
+							zend_ast_create_list(2, ZEND_AST_ARG_LIST,
+								zend_ast_create(ZEND_AST_CALL,
+									func_get_args_name_ast,
+									zend_ast_create_list(0, ZEND_AST_ARG_LIST)),
+								zend_ast_create_zval_from_long(num_args)))));
+		}
+	}
+
+	zend_ast *call_ast;
+	if (function->common.fn_flags & ZEND_ACC_CLOSURE) {
+		zend_ast *fn_ast = zend_ast_create(ZEND_AST_VAR,
+					zend_ast_create_zval_from_str(zend_string_copy(param_names[argc + variadic_partial + (extra_named_params != NULL)])));
+		call_ast = zend_ast_create(ZEND_AST_CALL, fn_ast, args_ast);
+	} else if (Z_TYPE_P(this_ptr) == IS_OBJECT) {
+		zend_ast *this_ast = zend_ast_create(ZEND_AST_VAR,
+					zend_ast_create_zval_from_str(ZSTR_KNOWN(ZEND_STR_THIS)));
+		zend_ast *method_name_ast = zend_ast_create_zval_from_str(
+				zend_string_copy(function->common.function_name));
+		call_ast = zend_ast_create(ZEND_AST_METHOD_CALL, this_ast,
+				method_name_ast, args_ast);
+	} else if (called_scope) {
+		zend_ast *class_name_ast = zend_ast_create_zval_from_str(ZSTR_KNOWN(ZEND_STR_STATIC));
+		class_name_ast->attr = ZEND_NAME_NOT_FQ;
+		zend_ast *method_name_ast = zend_ast_create_zval_from_str(
+				zend_string_copy(function->common.function_name));
+		call_ast = zend_ast_create(ZEND_AST_STATIC_CALL, class_name_ast,
+				method_name_ast, args_ast);
+	} else {
+		zend_ast *func_name_ast = zend_ast_create_zval_from_str(zend_string_copy(function->common.function_name));
+		func_name_ast->attr = ZEND_NAME_FQ;
+		call_ast = zend_ast_create(ZEND_AST_CALL, func_name_ast, args_ast);
+	}
+
+	/* Void functions can not 'return $expr' */
+	if (ZEND_TYPE_FULL_MASK(return_type) & MAY_BE_VOID) {
+		stmts_ast = zend_ast_list_add(stmts_ast, call_ast);
+	} else {
+		zend_ast *return_ast = zend_ast_create(ZEND_AST_RETURN, call_ast);
+		stmts_ast = zend_ast_list_add(stmts_ast, return_ast);
+	}
+
+	return stmts_ast;
+}
+
 zend_op_array *zp_compile(zval *this_ptr, zend_function *function,
 		uint32_t argc, zval *argv, zend_array *extra_named_params,
 		const zend_op_array *declaring_op_array,
@@ -621,69 +728,6 @@ zend_op_array *zp_compile(zval *this_ptr, zend_function *function,
 				NULL, NULL, NULL, NULL));
 	}
 
-	/* Generate function body */
-	zend_ast *args_ast = zend_ast_create_list(0, ZEND_AST_ARG_LIST);
-	for (uint32_t offset = 0; offset < argc; offset++) {
-		if (Z_ISUNDEF(argv[offset])) {
-			/* Argument was not passed. Pass its default value. */
-			if (offset < function->common.required_num_args) {
-				zend_argument_error(zend_ce_argument_count_error, offset + 1, "not passed");
-				// TODO: proper cleanup
-				goto clean_argv;
-			}
-			zval default_value;
-			if (zp_get_param_default_value(&default_value, function, offset) == FAILURE) {
-				// TODO: proper cleanup
-				goto clean_argv;
-			}
-			zend_ast *default_value_ast;
-			if (Z_TYPE(default_value) == IS_CONSTANT_AST) {
-				default_value_ast = zend_ast_dup(Z_ASTVAL(default_value));
-			} else {
-				default_value_ast = zend_ast_create_zval(&default_value);
-			}
-			args_ast = zend_ast_list_add(args_ast, default_value_ast);
-		} else {
-			args_ast = zend_ast_list_add(args_ast, zend_ast_create(ZEND_AST_VAR,
-						zend_ast_create_zval_from_str(zend_string_copy(param_names[offset]))));
-		}
-	}
-	if (extra_named_params) {
-		args_ast = zend_ast_list_add(args_ast, zend_ast_create(ZEND_AST_UNPACK,
-					zend_ast_create(ZEND_AST_VAR,
-						zend_ast_create_zval_from_str(zend_string_copy(param_names[argc + variadic_partial])))));
-	}
-	if (variadic_partial && (function->common.fn_flags & ZEND_ACC_VARIADIC)) {
-		args_ast = zend_ast_list_add(args_ast, zend_ast_create(ZEND_AST_UNPACK,
-					zend_ast_create(ZEND_AST_VAR,
-						zend_ast_create_zval_from_str(zend_string_copy(param_names[argc])))));
-	}
-
-	zend_ast *call_ast;
-	if (function->common.fn_flags & ZEND_ACC_CLOSURE) {
-		zend_ast *fn_ast = zend_ast_create(ZEND_AST_VAR,
-					zend_ast_create_zval_from_str(zend_string_copy(param_names[argc + variadic_partial + (extra_named_params != NULL)])));
-		call_ast = zend_ast_create(ZEND_AST_CALL, fn_ast, args_ast);
-	} else if (Z_TYPE_P(this_ptr) == IS_OBJECT) {
-		zend_ast *this_ast = zend_ast_create(ZEND_AST_VAR,
-					zend_ast_create_zval_from_str(ZSTR_KNOWN(ZEND_STR_THIS)));
-		zend_ast *method_name_ast = zend_ast_create_zval_from_str(
-				zend_string_copy(function->common.function_name));
-		call_ast = zend_ast_create(ZEND_AST_METHOD_CALL, this_ast,
-				method_name_ast, args_ast);
-	} else if (called_scope) {
-		zend_ast *class_name_ast = zend_ast_create_zval_from_str(ZSTR_KNOWN(ZEND_STR_STATIC));
-		class_name_ast->attr = ZEND_NAME_NOT_FQ;
-		zend_ast *method_name_ast = zend_ast_create_zval_from_str(
-				zend_string_copy(function->common.function_name));
-		call_ast = zend_ast_create(ZEND_AST_STATIC_CALL, class_name_ast,
-				method_name_ast, args_ast);
-	} else {
-		zend_ast *func_name_ast = zend_ast_create_zval_from_str(zend_string_copy(function->common.function_name));
-		func_name_ast->attr = ZEND_NAME_FQ;
-		call_ast = zend_ast_create(ZEND_AST_CALL, func_name_ast, args_ast);
-	}
-
 	zend_ast *return_type_ast = NULL;
 	zend_type return_type = {0};
 	if (function->common.fn_flags & ZEND_ACC_HAS_RETURN_TYPE) {
@@ -691,12 +735,69 @@ zend_op_array *zp_compile(zval *this_ptr, zend_function *function,
 		return_type_ast = zp_type_to_ast(return_type);
 	}
 
-	/* Void functions can not 'return $expr' */
-	if (ZEND_TYPE_FULL_MASK(return_type) & MAY_BE_VOID) {
-		stmts_ast = zend_ast_list_add(stmts_ast, call_ast);
+	/**
+	 * Generate function body.
+	 *
+	 * If we may need to forward superflous arguments, do that conditionally, as
+	 * it's faster:
+	 *
+	 * if (func_num_args() <= n) {
+	 *    // normal call
+	 * } else {
+	 *    // call with superflous arg forwarding
+	 * }
+	 *
+	 * The func_num_args() call should be compiled to a single FUNC_NUM_ARGS op.
+	 */
+	if (variadic_partial && !(function->common.fn_flags & ZEND_ACC_VARIADIC)) {
+		zend_ast *no_forwarding_ast = zend_ast_create_list(0, ZEND_AST_STMT_LIST);
+		zend_ast *forwarding_ast = zend_ast_create_list(0, ZEND_AST_STMT_LIST);
+
+		no_forwarding_ast = zp_compile_forwarding_call(this_ptr, function,
+				argc, argv, extra_named_params,
+				param_names, variadic_partial, num_args,
+				called_scope, return_type, false, no_forwarding_ast);
+
+		if (!no_forwarding_ast) {
+			/* TODO: proper cleanup */
+			goto clean_argv;
+		}
+
+		forwarding_ast = zp_compile_forwarding_call(this_ptr, function,
+				argc, argv, extra_named_params,
+				param_names, variadic_partial, num_args,
+				called_scope, return_type, true, forwarding_ast);
+
+		if (!forwarding_ast) {
+			/* TODO: proper cleanup */
+			goto clean_argv;
+		}
+
+		zend_ast *func_num_args_name_ast = zend_ast_create_zval_from_str(
+				zend_string_copy(ZSTR_KNOWN(ZEND_STR_FUNC_NUM_ARGS)));
+		func_num_args_name_ast->attr = ZEND_NAME_FQ;
+
+		stmts_ast = zend_ast_list_add(stmts_ast,
+			zend_ast_create_list(2, ZEND_AST_IF,
+				zend_ast_create(ZEND_AST_IF_ELEM,
+					zend_ast_create_binary_op(ZEND_IS_SMALLER_OR_EQUAL,
+						zend_ast_create(ZEND_AST_CALL, func_num_args_name_ast,
+							zend_ast_create_list(0, ZEND_AST_ARG_LIST)),
+						zend_ast_create_zval_from_long(num_args)),
+					no_forwarding_ast),
+				zend_ast_create(ZEND_AST_IF_ELEM,
+					NULL,
+					forwarding_ast)));
 	} else {
-		zend_ast *return_ast = zend_ast_create(ZEND_AST_RETURN, call_ast);
-		stmts_ast = zend_ast_list_add(stmts_ast, return_ast);
+		stmts_ast = zp_compile_forwarding_call(this_ptr, function,
+				argc, argv, extra_named_params,
+				param_names, variadic_partial, num_args,
+				called_scope, return_type, false, stmts_ast);
+
+		if (!stmts_ast) {
+			/* TODO: proper cleanup */
+			goto clean_argv;
+		}
 	}
 
 	/* Inherit the NoDiscard attribute */

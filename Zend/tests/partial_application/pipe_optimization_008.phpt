@@ -74,15 +74,26 @@ LIVE RANGES:
      1: 0001 - 0002 (tmp/var)
 
 {closure:%s:%d}:
-     ; (lines=7, args=1, vars=2, tmps=1)
+     ; (lines=18, args=1, vars=2, tmps=2)
      ; (after optimizer)
      ; %s:10-10
 0000 CV0($b) = RECV 1
 0001 BIND_STATIC CV1($a)
-0002 INIT_FCALL 2 112 string("foo")
-0003 SEND_VAR CV1($a) 1
-0004 SEND_VAR CV0($b) 2
-0005 V2 = DO_UCALL
-0006 RETURN V2
+0002 T3 = FUNC_NUM_ARGS
+0003 T2 = IS_SMALLER_OR_EQUAL T3 int(1)
+0004 JMPZ T2 0010
+0005 INIT_FCALL 2 112 string("foo")
+0006 SEND_VAR CV1($a) 1
+0007 SEND_VAR CV0($b) 2
+0008 V2 = DO_UCALL
+0009 RETURN V2
+0010 INIT_FCALL 2 112 string("foo")
+0011 SEND_VAR CV1($a) 1
+0012 SEND_VAR CV0($b) 2
+0013 T2 = FUNC_GET_ARGS int(1)
+0014 SEND_UNPACK T2
+0015 CHECK_UNDEF_ARGS
+0016 V2 = DO_UCALL
+0017 RETURN V2
 int(1)
 int(2)
