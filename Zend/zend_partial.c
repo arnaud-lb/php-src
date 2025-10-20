@@ -57,27 +57,18 @@ static zend_always_inline void zend_partial_args_underflow(
 	const char *limit = function->common.num_args <= function->common.required_num_args ?
 			"exactly" : "at least";
 
-	zend_throw_error(NULL,
-		"not enough arguments or placeholders for application of %s, "
-		"%d given and %s %d expected",
-		ZSTR_VAL(symbol), args, limit, expected);
+	zend_argument_count_error(
+		"Partial application of %s() expects %s %d arguments, %d given",
+		ZSTR_VAL(symbol), limit, expected, args);
 }
 
 static zend_always_inline void zend_partial_args_overflow(
 		zend_function *function, zend_string *symbol, uint32_t args,
 		uint32_t expected)
 {
-	if (function->type == ZEND_USER_FUNCTION) {
-		zend_throw_error(NULL,
-			"too many arguments or placeholders for application of %s, "
-			"%d given and a maximum of %d expected",
-			ZSTR_VAL(symbol), args, expected);
-	} else {
-		zend_throw_error(NULL,
-			"too many arguments or placeholders for application of %s, "
-			"%d given and a maximum of %d expected",
-			ZSTR_VAL(symbol), args, expected);
-	}
+	zend_argument_count_error(
+		"Partial application of %s() expects at most %d arguments, %d given",
+		ZSTR_VAL(symbol), expected, args);
 }
 
 void zend_partial_args_check(zend_execute_data *call) {

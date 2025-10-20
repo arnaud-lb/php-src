@@ -13,4 +13,4 @@ try {
 }
 ?>
 --EXPECTF--
-too many arguments or placeholders for application of {closure:%s}, 2 given and a maximum of 1 expected
+Partial application of {closure:%s:%d}() expects at most 1 arguments, 2 given

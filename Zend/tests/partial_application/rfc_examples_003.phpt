@@ -10,23 +10,23 @@ if (time() > 0) {
 try {
     stuff(?);
 } catch (Error $e) {
-    echo $e->getMessage(), "\n";
+    echo $e::class, ": ", $e->getMessage(), "\n";
 }
 
 try {
     stuff(?, ?, ?, ?, ?, ?);
 } catch (Error $e) {
-    echo $e->getMessage(), "\n";
+    echo $e::class, ": ", $e->getMessage(), "\n";
 }
 
 try {
     stuff(?, ?, 3.5, null, i: 5);
 } catch (Error $e) {
-    echo $e->getMessage(), "\n";
+    echo $e::class, ": ", $e->getMessage(), "\n";
 }
 
 ?>
---EXPECTF--
-not enough arguments or placeholders for application of stuff, 1 given and at least 4 expected
-too many arguments or placeholders for application of stuff, 6 given and a maximum of 5 expected
-Named parameter $i overwrites previous placeholder
+--EXPECT--
+ArgumentCountError: Partial application of stuff() expects at least 4 arguments, 1 given
+ArgumentCountError: Partial application of stuff() expects at most 5 arguments, 6 given
+Error: Named parameter $i overwrites previous placeholder
