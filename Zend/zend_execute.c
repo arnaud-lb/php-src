@@ -45,6 +45,7 @@
 #include "zend_call_stack.h"
 #include "zend_attributes.h"
 #include "Optimizer/zend_func_info.h"
+#include "zend_context_managers.h"
 
 /* Virtual current working directory support */
 #include "zend_virtual_cwd.h"
@@ -3914,6 +3915,26 @@ ZEND_API ZEND_COLD void zend_throw_conflicting_coercion_error(const zend_propert
 	);
 	zend_string_release(type1_str);
 	zend_string_release(type2_str);
+}
+
+ZEND_API ZEND_COLD void zend_throw_invalid_context_manager_error(zval *op1 OPLINE_DC EXECUTE_DATA_DC)
+{
+	execute_data->opline = opline;
+
+	const zend_arg_info arg_info = {
+		.type = ZEND_TYPE_INIT_CLASS(zend_ce_context_manager->name, 0, 0),
+	};
+	const char *fname;
+	const char *fsep;
+	const char *fclass;
+	zend_string *need_msg;
+	const char *given_kind;
+
+	zend_verify_type_error_common(
+		EX(func), &arg_info, op1, &fname, &fsep, &fclass, &need_msg, &given_kind);
+
+	zend_throw_error(NULL, "with() expression must be of type %s, %s given",
+			ZSTR_VAL(need_msg), given_kind);
 }
 
 /* 1: valid, 0: invalid, -1: may be valid after type coercion */

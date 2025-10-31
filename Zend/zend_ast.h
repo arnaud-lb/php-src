@@ -166,6 +166,7 @@ enum _zend_ast_kind {
 	ZEND_AST_PROP_GROUP,
 	ZEND_AST_CONST_ELEM,
 	ZEND_AST_CLASS_CONST_GROUP,
+	ZEND_AST_WITH,
 
 	// Pseudo node for initializing enums
 	ZEND_AST_CONST_ENUM_INIT,
@@ -306,6 +307,7 @@ static zend_always_inline zend_ast * zend_ast_create_ex_5(zend_ast_kind kind, ze
 ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_list_0(zend_ast_kind kind);
 ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_list_1(zend_ast_kind kind, zend_ast *child);
 ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_list_2(zend_ast_kind kind, zend_ast *child1, zend_ast *child2);
+ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_list_3(zend_ast_kind kind, zend_ast *child1, zend_ast *child2, zend_ast *child3);
 
 # define zend_ast_create(...) \
 	ZEND_AST_SPEC_CALL(zend_ast_create, __VA_ARGS__)

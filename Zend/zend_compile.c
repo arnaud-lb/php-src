@@ -38,6 +38,7 @@
 #include "zend_call_stack.h"
 #include "zend_frameless_function.h"
 #include "zend_property_hooks.h"
+#include "zend_builtin_functions.h"
 
 #define SET_NODE(target, src) do { \
 		target ## _type = (src)->op_type; \
@@ -101,6 +102,7 @@ static zend_op *zend_delayed_compile_var(znode *result, zend_ast *ast, uint32_t 
 static void zend_compile_expr(znode *result, zend_ast *ast);
 static void zend_compile_stmt(zend_ast *ast);
 static void zend_compile_assign(znode *result, zend_ast *ast);
+static void zend_compile_try(zend_ast *ast);
 
 #ifdef ZEND_CHECK_STACK_LIMIT
 zend_never_inline static void zend_stack_limit_error(void)
@@ -710,7 +712,7 @@ void zend_stop_lexing(void)
 }
 
 static inline void zend_begin_loop(
-		uint8_t free_opcode, const znode *loop_var, bool is_switch) /* {{{ */
+		uint8_t free_opcode, const znode *loop_var, zend_brk_cont_kind kind) /* {{{ */
 {
 	zend_brk_cont_element *brk_cont_element;
 	int parent = CG(context).current_brk_cont;
@@ -719,7 +721,7 @@ static inline void zend_begin_loop(
 	CG(context).current_brk_cont = CG(context).last_brk_cont;
 	brk_cont_element = get_next_brk_cont_element();
 	brk_cont_element->parent = parent;
-	brk_cont_element->is_switch = is_switch;
+	brk_cont_element->kind = kind;
 
 	if (loop_var && (loop_var->op_type & (IS_VAR|IS_TMP_VAR))) {
 		uint32_t start = get_next_op_number();
@@ -3539,6 +3541,16 @@ static void zend_compile_assign(znode *result, zend_ast *ast) /* {{{ */
 
 			zend_compile_list_assign(result, var_ast, &expr_node, var_ast->attr);
 			return;
+		case ZEND_AST_ZNODE:
+			var_node = *zend_ast_get_znode(var_ast);
+			zend_compile_expr(&expr_node, expr_ast);
+			if (expr_node.op_type == IS_CONST) {
+				opline = zend_emit_op(NULL, ZEND_QM_ASSIGN, &expr_node, NULL);
+			} else {
+				opline = zend_emit_op(NULL, ZEND_COPY_TMP, &expr_node, NULL);
+			}
+			SET_NODE(opline->result, &var_node);
+			break;
 		EMPTY_SWITCH_DEFAULT_CASE();
 	}
 }
@@ -5786,6 +5798,155 @@ static void zend_compile_void_cast(znode *result, zend_ast *ast)
 	}
 }
 
+static void zend_emit_copy_tmp(znode *result, znode *expr)
+{
+	if (expr->op_type == IS_VAR) {
+		zend_emit_op(result, ZEND_COPY_TMP, expr, NULL);
+	} else if (expr->op_type == IS_TMP_VAR) {
+		zend_emit_op_tmp(result, ZEND_COPY_TMP, expr, NULL);
+	} else {
+		if (expr->op_type == IS_CONST) {
+			Z_TRY_ADDREF(expr->u.constant);
+		}
+		*result = *expr;
+	}
+}
+
+static void zend_compile_with(zend_ast *ast)
+{
+	zend_ast *expr_ast = ast->child[0];
+	zend_ast *var_ast = ast->child[1];
+	zend_ast *stmts_ast = ast->child[2];
+
+	znode tmp;
+
+	/* manager = (expr); */
+	znode manager;
+	zend_compile_expr(&manager, expr_ast);
+	if (manager.op_type == IS_CV) {
+		zend_emit_op_tmp(&manager, ZEND_QM_ASSIGN, &manager, NULL);
+	}
+
+	/* check type of manager; */
+	zend_emit_op(&manager, ZEND_INIT_WITH, &manager, NULL);
+
+	/* $var = manager->enterContext() */
+	zend_emit_copy_tmp(&tmp, &manager);
+	zend_ast *enter_ast = zend_ast_create(ZEND_AST_METHOD_CALL,
+			zend_ast_create_znode(&tmp),
+			zend_ast_create_zval_from_str(ZSTR_KNOWN(ZEND_STR_ENTER_CONTEXT)),
+			zend_ast_create_list(0, ZEND_AST_ARG_LIST));
+	if (var_ast) {
+		if (var_ast->kind != ZEND_AST_VAR) {
+			zend_throw_error(NULL, "TODO: support non-var on right side of 'as'");
+		}
+		zend_compile_assign(&tmp, zend_ast_create(ZEND_AST_ASSIGN, var_ast, enter_ast));
+	} else {
+		zend_compile_method_call(&tmp, enter_ast, BP_VAR_R);
+	}
+	zend_do_free(&tmp);
+
+	/* closed = false;
+	 * try {
+	 *   stmts;
+	 * } catch (\Throwable e) {
+	 *   closed = true;
+	 *   if (manager->exitContext(e) !== true) {
+	 *     throw e;
+	 *   }
+	 * } finally {
+	 *   if (closed !== true) {
+	 *     manager->exitContext(null);
+	 *   }
+	 *   unset($var);
+	 * }
+	 */
+
+	zend_ast *exception_class_name = zend_ast_create_zval_from_str(zend_string_copy(zend_ce_throwable->name));
+	exception_class_name->attr = ZEND_NAME_FQ;
+
+	znode null_node;
+	null_node.op_type = IS_CONST;
+	ZVAL_NULL(&null_node.u.constant);
+
+	znode true_node;
+	true_node.op_type = IS_CONST;
+	ZVAL_TRUE(&true_node.u.constant);
+
+	znode false_node;
+	false_node.op_type = IS_CONST;
+	ZVAL_FALSE(&false_node.u.constant);
+
+	znode exception;
+	exception.op_type = IS_TMP_VAR;
+	exception.u.op.var = get_temporary_variable();
+
+	znode exception_copy;
+	exception_copy.op_type = IS_TMP_VAR;
+	exception_copy.u.op.var = get_temporary_variable();
+
+	znode closed;
+	zend_emit_op_tmp(&closed, ZEND_QM_ASSIGN, &false_node, NULL);
+
+	zend_begin_loop(ZEND_NOP, NULL, ZEND_BRK_CONT_WITH);
+
+	zend_ast *catch_list = zend_ast_create_list(1, ZEND_AST_CATCH_LIST,
+			/* } catch (Exception exception) { */
+			zend_ast_create(ZEND_AST_CATCH,
+				zend_ast_create_list(1, ZEND_AST_NAME_LIST, exception_class_name),
+				zend_ast_create_znode(&exception),
+				zend_ast_create_list(3, ZEND_AST_STMT_LIST,
+					/* closed = true; */
+					zend_ast_create(ZEND_AST_ASSIGN,
+						zend_ast_create_znode(&closed),
+						zend_ast_create_znode(&true_node)),
+					/* exception_copy = exception; */
+					zend_ast_create(ZEND_AST_ASSIGN,
+						zend_ast_create_znode(&exception_copy),
+						zend_ast_create_znode(&exception)),
+					/* if (manager->exitContext(exception) !== true) { */
+					zend_ast_create_list(2, ZEND_AST_IF,
+						zend_ast_create(ZEND_AST_IF_ELEM,
+							zend_ast_create_binary_op(ZEND_IS_NOT_IDENTICAL,
+								zend_ast_create(ZEND_AST_METHOD_CALL,
+									zend_ast_create_znode(&manager),
+									zend_ast_create_zval_from_str(ZSTR_KNOWN(ZEND_STR_EXIT_CONTEXT)),
+									zend_ast_create_list(1, ZEND_AST_ARG_LIST, zend_ast_create_znode(&exception))),
+								zend_ast_create_znode(&true_node)),
+							zend_ast_create_list(1, ZEND_AST_STMT_LIST,
+								/* throw exception_copy; */
+								zend_ast_create(ZEND_AST_THROW, zend_ast_create_znode(&exception_copy)))),
+						/* } else { */
+						zend_ast_create(ZEND_AST_IF_ELEM,
+							NULL,
+							/* free exception_copy */
+							zend_ast_create(ZEND_AST_CAST_VOID, zend_ast_create_znode(&exception_copy)))))));
+
+	zend_ast *finally_stmt = zend_ast_create_list(1, ZEND_AST_STMT_LIST,
+			/* if (closed !== true) { */
+			zend_ast_create_list(1, ZEND_AST_IF,
+				zend_ast_create(ZEND_AST_IF_ELEM,
+					zend_ast_create_binary_op(ZEND_IS_NOT_IDENTICAL,
+						zend_ast_create_znode(&closed),
+						zend_ast_create_znode(&true_node)),
+					/* manager->exitContext() */
+					zend_ast_create_list(1, ZEND_AST_STMT_LIST,
+						zend_ast_create(ZEND_AST_METHOD_CALL,
+							zend_ast_create_znode(&manager),
+							zend_ast_create_zval_from_str(ZSTR_KNOWN(ZEND_STR_EXIT_CONTEXT)),
+							zend_ast_create_list(0, ZEND_AST_ARG_LIST))))));
+
+	if (var_ast) {
+		/* unset($var) */
+		finally_stmt = zend_ast_list_add(finally_stmt,
+			zend_ast_create(ZEND_AST_UNSET, var_ast));
+	}
+
+	zend_compile_try(zend_ast_create(ZEND_AST_TRY, stmts_ast, catch_list, finally_stmt));
+
+	zend_end_loop(get_next_op_number(), NULL);
+}
+
 static void zend_compile_echo(zend_ast *ast) /* {{{ */
 {
 	zend_op *opline;
@@ -5861,27 +6022,30 @@ static void zend_compile_break_continue(zend_ast *ast) /* {{{ */
 			ZEND_ASSERT(cur != -1);
 		}
 
-		if (CG(context).brk_cont_array[cur].is_switch) {
+		if (CG(context).brk_cont_array[cur].kind == ZEND_BRK_CONT_SWITCH
+				|| CG(context).brk_cont_array[cur].kind == ZEND_BRK_CONT_WITH) {
+			const char *keyword = CG(context).brk_cont_array[cur].kind == ZEND_BRK_CONT_SWITCH
+				? "switch" : "with";
 			if (depth == 1) {
 				if (CG(context).brk_cont_array[cur].parent == -1) {
 					zend_error(E_WARNING,
-						"\"continue\" targeting switch is equivalent to \"break\"");
+						"\"continue\" targeting %s is equivalent to \"break\"", keyword);
 				} else {
 					zend_error(E_WARNING,
-						"\"continue\" targeting switch is equivalent to \"break\". " \
+						"\"continue\" targeting %s is equivalent to \"break\". " \
 						"Did you mean to use \"continue " ZEND_LONG_FMT "\"?",
-						depth + 1);
+						keyword, depth + 1);
 				}
 			} else {
 				if (CG(context).brk_cont_array[cur].parent == -1) {
 					zend_error(E_WARNING,
-						"\"continue " ZEND_LONG_FMT "\" targeting switch is equivalent to \"break " ZEND_LONG_FMT "\"",
-						depth, depth);
+						"\"continue " ZEND_LONG_FMT "\" targeting %s is equivalent to \"break " ZEND_LONG_FMT "\"",
+						depth, keyword, depth);
 				} else {
 					zend_error(E_WARNING,
-						"\"continue " ZEND_LONG_FMT "\" targeting switch is equivalent to \"break " ZEND_LONG_FMT "\". " \
+						"\"continue " ZEND_LONG_FMT "\" targeting %s is equivalent to \"break " ZEND_LONG_FMT "\". " \
 						"Did you mean to use \"continue " ZEND_LONG_FMT "\"?",
-						depth, depth, depth + 1);
+						depth, keyword, depth, depth + 1);
 				}
 			}
 		}
@@ -5999,7 +6163,7 @@ static void zend_compile_while(zend_ast *ast) /* {{{ */
 
 	opnum_jmp = zend_emit_jump(0);
 
-	zend_begin_loop(ZEND_NOP, NULL, false);
+	zend_begin_loop(ZEND_NOP, NULL, ZEND_BRK_CONT_DEFAULT);
 
 	opnum_start = get_next_op_number();
 	zend_compile_stmt(stmt_ast);
@@ -6022,7 +6186,7 @@ static void zend_compile_do_while(zend_ast *ast) /* {{{ */
 	znode cond_node;
 	uint32_t opnum_start, opnum_cond;
 
-	zend_begin_loop(ZEND_NOP, NULL, false);
+	zend_begin_loop(ZEND_NOP, NULL, ZEND_BRK_CONT_DEFAULT);
 
 	opnum_start = get_next_op_number();
 	zend_compile_stmt(stmt_ast);
@@ -6079,7 +6243,7 @@ static void zend_compile_for(zend_ast *ast) /* {{{ */
 
 	opnum_jmp = zend_emit_jump(0);
 
-	zend_begin_loop(ZEND_NOP, NULL, false);
+	zend_begin_loop(ZEND_NOP, NULL, ZEND_BRK_CONT_DEFAULT);
 
 	opnum_start = get_next_op_number();
 	zend_compile_stmt(stmt_ast);
@@ -6141,7 +6305,7 @@ static void zend_compile_foreach(zend_ast *ast) /* {{{ */
 	opnum_reset = get_next_op_number();
 	opline = zend_emit_op(&reset_node, by_ref ? ZEND_FE_RESET_RW : ZEND_FE_RESET_R, &expr_node, NULL);
 
-	zend_begin_loop(ZEND_FE_FREE, &reset_node, false);
+	zend_begin_loop(ZEND_FE_FREE, &reset_node, ZEND_BRK_CONT_DEFAULT);
 
 	opnum_fetch = get_next_op_number();
 	opline = zend_emit_op(NULL, by_ref ? ZEND_FE_FETCH_RW : ZEND_FE_FETCH_R, &reset_node, NULL);
@@ -6314,7 +6478,7 @@ static void zend_compile_switch(zend_ast *ast) /* {{{ */
 
 	zend_compile_expr(&expr_node, expr_ast);
 
-	zend_begin_loop(ZEND_FREE, &expr_node, true);
+	zend_begin_loop(ZEND_FREE, &expr_node, ZEND_BRK_CONT_SWITCH);
 
 	case_node.op_type = IS_TMP_VAR;
 	case_node.u.op.var = get_temporary_variable();
@@ -6797,7 +6961,7 @@ static void zend_compile_try(zend_ast *ast) /* {{{ */
 		zend_ast_list *classes = zend_ast_get_list(catch_ast->child[0]);
 		zend_ast *var_ast = catch_ast->child[1];
 		zend_ast *stmt_ast = catch_ast->child[2];
-		zend_string *var_name = var_ast ? zval_make_interned_string(zend_ast_get_zval(var_ast)) : NULL;
+		zend_string *var_name = var_ast && var_ast->kind == ZEND_AST_ZVAL ? zval_make_interned_string(zend_ast_get_zval(var_ast)) : NULL;
 		bool is_last_catch = (i + 1 == catches->children);
 
 		uint32_t *jmp_multicatch = safe_emalloc(sizeof(uint32_t), classes->children - 1, 0);
@@ -6829,8 +6993,18 @@ static void zend_compile_try(zend_ast *ast) /* {{{ */
 				zend_error_noreturn(E_COMPILE_ERROR, "Cannot re-assign $this");
 			}
 
-			opline->result_type = var_name ? IS_CV : IS_UNUSED;
-			opline->result.var = var_name ? lookup_cv(var_name) : -1;
+			if (var_name) {
+				opline->result_type = var_name ? IS_CV : IS_UNUSED;
+				opline->result.var = var_name ? lookup_cv(var_name) : -1;
+			} else if (var_ast && var_ast->kind == ZEND_AST_ZNODE) {
+				znode *node = zend_ast_get_znode(var_ast);
+				ZEND_ASSERT(node->op_type == IS_TMP_VAR);
+				opline->result_type = IS_TMP_VAR;
+				opline->result = node->u.op;
+			} else {
+				opline->result_type = IS_UNUSED;
+				opline->result.var = -1;
+			}
 
 			if (is_last_catch && is_last_class) {
 				opline->extended_value |= ZEND_LAST_CATCH;
@@ -11804,6 +11978,9 @@ static void zend_compile_stmt(zend_ast *ast) /* {{{ */
 			break;
 		case ZEND_AST_CAST_VOID:
 			zend_compile_void_cast(NULL, ast);
+			break;
+		case ZEND_AST_WITH:
+			zend_compile_with(ast);
 			break;
 		default:
 		{
