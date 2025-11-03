@@ -649,6 +649,10 @@ struct _zend_ast_ref {
 #define _IS_BOOL					18
 #define _IS_NUMBER					19
 
+/* used for place holders */
+#define _IS_PLACEHOLDER_ARG         20
+#define _IS_PLACEHOLDER_VARIADIC    21
+
 /* guard flags */
 #define ZEND_GUARD_PROPERTY_GET		(1<<0)
 #define ZEND_GUARD_PROPERTY_SET		(1<<1)
@@ -866,6 +870,7 @@ static zend_always_inline uint32_t zval_gc_info(uint32_t gc_type_info) {
 
 #define IS_OBJ_LAZY_UNINITIALIZED   (1U<<31) /* Virtual proxy or uninitialized Ghost */
 #define IS_OBJ_LAZY_PROXY           (1U<<30) /* Virtual proxy (may be initialized) */
+#define OBJ_EXTRA_FLAG_PRIV_1       (1U<<29) /* Reserved for private use by the object itself */
 
 #define OBJ_EXTRA_FLAGS(obj)		((obj)->extra_flags)
 
