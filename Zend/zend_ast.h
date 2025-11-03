@@ -342,7 +342,7 @@ ZEND_API zend_ast *zend_ast_create_decl(
 	zend_string *name, zend_ast *child0, zend_ast *child1, zend_ast *child2, zend_ast *child3, zend_ast *child4
 );
 
-ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_fcc(void);
+ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_fcc(zend_ast *args);
 
 typedef struct {
 	bool had_side_effects;

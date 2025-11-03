@@ -54,14 +54,14 @@ ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_znode(const znode *node) {
 	return (zend_ast *) ast;
 }
 
-ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_fcc(void) {
+ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_fcc(zend_ast *args) {
 	zend_ast_fcc *ast;
 
 	ast = zend_ast_alloc(sizeof(zend_ast_fcc));
 	ast->kind = ZEND_AST_CALLABLE_CONVERT;
 	ast->attr = 0;
 	ast->lineno = CG(zend_lineno);
-	ast->args = NULL;
+	ast->args = args;
 	ZEND_MAP_PTR_INIT(ast->fptr, NULL);
 
 	return (zend_ast *) ast;
@@ -416,9 +416,7 @@ ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_arg_list_1(zend_ast_kind kind,
 	zend_ast *list = zend_ast_create_list(1, kind, arg);
 
 	if (zend_ast_is_placeholder_arg(arg)) {
-		zend_ast_fcc *fcc_ast = (zend_ast_fcc*)zend_ast_create_fcc();
-		fcc_ast->args = list;
-		return (zend_ast*)fcc_ast;
+		return zend_ast_create_fcc(list);
 	}
 
 	return list;
@@ -428,9 +426,7 @@ ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_arg_list_2(zend_ast_kind kind,
 	zend_ast *list = zend_ast_create_list(2, kind, arg1, arg2);
 
 	if (zend_ast_is_placeholder_arg(arg1) || zend_ast_is_placeholder_arg(arg2)) {
-		zend_ast_fcc *fcc_ast = (zend_ast_fcc*)zend_ast_create_fcc();
-		fcc_ast->args = list;
-		return (zend_ast*)fcc_ast;
+		return zend_ast_create_fcc(list);
 	}
 
 	return list;
@@ -544,9 +540,7 @@ ZEND_API zend_ast *zend_ast_create_arg_list(uint32_t init_children, zend_ast_kin
 	}
 
 	if (has_placeholders) {
-		zend_ast_fcc *fcc_ast = (zend_ast_fcc*)zend_ast_create_fcc();
-		fcc_ast->args = ast;
-		return (zend_ast*)fcc_ast;
+		return zend_ast_create_fcc(list);
 	}
 
 	return ast;
@@ -591,9 +585,7 @@ ZEND_API zend_ast * ZEND_FASTCALL zend_ast_arg_list_add(zend_ast *list, zend_ast
 	ZEND_ASSERT(list->kind == ZEND_AST_ARG_LIST);
 
 	if (zend_ast_is_placeholder_arg(arg)) {
-		zend_ast_fcc *fcc_ast = (zend_ast_fcc*)zend_ast_create_fcc();
-		fcc_ast->args = zend_ast_list_add(list, arg);
-		return (zend_ast*)fcc_ast;
+		return zend_ast_create_fcc(zend_ast_list_add(list, arg));
 	}
 
 	return zend_ast_list_add(list, arg);
