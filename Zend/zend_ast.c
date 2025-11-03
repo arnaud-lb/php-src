@@ -1464,7 +1464,7 @@ ZEND_API zend_ast * ZEND_FASTCALL zend_ast_dup(zend_ast *ast)
 	void *buf = zend_ast_alloc(zend_ast_tree_size(ast));
 	zend_ast_tree_copy(ast, buf);
 
-	return (zend_ast*)buf;
+	return buf;
 }
 
 ZEND_API void ZEND_FASTCALL zend_ast_destroy(zend_ast *ast)
@@ -2567,10 +2567,11 @@ simple_list:
 			zend_ast_export_ex(str, ast->child[1], 0, indent);
 			smart_str_appendc(str, ')');
 			break;
-		case ZEND_AST_CALLABLE_CONVERT:;
+		case ZEND_AST_CALLABLE_CONVERT: {
 			zend_ast_fcc *fcc_ast = (zend_ast_fcc*)ast;
 			ast = fcc_ast->args;
 			goto simple_list;
+		}
 		case ZEND_AST_CLASS_CONST:
 			zend_ast_export_ns_name(str, ast->child[0], 0, indent);
 			smart_str_appends(str, "::");
