@@ -8,16 +8,14 @@ function foo($a, $b) {
 
 $foo = foo(b: 10, ...);
 
-if ($foo->__invoke(32) == 42) {
-    echo "OK\n";
-}
+var_dump($foo->__invoke(32) == 42);
 
 try {
     $foo->nothing();
 } catch (Error $ex) {
-    echo "OK";
+    echo $ex::class, ": ", $ex->getMessage(), "\n";
 }
 ?>
 --EXPECT--
-OK
-OK
+bool(true)
+Error: Call to undefined method Closure::nothing()
