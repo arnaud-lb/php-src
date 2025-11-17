@@ -853,7 +853,7 @@ zend_op_array *zp_compile(zval *this_ptr, zend_function *function,
 		}
 	}
 
-	int closure_flags = 0;
+	int closure_flags = function->common.fn_flags & ZEND_ACC_RETURN_REFERENCE;
 	zend_ast *closure_ast = zend_ast_create_decl(ZEND_AST_CLOSURE,
 			closure_flags, CG(zend_lineno), NULL,
 			NULL, params_ast, lexical_vars_ast, stmts_ast,
