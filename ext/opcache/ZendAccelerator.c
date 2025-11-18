@@ -2020,7 +2020,7 @@ static zend_string *zend_accel_pfa_key(const zend_op *declaring_opline,
 	zend_string *key = zend_string_alloc(key_len, 0);
 	char *dest = ZSTR_VAL(key);
 
-	dest = mempcpy(ZSTR_VAL(key), "partial", strlen("partial"));
+	dest = zend_mempcpy(ZSTR_VAL(key), "partial", strlen("partial"));
 	*dest++ = ':';
 	dest = accel_uintptr_hex(dest, (uintptr_t)declaring_opline);
 	*dest++ = ':';
