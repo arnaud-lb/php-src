@@ -976,6 +976,7 @@ void zend_partial_create(zval *result, zval *this_ptr, zend_function *function,
 
 	if (UNEXPECTED(!op_array)) {
 		ZEND_ASSERT(EG(exception));
+		ZVAL_NULL(result);
 		return;
 	}
 
