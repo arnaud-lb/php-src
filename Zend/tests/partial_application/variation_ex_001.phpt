@@ -7,8 +7,8 @@ function test($a){}
 try {
     test(1,...)(?);
 } catch (Error $ex) {
-    echo "OK";
+    echo $ex::class, ": ", $ex->getMessage(), "\n";
 }
 ?>
---EXPECT--
-OK
+--EXPECTF--
+ArgumentCountError: Partial application of {closure:%s:%d}() expects at most 0 arguments, 1 given

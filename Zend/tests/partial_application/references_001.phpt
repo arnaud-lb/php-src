@@ -7,7 +7,7 @@ function foo($a, $b) {
     $b = 2;
 }
 
-$a = [];
+$a = ['unchanged because foo() doesn\'t take by reference'];
 $b = &$a[0];
 
 $foo = foo(1, ?);
@@ -19,6 +19,6 @@ var_dump($a, $b);
 --EXPECT--
 array(1) {
   [0]=>
-  &NULL
+  &string(49) "unchanged because foo() doesn't take by reference"
 }
-NULL
+string(49) "unchanged because foo() doesn't take by reference"

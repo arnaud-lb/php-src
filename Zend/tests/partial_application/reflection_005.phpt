@@ -3,14 +3,14 @@ Closure application reflection: ReflectionFunction::isClosure() is true for part
 --FILE--
 <?php
 
-echo (int)(new ReflectionFunction('sprintf'))->isClosure(), "\n";
+var_dump((new ReflectionFunction('sprintf'))->isClosure());
 
-echo (int)(new ReflectionFunction(function () {}))->isClosure(), "\n";
+var_dump((new ReflectionFunction(function () {}))->isClosure());
 
-echo (int)(new ReflectionFunction(sprintf(?)))->isClosure(), "\n";
+var_dump((new ReflectionFunction(sprintf(?)))->isClosure());
 
 ?>
---EXPECTF--
-0
-1
-1
+--EXPECT--
+bool(false)
+bool(true)
+bool(true)

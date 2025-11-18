@@ -14,8 +14,7 @@ $bar = $foo->method(new stdClass, ...);
 
 $baz = $bar(new stdClass, ...);
 
-var_dump($baz());
+var_dump($foo === $baz());
 ?>
---EXPECTF--
-object(Foo)#%d (0) {
-}
+--EXPECT--
+bool(true)
