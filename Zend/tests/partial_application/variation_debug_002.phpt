@@ -9,7 +9,7 @@ object(Closure)#%d (5) {
   ["name"]=>
   string(%d) "{closure:%s}"
   ["file"]=>
-  string(83) "%svariation_debug_002.php"
+  string(%d) "%svariation_debug_002.php"
   ["line"]=>
   int(2)
   ["static"]=>

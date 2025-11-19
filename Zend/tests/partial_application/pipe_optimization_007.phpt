@@ -76,7 +76,7 @@ $_main:
      ; %s:10-10
 0000 CV0($a) = RECV 1
 0001 CV1($b) = RECV 2
-0002 INIT_FCALL 2 112 string("foo")
+0002 INIT_FCALL 2 %d string("foo")
 0003 SEND_VAR CV0($a) 1
 0004 SEND_VAR CV1($b) 2
 0005 V2 = DO_UCALL

@@ -21,7 +21,7 @@ object(Closure)#%d (6) {
   ["name"]=>
   string(%d) "{closure:%s}"
   ["file"]=>
-  string(84) "%svariation_parent_001.php"
+  string(%d) "%svariation_parent_001.php"
   ["line"]=>
   int(12)
   ["static"]=>
@@ -66,7 +66,7 @@ object(Closure)#%d (4) {
   ["name"]=>
   string(25) "{closure:Foo::method():4}"
   ["file"]=>
-  string(84) "%s"
+  string(%d) "%s"
   ["line"]=>
   int(4)
   ["this"]=>

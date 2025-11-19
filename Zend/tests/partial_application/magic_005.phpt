@@ -16,7 +16,7 @@ object(Closure)#%d (%d) {
   ["name"]=>
   string(%d) "{closure:%s}"
   ["file"]=>
-  string(73) "%smagic_005.php"
+  string(%d) "%smagic_005.php"
   ["line"]=>
   int(8)
   ["this"]=>

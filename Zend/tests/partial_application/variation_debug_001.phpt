@@ -13,7 +13,7 @@ object(Closure)#%d (5) {
   ["name"]=>
   string(%d) "{closure:%s}"
   ["file"]=>
-  string(83) "%svariation_debug_001.php"
+  string(%d) "%svariation_debug_001.php"
   ["line"]=>
   int(6)
   ["static"]=>

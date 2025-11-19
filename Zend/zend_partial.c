@@ -357,7 +357,7 @@ static zend_ast *zp_type_to_ast(const zend_type type)
 
 static zend_result zp_get_param_default_value(zval *result, zend_function *function, uint32_t arg_offset)
 {
-	ZEND_ASSERT(arg_offset < function->op_array.last);
+	ZEND_ASSERT(arg_offset < function->common.num_args);
 
 	if (function->type == ZEND_USER_FUNCTION) {
 		zend_op *opline = &function->op_array.opcodes[arg_offset];
