@@ -2979,6 +2979,7 @@ ZEND_VM_HOT_HELPER(zend_leave_helper, ANY, ANY)
 		} else if (UNEXPECTED(call_info & ZEND_CALL_CLOSURE)) {
 			OBJ_RELEASE(ZEND_CLOSURE_OBJECT(EX(func)));
 		}
+
 		EG(vm_stack_top) = (zval*)execute_data;
 		execute_data = EX(prev_execute_data);
 
@@ -9240,6 +9241,47 @@ ZEND_VM_HANDLER(200, ZEND_FETCH_GLOBALS, UNUSED, UNUSED)
 	ZEND_VM_NEXT_OPCODE();
 }
 
+ZEND_VM_HANDLER(211, ZEND_SEND_PLACEHOLDER, UNUSED, CONST|UNUSED)
+{
+	USE_OPLINE
+	zval *arg;
+	zend_execute_data *call = EX(call);
+
+	if (OP2_TYPE == IS_CONST) {
+		SAVE_OPLINE();
+		zend_string *arg_name = Z_STR_P(RT_CONSTANT(opline, opline->op2));
+		uint32_t arg_num;
+		arg = zend_handle_named_arg(&EX(call), arg_name, &arg_num, CACHE_ADDR(opline->result.num));
+		if (UNEXPECTED(!arg)) {
+			HANDLE_EXCEPTION();
+		}
+		ZEND_ASSERT(opline->op1.num == _IS_PLACEHOLDER_ARG);
+		Z_TYPE_INFO_P(arg) = _IS_PLACEHOLDER_ARG;
+		Z_EXTRA_P(ZEND_CALL_ARG(call, 1)) = 0;
+	} else if (opline->op1.num == _IS_PLACEHOLDER_VARIADIC) {
+		/* TODO: maybe find another way to pass the variadic flag, as this
+		 * requires to initialize this slot for each placeholder. */
+		Z_EXTRA_P(ZEND_CALL_ARG(call, 1)) = _IS_PLACEHOLDER_VARIADIC;
+	} else {
+		ZEND_ASSERT(opline->op1.num == _IS_PLACEHOLDER_ARG);
+		arg = ZEND_CALL_VAR(EX(call), opline->result.var);
+		Z_TYPE_INFO_P(arg) = _IS_PLACEHOLDER_ARG;
+		Z_EXTRA_P(ZEND_CALL_ARG(call, 1)) = 0;
+	}
+
+	ZEND_VM_NEXT_OPCODE();
+}
+
+ZEND_VM_HANDLER(213, ZEND_CHECK_PARTIAL_ARGS, UNUSED, UNUSED)
+{
+	USE_OPLINE
+	zend_execute_data *call = EX(call);
+
+	SAVE_OPLINE();
+	zend_partial_args_check(call);
+	ZEND_VM_NEXT_OPCODE_CHECK_EXCEPTION();
+}
+
 ZEND_VM_HANDLER(186, ZEND_ISSET_ISEMPTY_THIS, UNUSED, UNUSED)
 {
 	USE_OPLINE
@@ -9760,6 +9802,44 @@ ZEND_VM_HANDLER(202, ZEND_CALLABLE_CONVERT, UNUSED, UNUSED, NUM|CACHE_SLOT)
 	zend_vm_stack_free_call_frame(call);
 
 	ZEND_VM_NEXT_OPCODE();
+}
+
+ZEND_VM_HANDLER(212, ZEND_CALLABLE_CONVERT_PARTIAL, NUM, CONST|UNUSED, CACHE_SLOT)
+{
+	USE_OPLINE
+	SAVE_OPLINE();
+
+	zend_execute_data *call = EX(call);
+	void **cache_slot = CACHE_ADDR(opline->op1.num);
+	zval *named_positions = GET_OP2_ZVAL_PTR();
+
+	zend_partial_create(EX_VAR(opline->result.var),
+		&call->This, call->func,
+		ZEND_CALL_NUM_ARGS(call), ZEND_CALL_ARG(call, 1),
+		ZEND_CALL_INFO(call) & ZEND_CALL_HAS_EXTRA_NAMED_PARAMS ?
+			call->extra_named_params : NULL,
+		OP2_TYPE == IS_CONST ? Z_ARRVAL_P(named_positions) : NULL,
+		&EX(func)->op_array, opline, cache_slot);
+
+	if (ZEND_CALL_INFO(call) & ZEND_CALL_HAS_EXTRA_NAMED_PARAMS) {
+		zend_array_release(call->extra_named_params);
+	}
+
+	if ((call->func->common.fn_flags & ZEND_ACC_CALL_VIA_TRAMPOLINE)) {
+		zend_free_trampoline(call->func);
+	}
+
+	if (ZEND_CALL_INFO(call) & ZEND_CALL_RELEASE_THIS) {
+		OBJ_RELEASE(Z_OBJ(call->This));
+	} else if (ZEND_CALL_INFO(call) & ZEND_CALL_CLOSURE) {
+		OBJ_RELEASE(ZEND_CLOSURE_OBJECT(call->func));
+	}
+
+	EX(call) = call->prev_execute_data;
+
+	zend_vm_stack_free_call_frame(call);
+
+	ZEND_VM_NEXT_OPCODE_CHECK_EXCEPTION();
 }
 
 ZEND_VM_HANDLER(208, ZEND_JMP_FRAMELESS, CONST, JMP_ADDR, NUM|CACHE_SLOT)

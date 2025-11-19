@@ -630,6 +630,9 @@ EMPTY_SWITCH_DEFAULT_CASE()
 	_(ZEND_STR_AUTOGLOBAL_ENV,         "_ENV") \
 	_(ZEND_STR_AUTOGLOBAL_REQUEST,     "_REQUEST") \
 	_(ZEND_STR_COUNT,                  "count") \
+	_(ZEND_STR_FUNC_NUM_ARGS,          "func_num_args") \
+	_(ZEND_STR_FUNC_GET_ARGS,          "func_get_args") \
+	_(ZEND_STR_ARRAY_SLICE,            "array_slice") \
 	_(ZEND_STR_SENSITIVEPARAMETER,     "SensitiveParameter") \
 	_(ZEND_STR_CONST_EXPR_PLACEHOLDER, "[constant expression]") \
 	_(ZEND_STR_DEPRECATED_CAPITALIZED, "Deprecated") \

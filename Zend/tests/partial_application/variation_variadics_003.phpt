@@ -1,0 +1,60 @@
+--TEST--
+Closure application variation variadics interactions
+--XFAIL--
+TODO: extra args rules
+--FILE--
+<?php
+function foo($a, $b) {
+    var_dump(func_get_args());
+}
+
+$foo = foo(?, ?);
+
+try {
+    $foo(1, 2, 3); // FAIL, 2 expected, 3 given
+} catch (Error $ex) {
+    printf("%s: %s\n", $ex::class, $ex->getMessage());
+}
+
+try {
+    $foo = foo(?, ?, ?); // FAIL 2 expected, 3 given
+} catch (Error $ex) {
+    printf("%s: %s\n", $ex::class, $ex->getMessage());
+}
+
+function bar($a, $b, ...$c) {
+    var_dump(func_get_args());
+}
+
+$bar = bar(?, ?);
+
+try {
+    $bar(1, 2, 3); // FAIL 3 given, maximum 2 expected
+} catch (Error $ex) {
+    printf("%s: %s\n", $ex::class, $ex->getMessage());
+}
+
+$foo = foo(?, ?, ...);
+
+$foo(1, 2, 3); // OK
+?>
+--EXPECT--
+array(2) {
+  [0]=>
+  int(1)
+  [1]=>
+  int(2)
+}
+Error: too many arguments or placeholders for application of foo, 3 given and a maximum of 2 expected
+array(2) {
+  [0]=>
+  int(1)
+  [1]=>
+  int(2)
+}
+array(2) {
+  [0]=>
+  int(1)
+  [1]=>
+  int(2)
+}
