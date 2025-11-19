@@ -343,7 +343,8 @@ zend_op_array *zend_accel_pfa_cache_get(const zend_op_array *declaring_op_array,
 zend_op_array *zend_accel_compile_pfa(zend_ast *ast,
 		const zend_op_array *declaring_op_array,
 		const zend_op *declaring_opline,
-		const zend_function *called_function);
+		const zend_function *called_function,
+		zend_string *pfa_func_name);
 
 END_EXTERN_C()
 

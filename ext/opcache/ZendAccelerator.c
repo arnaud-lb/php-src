@@ -2071,7 +2071,8 @@ zend_op_array *zend_accel_pfa_cache_get(const zend_op_array *declaring_op_array,
 zend_op_array *zend_accel_compile_pfa(zend_ast *ast,
 		const zend_op_array *declaring_op_array,
 		const zend_op *declaring_opline,
-		const zend_function *called_function)
+		const zend_function *called_function,
+		zend_string *pfa_func_name)
 {
 	// TODO: file cache support
 
@@ -2116,6 +2117,9 @@ zend_op_array *zend_accel_compile_pfa(zend_ast *ast,
 	if (!op_array) {
 		return NULL;
 	}
+
+	zend_string_release(op_array->dynamic_func_defs[0]->function_name);
+	op_array->dynamic_func_defs[0]->function_name = pfa_func_name;
 
 	/* Cache op_array only if the declaring op_array and the called function
 	 * are cached */

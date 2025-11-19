@@ -443,6 +443,47 @@ static zend_ast *zp_param_attributes_to_ast(zend_function *function,
 	return attributes_ast;
 }
 
+static zend_string *zp_pfa_name(const zend_op_array *declaring_op_array,
+		const zend_op *declaring_opline)
+{
+	zend_string *filename = declaring_op_array->filename;
+	uint32_t start_lineno = declaring_opline->lineno;
+
+	zend_string *class = zend_empty_string;
+	zend_string *separator = zend_empty_string;
+	zend_string *function = filename;
+	const char *parens = "";
+
+	if (declaring_op_array->function_name) {
+		if (declaring_op_array->fn_flags & ZEND_ACC_CLOSURE) {
+			/* If the parent function is a closure, don't redundantly
+			 * add the classname and parentheses.
+			 */
+			function = declaring_op_array->function_name;
+		} else {
+			function = declaring_op_array->function_name;
+			parens = "()";
+
+			if (declaring_op_array->scope && declaring_op_array->scope->name) {
+				class = declaring_op_array->scope->name;
+				separator = ZSTR_KNOWN(ZEND_STR_PAAMAYIM_NEKUDOTAYIM);
+			}
+		}
+	}
+
+	zend_string *name = zend_strpprintf_unchecked(
+		0,
+		"{closure:pfa:%S%S%S%s:%" PRIu32 "}",
+		class,
+		separator,
+		function,
+		parens,
+		start_lineno
+	);
+
+	return name;
+}
+
 zend_ast *zp_compile_forwarding_call(
 	zval *this_ptr, zend_function *function,
 	uint32_t argc, zval *argv, zend_array *extra_named_params,
@@ -874,8 +915,10 @@ zend_op_array *zp_compile(zval *this_ptr, zend_function *function,
 	}
 #endif
 
+	zend_string *pfa_name = zp_pfa_name(declaring_op_array, declaring_opline);
+
 	op_array = zend_accel_compile_pfa(closure_ast, declaring_op_array,
-			declaring_opline, function);
+			declaring_opline, function, pfa_name);
 
 	zend_ast_destroy(closure_ast);
 
