@@ -5836,10 +5836,15 @@ static void zend_compile_using(zend_ast *ast)
 			zend_ast_create_znode(&tmp),
 			zend_ast_create_zval_from_str(ZSTR_KNOWN(ZEND_STR_ENTER_CONTEXT)),
 			zend_ast_create_list(0, ZEND_AST_ARG_LIST));
+	znode var_backup;
+	znode var_node;
 	if (var_ast) {
-		if (var_ast->kind != ZEND_AST_VAR) {
-			zend_throw_error(NULL, "TODO: support non-var on right side of 'as'");
-		}
+		/* backup $var */
+		zend_compile_var(&var_node, var_ast, BP_VAR_IS, false);
+		zend_emit_op(&var_backup, ZEND_BACKUP_CV, &var_node, NULL);
+
+		/* assign $var */
+		zend_compile_stmt(zend_ast_create(ZEND_AST_UNSET, var_ast));
 		zend_compile_assign(&tmp, zend_ast_create(ZEND_AST_ASSIGN, var_ast, enter_ast));
 	} else {
 		zend_compile_method_call(&tmp, enter_ast, BP_VAR_R);
@@ -5940,11 +5945,30 @@ static void zend_compile_using(zend_ast *ast)
 		/* unset($var) */
 		finally_stmt = zend_ast_list_add(finally_stmt,
 			zend_ast_create(ZEND_AST_UNSET, var_ast));
+		/* restore $var */
+		finally_stmt = zend_ast_list_add(finally_stmt,
+			zend_ast_create(ZEND_AST_RESTORE_CV, var_ast,
+				zend_ast_create_znode(&var_backup)));
 	}
 
 	zend_compile_try(zend_ast_create(ZEND_AST_TRY, stmts_ast, catch_list, finally_stmt));
 
 	zend_end_loop(get_next_op_number(), NULL);
+}
+
+static void zend_compile_restore_cv(zend_ast *ast)
+{
+	zend_ast *var_ast = ast->child[0];
+	zend_ast *backup_ast = ast->child[1];
+
+	znode var_node;
+	znode backup_node;
+
+	zend_compile_expr(&var_node, var_ast);
+	zend_compile_expr(&backup_node, backup_ast);
+
+	zend_op *opline = zend_emit_op(NULL, ZEND_RESTORE_CV, &backup_node, NULL);
+	SET_NODE(opline->result, &var_node);
 }
 
 static void zend_compile_echo(zend_ast *ast) /* {{{ */
@@ -11981,6 +12005,9 @@ static void zend_compile_stmt(zend_ast *ast) /* {{{ */
 			break;
 		case ZEND_AST_USING:
 			zend_compile_using(ast);
+			break;
+		case ZEND_AST_RESTORE_CV:
+			zend_compile_restore_cv(ast);
 			break;
 		default:
 		{

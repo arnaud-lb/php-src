@@ -9983,6 +9983,26 @@ ZEND_VM_C_LABEL(type_error):
 	HANDLE_EXCEPTION();
 }
 
+ZEND_VM_HANDLER(212, ZEND_BACKUP_CV, CV, UNUSED)
+{
+	USE_OPLINE;
+
+	zval *var = EX_VAR(opline->result.var);
+	zval *value = GET_OP1_ZVAL_PTR(BP_VAR_IS);
+	ZVAL_COPY(var, value);
+	ZEND_VM_NEXT_OPCODE();
+}
+
+ZEND_VM_HANDLER(213, ZEND_RESTORE_CV, VAR, UNUSED)
+{
+	USE_OPLINE;
+
+	zval *var = EX_VAR(opline->result.var);
+	zval *value = GET_OP1_ZVAL_PTR(BP_VAR_IS);
+	ZVAL_COPY_VALUE(var, value);
+	ZEND_VM_NEXT_OPCODE();
+}
+
 ZEND_VM_HOT_TYPE_SPEC_HANDLER(ZEND_JMP, (OP_JMP_ADDR(op, op->op1) > op), ZEND_JMP_FORWARD, JMP_ADDR, ANY)
 {
 	USE_OPLINE

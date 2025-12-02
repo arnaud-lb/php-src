@@ -548,10 +548,9 @@ statement:
 ;
 
 optional_using_as_variable:
-		%empty { $$ = NULL; }
-	|	T_AS variable { $$ = $2; }
+		%empty          { $$ = NULL; }
+	|   T_AS T_VARIABLE { $$ = zend_ast_create(ZEND_AST_VAR, $2); }
 ;
-
 
 catch_list:
 		%empty
