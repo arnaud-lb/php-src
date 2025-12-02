@@ -159,7 +159,7 @@ struct _zend_op {
 typedef enum _zend_brk_cont_kind {
 	ZEND_BRK_CONT_DEFAULT,
 	ZEND_BRK_CONT_SWITCH,
-	ZEND_BRK_CONT_WITH,
+	ZEND_BRK_CONT_USING,
 } zend_brk_cont_kind;
 
 typedef struct _zend_brk_cont_element {

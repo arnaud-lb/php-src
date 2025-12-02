@@ -5812,7 +5812,7 @@ static void zend_emit_copy_tmp(znode *result, znode *expr)
 	}
 }
 
-static void zend_compile_with(zend_ast *ast)
+static void zend_compile_using(zend_ast *ast)
 {
 	zend_ast *expr_ast = ast->child[0];
 	zend_ast *var_ast = ast->child[1];
@@ -5828,7 +5828,7 @@ static void zend_compile_with(zend_ast *ast)
 	}
 
 	/* check type of manager; */
-	zend_emit_op(&manager, ZEND_INIT_WITH, &manager, NULL);
+	zend_emit_op(&manager, ZEND_INIT_USING, &manager, NULL);
 
 	/* $var = manager->enterContext() */
 	zend_emit_copy_tmp(&tmp, &manager);
@@ -5888,7 +5888,7 @@ static void zend_compile_with(zend_ast *ast)
 	znode closed;
 	zend_emit_op_tmp(&closed, ZEND_QM_ASSIGN, &false_node, NULL);
 
-	zend_begin_loop(ZEND_NOP, NULL, ZEND_BRK_CONT_WITH);
+	zend_begin_loop(ZEND_NOP, NULL, ZEND_BRK_CONT_USING);
 
 	zend_ast *catch_list = zend_ast_create_list(1, ZEND_AST_CATCH_LIST,
 			/* } catch (Exception exception) { */
@@ -6023,9 +6023,9 @@ static void zend_compile_break_continue(zend_ast *ast) /* {{{ */
 		}
 
 		if (CG(context).brk_cont_array[cur].kind == ZEND_BRK_CONT_SWITCH
-				|| CG(context).brk_cont_array[cur].kind == ZEND_BRK_CONT_WITH) {
+				|| CG(context).brk_cont_array[cur].kind == ZEND_BRK_CONT_USING) {
 			const char *keyword = CG(context).brk_cont_array[cur].kind == ZEND_BRK_CONT_SWITCH
-				? "switch" : "with";
+				? "switch" : "using";
 			if (depth == 1) {
 				if (CG(context).brk_cont_array[cur].parent == -1) {
 					zend_error(E_WARNING,
@@ -11979,8 +11979,8 @@ static void zend_compile_stmt(zend_ast *ast) /* {{{ */
 		case ZEND_AST_CAST_VOID:
 			zend_compile_void_cast(NULL, ast);
 			break;
-		case ZEND_AST_WITH:
-			zend_compile_with(ast);
+		case ZEND_AST_USING:
+			zend_compile_using(ast);
 			break;
 		default:
 		{

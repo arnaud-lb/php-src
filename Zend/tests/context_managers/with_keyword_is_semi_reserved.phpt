@@ -1,19 +1,19 @@
 --TEST--
-'with' keyword is semi reserved
+'using' keyword is semi reserved
 --FILE--
 <?php
 
 class Test {
     const WITH = 1;
-    public $with;
-    function with ($with) {}
+    public $using;
+    function using ($using) {}
 }
 
-$with = 1;
+$using = 1;
 
 // Not allowed:
-// function with() {}
-// class with {}
+// function using() {}
+// class using {}
 // const WITH = 1;
 
 ?>

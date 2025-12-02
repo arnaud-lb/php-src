@@ -5,15 +5,15 @@ Variable on the rhs of 'as' is optional
 
 require 'basic_manager.inc';
 
-with (new Manager()) {
-    echo "In with() block\n";
+using (new Manager()) {
+    echo "In using() block\n";
 }
 
-echo "After with() block\n";
+echo "After using() block\n";
 
 ?>
 --EXPECT--
 Manager::enterContext()
-In with() block
+In using() block
 Manager::exitContext(null)
-After with() block
+After using() block

@@ -166,7 +166,7 @@ enum _zend_ast_kind {
 	ZEND_AST_PROP_GROUP,
 	ZEND_AST_CONST_ELEM,
 	ZEND_AST_CLASS_CONST_GROUP,
-	ZEND_AST_WITH,
+	ZEND_AST_USING,
 
 	// Pseudo node for initializing enums
 	ZEND_AST_CONST_ENUM_INIT,

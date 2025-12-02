@@ -1,23 +1,23 @@
 --TEST--
-with() does not rethrow exception when exitContext() returns true
+using() does not rethrow exception when exitContext() returns true
 --FILE--
 <?php
 
 require 'basic_manager.inc';
 
-with (new Manager(false) as $value) {
-    echo "In with() block\n";
+using (new Manager(false) as $value) {
+    echo "In using() block\n";
     var_dump($value);
-    throw new Exception('exception in with block');
+    throw new Exception('exception in using block');
 }
 
-echo "After with() block\n";
+echo "After using() block\n";
 
 ?>
 --EXPECTF--
 Manager::enterContext()
-In with() block
+In using() block
 object(stdClass)#%d (0) {
 }
-Manager::exitContext(Exception(exception in with block))
-After with() block
+Manager::exitContext(Exception(exception in using block))
+After using() block

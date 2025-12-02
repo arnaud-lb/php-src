@@ -1,23 +1,23 @@
 --TEST--
-'continue' in with() jumps out of the block, considered a success, warns like 'switch'
+'continue' in using() jumps out of the block, considered a success, warns like 'switch'
 --FILE--
 <?php
 
 require 'basic_manager.inc';
 
-with (new Manager() as $value) {
-    echo "In with() block\n";
+using (new Manager() as $value) {
+    echo "In using() block\n";
     continue;
     echo "Not executed\n";
     var_dump($value);
 }
 
-echo "After with() block\n";
+echo "After using() block\n";
 
 ?>
 --EXPECTF--
-Warning: "continue" targeting with is equivalent to "break" in %s on line %d
+Warning: "continue" targeting using is equivalent to "break" in %s on line %d
 Manager::enterContext()
-In with() block
+In using() block
 Manager::exitContext(null)
-After with() block
+After using() block
