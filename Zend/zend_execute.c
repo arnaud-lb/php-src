@@ -2556,9 +2556,18 @@ ZEND_API ZEND_COLD zval* ZEND_FASTCALL zend_undefined_index_write(HashTable *ht,
 	return retval;
 }
 
+ZEND_API zend_never_inline ZEND_COLD void ZEND_FASTCALL zend_undefined_method_ex(const zend_class_entry *ce, const zend_string *method, bool callable_this)
+{
+	if (callable_this) {
+		zend_throw_error(NULL, "Method %s::%s() does not exist or does not support partial application", ZSTR_VAL(ce->name), ZSTR_VAL(method));
+	} else {
+		zend_throw_error(NULL, "Call to undefined method %s::%s()", ZSTR_VAL(ce->name), ZSTR_VAL(method));
+	}
+}
+
 ZEND_API zend_never_inline ZEND_COLD void ZEND_FASTCALL zend_undefined_method(const zend_class_entry *ce, const zend_string *method)
 {
-	zend_throw_error(NULL, "Call to undefined method %s::%s()", ZSTR_VAL(ce->name), ZSTR_VAL(method));
+	zend_undefined_method_ex(ce, method, false);
 }
 
 static zend_never_inline ZEND_COLD void ZEND_FASTCALL zend_invalid_method_call(zval *object, zval *function_name)

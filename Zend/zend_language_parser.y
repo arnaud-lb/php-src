@@ -945,6 +945,8 @@ argument_no_expr:
 			{ $$ = zend_ast_create(ZEND_AST_PLACEHOLDER_ARG); }
 	|	identifier ':' '?'
 			{ $$ = zend_ast_create(ZEND_AST_NAMED_ARG, $1, zend_ast_create(ZEND_AST_PLACEHOLDER_ARG)); }
+	|	T_VARIABLE ':' '?'
+			{ $$ = zend_ast_create(ZEND_AST_NAMED_ARG, zend_ast_create(ZEND_AST_VAR, $1), zend_ast_create(ZEND_AST_PLACEHOLDER_ARG)); }
 	|	T_ELLIPSIS expr
 			{ $$ = zend_ast_create(ZEND_AST_UNPACK, $2); }
 ;

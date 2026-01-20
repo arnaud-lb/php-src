@@ -53,6 +53,10 @@ function check_equivalence($tests)
                     'string' => (string) (100 + $i),
                     'Point' => new Point,
                     'mixed' => "mixed($i)",
+                    'MyInterface' => new ParentClass,
+                    'ParentClass' => new ParentClass,
+                    'ChildClass' => new ChildClass,
+                    'array|string' => (string) (100 + $i),
                     '' => "mixed($i)",
                 };
             }

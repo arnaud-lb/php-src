@@ -25,7 +25,7 @@ void zend_partial_create(zval *result, zval *this_ptr, zend_function *function,
 		const zend_array *named_positions,
 		const zend_op_array *declaring_op_array,
 		const zend_op *declaring_opline, void **cache_slot,
-		bool uses_variadic_placeholder);
+		uint32_t fcall_flags);
 
 void zend_partial_op_array_dtor(zval *pDest);
 

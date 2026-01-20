@@ -3746,7 +3746,7 @@ ZEND_VM_HANDLER(113, ZEND_INIT_STATIC_METHOD_CALL, UNUSED|CLASS_FETCH|CONST|VAR,
 
 	if (OP1_TYPE == IS_CONST) {
 		/* no function found. try a static method in class */
-		ce = CACHED_PTR(opline->result.num);
+		ce = CACHED_PTR(opline->result.num & ~ZEND_INIT_CALLABLE_THIS);
 		if (UNEXPECTED(ce == NULL)) {
 			ce = zend_fetch_class_by_name(Z_STR_P(RT_CONSTANT(opline, opline->op1)), Z_STR_P(RT_CONSTANT(opline, opline->op1) + 1), ZEND_FETCH_CLASS_DEFAULT | ZEND_FETCH_CLASS_EXCEPTION);
 			if (UNEXPECTED(ce == NULL)) {
@@ -3754,7 +3754,7 @@ ZEND_VM_HANDLER(113, ZEND_INIT_STATIC_METHOD_CALL, UNUSED|CLASS_FETCH|CONST|VAR,
 				HANDLE_EXCEPTION();
 			}
 			if (OP2_TYPE != IS_CONST) {
-				CACHE_PTR(opline->result.num, ce);
+				CACHE_PTR(opline->result.num & ~ZEND_INIT_CALLABLE_THIS, ce);
 			}
 		}
 	} else if (OP1_TYPE == IS_UNUSED) {
@@ -3769,12 +3769,12 @@ ZEND_VM_HANDLER(113, ZEND_INIT_STATIC_METHOD_CALL, UNUSED|CLASS_FETCH|CONST|VAR,
 
 	if (OP1_TYPE == IS_CONST &&
 	    OP2_TYPE == IS_CONST &&
-	    EXPECTED((fbc = CACHED_PTR(opline->result.num + sizeof(void*))) != NULL)) {
+	    EXPECTED((fbc = CACHED_PTR((opline->result.num & ~ZEND_INIT_CALLABLE_THIS) + sizeof(void*))) != NULL)) {
 		/* nothing to do */
 	} else if (OP1_TYPE != IS_CONST &&
 	           OP2_TYPE == IS_CONST &&
-	           EXPECTED(CACHED_PTR(opline->result.num) == ce)) {
-		fbc = CACHED_PTR(opline->result.num + sizeof(void*));
+	           EXPECTED(CACHED_PTR(opline->result.num & ~ZEND_INIT_CALLABLE_THIS) == ce)) {
+		fbc = CACHED_PTR((opline->result.num & ~ZEND_INIT_CALLABLE_THIS) + sizeof(void*));
 	} else if (OP2_TYPE != IS_UNUSED) {
 		function_name = GET_OP2_ZVAL_PTR_UNDEF(BP_VAR_R);
 		if (OP2_TYPE != IS_CONST) {
@@ -3805,7 +3805,7 @@ ZEND_VM_HANDLER(113, ZEND_INIT_STATIC_METHOD_CALL, UNUSED|CLASS_FETCH|CONST|VAR,
 		}
 		if (UNEXPECTED(fbc == NULL)) {
 			if (EXPECTED(!EG(exception))) {
-				zend_undefined_method(ce, Z_STR_P(function_name));
+				zend_undefined_method_ex(ce, Z_STR_P(function_name), opline->result.num & ZEND_INIT_CALLABLE_THIS);
 			}
 			FREE_OP2();
 			HANDLE_EXCEPTION();
@@ -3813,7 +3813,7 @@ ZEND_VM_HANDLER(113, ZEND_INIT_STATIC_METHOD_CALL, UNUSED|CLASS_FETCH|CONST|VAR,
 		if (OP2_TYPE == IS_CONST &&
 		    EXPECTED(!(fbc->common.fn_flags & (ZEND_ACC_CALL_VIA_TRAMPOLINE|ZEND_ACC_NEVER_CACHE))) &&
 			EXPECTED(!(fbc->common.scope->ce_flags & ZEND_ACC_TRAIT))) {
-			CACHE_POLYMORPHIC_PTR(opline->result.num, ce, fbc);
+			CACHE_POLYMORPHIC_PTR(opline->result.num & ~ZEND_INIT_CALLABLE_THIS, ce, fbc);
 		}
 		if (EXPECTED(fbc->type == ZEND_USER_FUNCTION) && UNEXPECTED(!RUN_TIME_CACHE(&fbc->op_array))) {
 			init_func_run_time_cache(&fbc->op_array);
@@ -3837,7 +3837,9 @@ ZEND_VM_HANDLER(113, ZEND_INIT_STATIC_METHOD_CALL, UNUSED|CLASS_FETCH|CONST|VAR,
 	}
 
 	if (!(fbc->common.fn_flags & ZEND_ACC_STATIC)) {
-		if (Z_TYPE(EX(This)) == IS_OBJECT && instanceof_function(Z_OBJCE(EX(This)), ce)) {
+		if (opline->result.num & ZEND_INIT_CALLABLE_THIS) {
+			call_info = ZEND_CALL_NESTED_FUNCTION;
+		} else if (Z_TYPE(EX(This)) == IS_OBJECT && instanceof_function(Z_OBJCE(EX(This)), ce)) {
 			ce = (zend_class_entry*)Z_OBJ(EX(This));
 			call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS;
 		} else {
@@ -9032,7 +9034,7 @@ ZEND_VM_HANDLER(158, ZEND_CALL_TRAMPOLINE, ANY, ANY, SPEC(OBSERVER))
 	execute_data = EG(current_execute_data) = EX(prev_execute_data);
 
 	call->func = (fbc->op_array.fn_flags & ZEND_ACC_STATIC) ? fbc->op_array.scope->__callstatic : fbc->op_array.scope->__call;
-	ZEND_ASSERT(zend_vm_calc_used_stack(2, call->func) <= (size_t)(((char*)EG(vm_stack_end)) - (char*)call));
+	ZEND_ASSERT(zend_vm_calc_used_stack(2, call->func) <= (size_t)(((char*)EG(vm_stack_top)) - (char*)call));
 	ZEND_CALL_NUM_ARGS(call) = 2;
 
 	ZVAL_STR(ZEND_CALL_ARG(call, 1), fbc->common.function_name);
@@ -9823,7 +9825,7 @@ ZEND_VM_HANDLER(212, ZEND_CALLABLE_CONVERT_PARTIAL, CACHE_SLOT, CONST|UNUSED, NU
 			call->extra_named_params : NULL,
 		OP2_TYPE == IS_CONST ? Z_ARRVAL_P(named_positions) : NULL,
 		&EX(func)->op_array, opline, cache_slot,
-		opline->extended_value & ZEND_FCALL_USES_VARIADIC_PLACEHOLDER);
+		opline->extended_value);
 
 	if (ZEND_CALL_INFO(call) & ZEND_CALL_HAS_EXTRA_NAMED_PARAMS) {
 		zend_array_release(call->extra_named_params);
