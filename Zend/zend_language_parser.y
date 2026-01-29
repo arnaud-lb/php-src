@@ -543,8 +543,8 @@ statement:
 	|	T_GOTO T_STRING ';' { $$ = zend_ast_create(ZEND_AST_GOTO, $2); }
 	|	T_STRING ':' { $$ = zend_ast_create(ZEND_AST_LABEL, $1); }
 	|	T_VOID_CAST expr ';' { $$ = zend_ast_create(ZEND_AST_CAST_VOID, $2); }
-	|	T_USING '(' expr optional_using_as_variable ')' '{' inner_statement_list '}'
-			{ $$ = zend_ast_create(ZEND_AST_USING, $3, $4, $7); }
+	|	T_USING '(' expr optional_using_as_variable ')' statement
+			{ $$ = zend_ast_create(ZEND_AST_USING, $3, $4, $6); }
 ;
 
 optional_using_as_variable:
