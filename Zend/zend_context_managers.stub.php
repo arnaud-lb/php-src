@@ -9,7 +9,7 @@ interface ContextManager
     public function exitContext(?\Throwable $e = null): ?bool;
 }
 
-final class ResourceContextManager implements ContextManager
+final class ResourceContext implements ContextManager
 {
     private readonly mixed $resource;
 

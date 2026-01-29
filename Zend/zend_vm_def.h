@@ -9964,8 +9964,8 @@ ZEND_VM_HANDLER(211, ZEND_INIT_USING, CONST|TMP|VAR|CV, UNUSED)
 			ZEND_VM_C_GOTO(type_error);
 		}
 	} else if (EXPECTED(Z_TYPE_P(op1) == IS_RESOURCE)) {
-		object_init_ex(&obj, zend_ce_resource_context_manager);
-		zend_resource_context_manager_init(Z_OBJ(obj), Z_RES_P(op1));
+		object_init_ex(&obj, zend_ce_resource_context);
+		zend_resource_context_init(Z_OBJ(obj), Z_RES_P(op1));
 		op1 = &obj;
 	} else {
 		ZEND_VM_C_GOTO(type_error);

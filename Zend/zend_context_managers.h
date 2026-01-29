@@ -20,10 +20,10 @@
 #include "zend_API.h"
 
 extern ZEND_API zend_class_entry *zend_ce_context_manager;
-extern ZEND_API zend_class_entry *zend_ce_resource_context_manager;
+extern ZEND_API zend_class_entry *zend_ce_resource_context;
 
 ZEND_MINIT_FUNCTION(context_managers);
 
-void zend_resource_context_manager_init(zend_object *obj, zend_resource *res);
+void zend_resource_context_init(zend_object *obj, zend_resource *res);
 
 #endif /* ZEND_CONTEXT_MANAGERS_H */

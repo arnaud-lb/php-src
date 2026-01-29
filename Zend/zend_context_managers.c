@@ -21,17 +21,17 @@
 #include "zend_context_managers_arginfo.h"
 
 ZEND_API zend_class_entry *zend_ce_context_manager = NULL;
-ZEND_API zend_class_entry *zend_ce_resource_context_manager = NULL;
+ZEND_API zend_class_entry *zend_ce_resource_context = NULL;
 
 ZEND_MINIT_FUNCTION(context_managers)
 {
 	zend_ce_context_manager = register_class_ContextManager();
-	zend_ce_resource_context_manager = register_class_ResourceContextManager(zend_ce_context_manager);
+	zend_ce_resource_context = register_class_ResourceContext(zend_ce_context_manager);
 
 	return SUCCESS;
 }
 
-void zend_resource_context_manager_init(zend_object *obj, zend_resource *res)
+void zend_resource_context_init(zend_object *obj, zend_resource *res)
 {
 	zval zres;
 	ZVAL_RES(&zres, res);
@@ -40,7 +40,7 @@ void zend_resource_context_manager_init(zend_object *obj, zend_resource *res)
 	zend_update_property(obj->ce, obj, "resource", strlen("resource"), &zres);
 }
 
-ZEND_METHOD(ResourceContextManager, __construct)
+ZEND_METHOD(ResourceContext, __construct)
 {
 	zval *zres;
 	zend_object *this = Z_OBJ_P(getThis());
@@ -49,10 +49,10 @@ ZEND_METHOD(ResourceContextManager, __construct)
 		Z_PARAM_RESOURCE(zres);
 	ZEND_PARSE_PARAMETERS_END();
 
-	zend_resource_context_manager_init(this, Z_RES_P(zres));
+	zend_resource_context_init(this, Z_RES_P(zres));
 }
 
-ZEND_METHOD(ResourceContextManager, enterContext)
+ZEND_METHOD(ResourceContext, enterContext)
 {
 	zend_object *this = Z_OBJ_P(getThis());
 
@@ -69,7 +69,7 @@ ZEND_METHOD(ResourceContextManager, enterContext)
 	RETURN_COPY_DEREF(zres);
 }
 
-ZEND_METHOD(ResourceContextManager, exitContext)
+ZEND_METHOD(ResourceContext, exitContext)
 {
 	zend_object *this = Z_OBJ_P(getThis());
 	zend_object *exception;

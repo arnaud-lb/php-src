@@ -1,5 +1,5 @@
 --TEST--
-using() boxes resources in ResourceContextManager
+using() boxes resources in ResourceContext
 --FILE--
 <?php
 
