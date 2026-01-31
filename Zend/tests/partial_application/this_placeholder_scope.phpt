@@ -5,7 +5,7 @@ PFA with $this placeholder - scope
 
 class C {
     public function get_f() {
-        return C::f($this: ?, ...);
+        return C::f(this: ?, ...);
     }
     private function f($a = null, $b = null) {
         printf("%s::%s(%s, %s)\n", get_class($this), __FUNCTION__, $a, $b);

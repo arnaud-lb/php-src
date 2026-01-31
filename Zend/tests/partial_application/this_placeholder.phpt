@@ -11,31 +11,31 @@ class C {
 
 echo "# Basics\n";
 
-$f = C::f($this: ?, ?, ?);
+$f = C::f(this: ?, ?, ?);
 echo new ReflectionFunction($f), "\n";
 $f(new C, 'a', 'b');
 
-echo "\n# \$this: can be used anywhere, and makes anything before it required\n";
+echo "\n# this: can be used anywhere, and makes anything before it required\n";
 
-$f = C::f(?, $this: ?, ?);
+$f = C::f(?, this: ?, ?);
 echo new ReflectionFunction($f), "\n";
 $f('a', new C, 'b');
 
-echo "\n# \$this: can be used anywhere, and makes anything before it required (2)\n";
+echo "\n# this: can be used anywhere, and makes anything before it required (2)\n";
 
-$f = C::f(?, ?, $this: ?);
+$f = C::f(?, ?, this: ?);
 echo new ReflectionFunction($f), "\n";
 $f('a', 'b', new C);
 
-echo "\n# \$this: can be used anywhere (variadic placeholder)\n";
+echo "\n# this: can be used anywhere (variadic placeholder)\n";
 
-$f = C::f($this: ?, ...);
+$f = C::f(this: ?, ...);
 echo new ReflectionFunction($f), "\n";
 $f(new C, 'a', 'b');
 
-echo "\n# \$this: can be used anywhere (names params)\n";
+echo "\n# this: can be used anywhere (names params)\n";
 
-$f = C::f(b: ?, $this: ?, a: ?);
+$f = C::f(b: ?, this: ?, a: ?);
 echo new ReflectionFunction($f), "\n";
 $f('b', new C, 'a');
 
@@ -54,7 +54,7 @@ Closure [ <user> static public method {closure:pfa:%s:11} ] {
 
 C::f(a, b)
 
-# $this: can be used anywhere, and makes anything before it required
+# this: can be used anywhere, and makes anything before it required
 Closure [ <user> static public method {closure:pfa:%s:17} ] {
   @@ %s 17 - 17
 
@@ -67,7 +67,7 @@ Closure [ <user> static public method {closure:pfa:%s:17} ] {
 
 C::f(a, b)
 
-# $this: can be used anywhere, and makes anything before it required (2)
+# this: can be used anywhere, and makes anything before it required (2)
 Closure [ <user> static public method {closure:pfa:%s:23} ] {
   @@ %s 23 - 23
 
@@ -80,7 +80,7 @@ Closure [ <user> static public method {closure:pfa:%s:23} ] {
 
 C::f(a, b)
 
-# $this: can be used anywhere (variadic placeholder)
+# this: can be used anywhere (variadic placeholder)
 Closure [ <user> static public method {closure:pfa:%s:29} ] {
   @@ %s 29 - 29
 
@@ -93,7 +93,7 @@ Closure [ <user> static public method {closure:pfa:%s:29} ] {
 
 C::f(a, b)
 
-# $this: can be used anywhere (names params)
+# this: can be used anywhere (names params)
 Closure [ <user> static public method {closure:pfa:%s:35} ] {
   @@ %s 35 - 35
 

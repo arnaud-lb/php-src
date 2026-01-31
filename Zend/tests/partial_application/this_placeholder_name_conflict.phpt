@@ -9,7 +9,7 @@ class C {
     }
 }
 
-$f = C::f($this: ?, ...);
+$f = C::f(this: ?, ...);
 echo new ReflectionFunction($f), "\n";
 $f(new C(), 'a', 'b');
 

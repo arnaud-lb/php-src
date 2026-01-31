@@ -8,8 +8,8 @@ class C {
     }
 }
 
-C::f($this: 1);
+C::f(this: 1);
 
 ?>
 --EXPECTF--
-Parse error: syntax error, unexpected integer "1", expecting "?" in %s on line %d
+Fatal error: Invalid parameter name: this in %s on line %d

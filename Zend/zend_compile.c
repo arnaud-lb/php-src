@@ -3761,16 +3761,14 @@ static uint32_t zend_compile_args_ex(
 		}
 
 		if (arg->kind == ZEND_AST_NAMED_ARG) {
-			if (arg->child[0]->kind == ZEND_AST_VAR) {
-				zval *name = zend_ast_get_zval(arg->child[0]->child[0]);
-				is_this = zend_string_equals_literal(Z_STR_P(name), "this");
-				if (!is_this) {
+			arg_name = zval_make_interned_string(zend_ast_get_zval(arg->child[0]));
+			is_this = zend_string_equals_literal(arg_name, "this");
+			if (is_this) {
+				if (!is_call_partial) {
 					zend_error_noreturn(E_COMPILE_ERROR,
-						"Invalid parameter name: $%s", Z_STRVAL_P(name));
+						"Invalid parameter name: %s", ZSTR_VAL(arg_name));
 				}
-				arg_name = zend_new_interned_string(ZSTR_INIT_LITERAL("$this", false));
 			} else {
-				arg_name = zval_make_interned_string(zend_ast_get_zval(arg->child[0]));
 				uses_named_args = true;
 			}
 
@@ -3833,7 +3831,7 @@ static uint32_t zend_compile_args_ex(
 		if (is_this) {
 			if (uses_this_placeholder) {
 				zend_error_noreturn(E_COMPILE_ERROR,
-					"$this placeholder may only appear once");
+					"'this' placeholder may only appear once");
 			}
 			uses_this_placeholder = true;
 			if (Z_ISUNDEF_P(named_positions)) {
@@ -4066,7 +4064,7 @@ static void zend_compile_call_partial(znode *result, uint32_t arg_count,
 	if (uses_this_placeholder) {
 		if (init_opline->opcode != ZEND_INIT_STATIC_METHOD_CALL) {
 			zend_error_noreturn(E_COMPILE_ERROR,
-					"Invalid use of $this placeholder");
+					"Invalid use of 'this' placeholder");
 		}
 		init_opline->result.num |= ZEND_INIT_CALLABLE_THIS;
 	}
@@ -6865,8 +6863,9 @@ static zend_ast *zend_partial_apply(zend_ast *callable_ast, zend_ast *pipe_arg)
 	for (uint32_t i = 0; i < arg_list->children; i++) {
 		zend_ast *arg = arg_list->child[i];
 		if (arg->kind == ZEND_AST_NAMED_ARG) {
-			if (arg->child[0]->kind == ZEND_AST_VAR) {
-				/* $this placeholder */
+			zval *arg_name = zend_ast_get_zval(arg->child[0]);
+			if (zend_string_equals_literal(Z_STR_P(arg_name), "this")) {
+				/* this placeholder */
 				return NULL;
 			}
 			uses_named_args = true;

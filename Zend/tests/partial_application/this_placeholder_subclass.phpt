@@ -15,7 +15,7 @@ class SubC extends C {
     }
 }
 
-$f = C::f($this: ?, ...);
+$f = C::f(this: ?, ...);
 echo new ReflectionFunction($f), "\n";
 $f(new SubC(), 'a', 'b');
 

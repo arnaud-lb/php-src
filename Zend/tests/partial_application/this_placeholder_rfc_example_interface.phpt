@@ -23,17 +23,17 @@ class ChildClass extends ParentClass {
 
 $tests = [
     'MyInterface' => [
-        $i = MyInterface::method($this: ?, ...),
+        $i = MyInterface::method(this: ?, ...),
         static fn (MyInterface $__this, string $foo): int|string|bool
             => $__this->method($foo),
     ],
     'ParentClass' => [
-        $p = ParentClass::method($this: ?, ...),
+        $p = ParentClass::method(this: ?, ...),
         static fn (ParentClass $__this, string|array $foo): string
             => $__this->method($foo),
     ],
     'ChildClass' => [
-        $c = ChildClass::method($this: ?, ...),
+        $c = ChildClass::method(this: ?, ...),
         static fn (ChildClass $__this, string|array $bar): string
             => $__this->method($bar),
     ],

@@ -8,8 +8,8 @@ class C {
     }
 }
 
-C::f($this: ?, $this: ?);
+C::f(this: ?, this: ?);
 
 ?>
 --EXPECTF--
-Fatal error: $this placeholder may only appear once in %s on line %d
+Fatal error: 'this' placeholder may only appear once in %s on line %d

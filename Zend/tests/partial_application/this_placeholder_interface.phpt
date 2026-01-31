@@ -19,7 +19,7 @@ class ChildClass extends ParentClass {
     }
 }
 
-$i = MyInterface::method($this: ?, ...);
+$i = MyInterface::method(this: ?, ...);
 echo new ReflectionFunction($i), "\n";
 var_dump($i(new ParentClass(), 'a'));
 var_dump($i(new ChildClass(), 'a'));

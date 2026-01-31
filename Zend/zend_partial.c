@@ -186,7 +186,7 @@ static void zp_assign_names(zend_string **names, uint32_t num_names,
 		zend_string_release(orig_name);
 	}
 
-	/* Assign name for the $this placeholder. */
+	/* Assign name for the this placeholder. */
 	if (uses_this_placeholder) {
 		uint32_t n = 1;
 		zend_string *new_name = ZSTR_INIT_LITERAL("__this", false);
@@ -733,7 +733,7 @@ static zend_op_array *zp_compile(zval *this_ptr, zend_function *function,
 	argv = tmp;
 
 	uint32_t this_pos = uses_this_placeholder
-		? Z_LVAL_P(zend_hash_str_find(named_positions, "$this", strlen("$this")))
+		? Z_LVAL_P(zend_hash_find(named_positions, ZSTR_KNOWN(ZEND_STR_THIS)))
 		: UINT32_MAX;
 
 	/* Compute param positions and number of required args, add implicit

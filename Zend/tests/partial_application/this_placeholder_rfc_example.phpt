@@ -7,7 +7,7 @@ $dates = [
     new DateTimeImmutable('2026-01-19T19:44:42+00:00'),
 ];
 
-$formattedDates = array_map(DateTimeImmutable::format($this: ?, "c"), $dates);
+$formattedDates = array_map(DateTimeImmutable::format(this: ?, "c"), $dates);
 
 echo implode(", ", $formattedDates), PHP_EOL;
 

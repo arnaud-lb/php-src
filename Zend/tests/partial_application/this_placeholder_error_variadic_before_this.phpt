@@ -8,7 +8,7 @@ class C {
     }
 }
 
-C::f(..., $this: ?);
+C::f(..., this: ?);
 
 ?>
 --EXPECTF--

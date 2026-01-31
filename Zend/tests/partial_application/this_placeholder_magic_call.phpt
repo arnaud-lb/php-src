@@ -18,11 +18,11 @@ class D {
     }
 }
 
-$f = C::f($this: ?, ...);
+$f = C::f(this: ?, ...);
 echo new ReflectionFunction($f), "\n";
 $f(new C(), 'a', 'b');
 
-$f = D::f($this: ?, ...);
+$f = D::f(this: ?, ...);
 echo new ReflectionFunction($f), "\n";
 $f(new D(), 'a', 'b');
 
