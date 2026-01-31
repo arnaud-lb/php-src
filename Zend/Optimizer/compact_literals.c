@@ -577,17 +577,17 @@ void zend_optimizer_compact_literals(zend_op_array *op_array, zend_optimizer_ctx
 								opline->op1.constant,
 								opline->op2.constant,
 								LITERAL_STATIC_METHOD,
-								&cache_size);
+								&cache_size) | (opline->result.num & ZEND_INIT_CALLABLE_THIS);
 						} else {
-							opline->result.num = cache_size;
+							opline->result.num = cache_size | (opline->result.num & ZEND_INIT_CALLABLE_THIS);
 							cache_size += 2 * sizeof(void *);
 						}
 					} else if (opline->op1_type == IS_CONST) {
 						// op1 class
 						if (class_slot[opline->op1.constant] >= 0) {
-							opline->result.num = class_slot[opline->op1.constant];
+							opline->result.num = class_slot[opline->op1.constant] | (opline->result.num & ZEND_INIT_CALLABLE_THIS);
 						} else {
-							opline->result.num = cache_size;
+							opline->result.num = cache_size | (opline->result.num & ZEND_INIT_CALLABLE_THIS);
 							cache_size += sizeof(void *);
 							class_slot[opline->op1.constant] = opline->result.num;
 						}

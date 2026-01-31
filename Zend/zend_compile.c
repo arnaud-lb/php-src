@@ -3705,12 +3705,13 @@ static uint32_t zend_compile_args_ex(
 		zend_ast *ast, const zend_function *fbc,
 		bool *may_have_extra_named_args,
 		bool is_call_partial, bool *uses_variadic_placeholder_p,
-		zval *named_positions) /* {{{ */
+		bool *uses_this_placeholder_p, zval *named_positions) /* {{{ */
 {
 	const zend_ast_list *args = zend_ast_get_list(ast);
 	uint32_t i;
 	bool uses_arg_unpack = false;
 	bool uses_variadic_placeholder = false;
+	bool uses_this_placeholder = false;
 	uint32_t arg_count = 0; /* number of arguments not including unpacks */
 
 	/* Whether named arguments are used syntactically, to enforce language level limitations.
@@ -3724,7 +3725,8 @@ static uint32_t zend_compile_args_ex(
 	for (i = 0; i < args->children; ++i) {
 		zend_ast *arg = args->child[i];
 		zend_string *arg_name = NULL;
-		uint32_t arg_num = i + 1;
+		uint32_t arg_num = i + 1 - uses_this_placeholder;
+		bool is_this = false;
 
 		znode arg_node;
 		zend_op *opline;
@@ -3759,11 +3761,22 @@ static uint32_t zend_compile_args_ex(
 		}
 
 		if (arg->kind == ZEND_AST_NAMED_ARG) {
-			uses_named_args = true;
 			arg_name = zval_make_interned_string(zend_ast_get_zval(arg->child[0]));
+			is_this = zend_string_equals_literal(arg_name, "this");
+			if (is_this) {
+				if (!is_call_partial) {
+					zend_error_noreturn(E_COMPILE_ERROR,
+						"Invalid parameter name: %s", ZSTR_VAL(arg_name));
+				}
+			} else {
+				uses_named_args = true;
+			}
+
 			arg = arg->child[1];
 
-			if (fbc && !uses_arg_unpack) {
+			if (is_this) {
+				arg_num = (uint32_t) -1;
+			} else if (fbc && !uses_arg_unpack) {
 				arg_num = zend_get_arg_num(fbc, arg_name);
 				if (arg_num == arg_count + 1 && !may_have_undef) {
 					/* Using named arguments, but passing in order. */
@@ -3815,6 +3828,24 @@ static uint32_t zend_compile_args_ex(
 			}
 		}
 
+		if (is_this) {
+			if (uses_this_placeholder) {
+				zend_error_noreturn(E_COMPILE_ERROR,
+					"'this' placeholder may only appear once");
+			}
+			uses_this_placeholder = true;
+			if (Z_ISUNDEF_P(named_positions)) {
+				array_init(named_positions);
+			}
+			zval tmp;
+			ZVAL_LONG(&tmp, i);
+			zend_hash_add(Z_ARRVAL_P(named_positions), arg_name, &tmp);
+			zend_string_release(arg_name);
+			/* Do not emit a ZEND_SEND_* op: We represent the this placeholder
+			 * with a flag on the ZEND_CONVERT_CALLABLE_PARTIAL op instead. */
+			continue;
+		}
+
 		if (arg->kind == ZEND_AST_PLACEHOLDER_ARG) {
 			if (uses_arg_unpack) {
 				zend_error_noreturn(E_COMPILE_ERROR,
@@ -3834,7 +3865,7 @@ static uint32_t zend_compile_args_ex(
 					array_init(named_positions);
 				}
 				zval tmp;
-				ZVAL_LONG(&tmp, zend_hash_num_elements(Z_ARRVAL_P(named_positions)));
+				ZVAL_LONG(&tmp, zend_hash_num_elements(Z_ARRVAL_P(named_positions)) - uses_this_placeholder);
 				zend_hash_add(Z_ARRVAL_P(named_positions), arg_name, &tmp);
 			}
 
@@ -3968,6 +3999,7 @@ static uint32_t zend_compile_args_ex(
 		}
 	} else {
 		*uses_variadic_placeholder_p = uses_variadic_placeholder;
+		*uses_this_placeholder_p = uses_this_placeholder;
 	}
 
 	return arg_count;
@@ -3977,7 +4009,8 @@ static uint32_t zend_compile_args_ex(
 static uint32_t zend_compile_args(zend_ast *ast, const zend_function *fbc,
 		bool *may_have_extra_named_args) /* {{{ */
 {
-	return zend_compile_args_ex(ast, fbc, may_have_extra_named_args, false, NULL, NULL);
+	return zend_compile_args_ex(ast, fbc, may_have_extra_named_args, false,
+			NULL, NULL, NULL);
 }
 
 ZEND_API uint8_t zend_get_call_op(const zend_op *init_op, const zend_function *fbc, bool result_used) /* {{{ */
@@ -4015,7 +4048,8 @@ ZEND_API uint8_t zend_get_call_op(const zend_op *init_op, const zend_function *f
 
 static void zend_compile_call_partial(znode *result, uint32_t arg_count,
 		bool may_have_extra_named_args, bool uses_variadic_placeholder,
-		zval *named_positions, uint32_t opnum_init, const zend_function *fbc) {
+		bool uses_this_placeholder, zval *named_positions, uint32_t opnum_init,
+		const zend_function *fbc) {
 
 	zend_op *init_opline = &CG(active_op_array)->opcodes[opnum_init];
 
@@ -4025,6 +4059,14 @@ static void zend_compile_call_partial(znode *result, uint32_t arg_count,
 
 	if (init_opline->opcode == ZEND_INIT_FCALL) {
 		init_opline->op1.num = zend_vm_calc_used_stack(arg_count, fbc);
+	}
+
+	if (uses_this_placeholder) {
+		if (init_opline->opcode != ZEND_INIT_STATIC_METHOD_CALL) {
+			zend_error_noreturn(E_COMPILE_ERROR,
+					"Invalid use of 'this' placeholder");
+		}
+		init_opline->result.num |= ZEND_INIT_CALLABLE_THIS;
 	}
 
 	zend_op *opline = zend_emit_op_tmp(result, ZEND_CALLABLE_CONVERT_PARTIAL,
@@ -4037,6 +4079,9 @@ static void zend_compile_call_partial(znode *result, uint32_t arg_count,
 	}
 	if (uses_variadic_placeholder) {
 		opline->extended_value |= ZEND_FCALL_USES_VARIADIC_PLACEHOLDER;
+	}
+	if (uses_this_placeholder) {
+		opline->extended_value |= ZEND_FCALL_USES_THIS_PLACEHOLDER;
 	}
 
 	if (!Z_ISUNDEF_P(named_positions)) {
@@ -4085,17 +4130,18 @@ static bool zend_compile_call_common(znode *result, zend_ast *args_ast, const ze
 
 		bool may_have_extra_named_args;
 		bool uses_variadic_placeholder;
+		bool uses_this_placeholder;
 
 		zval named_positions;
 		ZVAL_UNDEF(&named_positions);
 
 		uint32_t arg_count = zend_compile_args_ex(args_ast, fbc,
 				&may_have_extra_named_args, true, &uses_variadic_placeholder,
-				&named_positions);
+				&uses_this_placeholder, &named_positions);
 
 		zend_compile_call_partial(result, arg_count,
 				may_have_extra_named_args, uses_variadic_placeholder,
-				&named_positions, opnum_init, fbc);
+				uses_this_placeholder, &named_positions, opnum_init, fbc);
 
 		return true;
 	}
@@ -5640,6 +5686,7 @@ static void zend_compile_static_call(znode *result, zend_ast *ast, uint32_t type
 
 	opline = get_next_op();
 	opline->opcode = ZEND_INIT_STATIC_METHOD_CALL;
+	opline->result.num = 0;
 
 	zend_set_class_name_op1(opline, &class_node);
 
@@ -6816,6 +6863,11 @@ static zend_ast *zend_partial_apply(zend_ast *callable_ast, zend_ast *pipe_arg)
 	for (uint32_t i = 0; i < arg_list->children; i++) {
 		zend_ast *arg = arg_list->child[i];
 		if (arg->kind == ZEND_AST_NAMED_ARG) {
+			zval *arg_name = zend_ast_get_zval(arg->child[0]);
+			if (zend_string_equals_literal(Z_STR_P(arg_name), "this")) {
+				/* this placeholder */
+				return NULL;
+			}
 			uses_named_args = true;
 			arg = arg->child[1];
 		}

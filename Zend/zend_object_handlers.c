@@ -1929,6 +1929,13 @@ static zend_always_inline zend_function *get_static_method_fallback(
 
 		ZEND_ASSERT(object->ce->__call);
 		return zend_get_call_trampoline_func(object->ce->__call, function_name);
+	} else if (ce->__call
+		/* TODO: figure a better way to achieve this */
+		&& (EG(current_execute_data)
+			&& ZEND_USER_CODE(EG(current_execute_data)->func->type)
+			&& EG(current_execute_data)->opline->opcode == ZEND_INIT_STATIC_METHOD_CALL
+			&& EG(current_execute_data)->opline->result.num & ZEND_INIT_CALLABLE_THIS)) {
+		return zend_get_call_trampoline_func(ce->__call, function_name);
 	} else if (ce->__callstatic) {
 		return zend_get_call_trampoline_func(ce->__callstatic, function_name);
 	} else {
@@ -1970,8 +1977,12 @@ ZEND_API zend_function *zend_std_get_static_method(const zend_class_entry *ce, z
 
 	if (EXPECTED(fbc)) {
 		if (UNEXPECTED(fbc->common.fn_flags & ZEND_ACC_ABSTRACT)) {
-			zend_abstract_method_call(fbc);
-			goto fail;
+			/* TODO: figure a better way to achieve this */
+			if (EG(current_execute_data)->opline->opcode != ZEND_INIT_STATIC_METHOD_CALL
+					|| !(EG(current_execute_data)->opline->result.num & ZEND_INIT_CALLABLE_THIS)) {
+				zend_abstract_method_call(fbc);
+				goto fail;
+			}
 		} else if (UNEXPECTED(fbc->common.scope->ce_flags & ZEND_ACC_TRAIT)) {
 			zend_error(E_DEPRECATED,
 				"Calling static trait method %s::%s is deprecated, "
