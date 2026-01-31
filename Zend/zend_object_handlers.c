@@ -1931,7 +1931,9 @@ static zend_always_inline zend_function *get_static_method_fallback(
 		return zend_get_call_trampoline_func(object->ce->__call, function_name);
 	} else if (ce->__call
 		/* TODO: figure a better way to achieve this */
-		&& (EG(current_execute_data)->opline->opcode == ZEND_INIT_STATIC_METHOD_CALL
+		&& (EG(current_execute_data)
+			&& ZEND_USER_CODE(EG(current_execute_data)->func->type)
+			&& EG(current_execute_data)->opline->opcode == ZEND_INIT_STATIC_METHOD_CALL
 			&& EG(current_execute_data)->opline->result.num & ZEND_INIT_CALLABLE_THIS)) {
 		return zend_get_call_trampoline_func(ce->__call, function_name);
 	} else if (ce->__callstatic) {
