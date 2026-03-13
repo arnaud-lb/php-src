@@ -115,6 +115,7 @@
 #define _VAR_CODE    2
 #define _UNUSED_CODE 3
 #define _CV_CODE     4
+#define _REG_CODE    5
 
 typedef int (ZEND_FASTCALL *incdec_t)(zval *);
 
@@ -5891,6 +5892,8 @@ static zend_always_inline zend_execute_data *_zend_vm_stack_push_call_frame(uint
 #define UNDEF_RESULT() do { \
 		if (opline->result_type & (IS_VAR | IS_TMP_VAR)) { \
 			ZVAL_UNDEF(EX_VAR(opline->result.var)); \
+		} else if (opline->result_type == IS_REG) { \
+			ZVAL_UNDEF(&reg); \
 		} \
 	} while (0)
 

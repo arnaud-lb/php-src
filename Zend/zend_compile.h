@@ -864,6 +864,7 @@ ZEND_STATIC_ASSERT(ZEND_MM_ALIGNED_SIZE(sizeof(zval)) == sizeof(zval),
 #define IS_TMP_VAR	(1<<1)
 #define IS_VAR		(1<<2)
 #define IS_CV		(1<<3)	/* Compiled variable */
+#define IS_REG		(1<<4)	/* Implicit register operand. IS_TMP_VAR semantics. */
 
 /* Used for result.type of smart branch instructions */
 #define IS_SMART_BRANCH_JMPZ  (1<<4)

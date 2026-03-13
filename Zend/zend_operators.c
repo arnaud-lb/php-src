@@ -2904,9 +2904,8 @@ ZEND_API bool ZEND_FASTCALL zend_is_true(const zval *op) /* {{{ */
 }
 /* }}} */
 
-ZEND_API bool ZEND_FASTCALL zend_object_is_true(const zval *op) /* {{{ */
+ZEND_API bool ZEND_FASTCALL zend_object_is_true(zend_object *zobj) /* {{{ */
 {
-	zend_object *zobj = Z_OBJ_P(op);
 	zval tmp;
 	if (zobj->handlers->cast_object(zobj, &tmp, _IS_BOOL) == SUCCESS) {
 		return Z_TYPE(tmp) == IS_TRUE;
