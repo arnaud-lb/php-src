@@ -163,6 +163,8 @@ ZEND_API void zend_dump_var(const zend_op_array *op_array, uint8_t var_type, uin
 		fprintf(stderr, "V%d", var_num);
 	} else if ((var_type & (IS_VAR|IS_TMP_VAR)) == IS_TMP_VAR) {
 		fprintf(stderr, "T%d", var_num);
+	} else if (var_type == IS_REG) {
+		fprintf(stderr, "REG");
 	} else {
 		fprintf(stderr, "X%d", var_num);
 	}
@@ -460,11 +462,11 @@ static void zend_dump_range_constraint(const zend_op_array *op_array, const zend
 ZEND_API void zend_dump_op(const zend_op_array *op_array, const zend_basic_block *b, const zend_op *opline, uint32_t dump_flags, const zend_ssa *ssa, const zend_ssa_op *ssa_op)
 {
 	const char *name = zend_get_opcode_name(opline->opcode);
-	uint32_t flags = zend_get_opcode_flags(opline->opcode);
+	uint64_t flags = zend_get_opcode_flags(opline->opcode);
 	uint32_t n = 0;
 
 	if (!ssa_op || ssa_op->result_use < 0) {
-		if (opline->result_type & (IS_CV|IS_VAR|IS_TMP_VAR)) {
+		if (opline->result_type & (IS_CV|IS_VAR|IS_TMP_VAR|IS_REG)) {
 			if (ssa_op && ssa_op->result_def >= 0) {
 				int ssa_var_num = ssa_op->result_def;
 				zend_dump_ssa_var(op_array, ssa, ssa_var_num, opline->result_type, EX_VAR_TO_NUM(opline->result.var), dump_flags);
@@ -639,7 +641,7 @@ ZEND_API void zend_dump_op(const zend_op_array *op_array, const zend_basic_block
 
 	if (opline->op1_type == IS_CONST) {
 		zend_dump_const(CRT_CONSTANT(opline->op1));
-	} else if (opline->op1_type & (IS_CV|IS_VAR|IS_TMP_VAR)) {
+	} else if (opline->op1_type & (IS_CV|IS_VAR|IS_TMP_VAR|IS_REG)) {
 		if (ssa_op) {
 			int ssa_var_num = ssa_op->op1_use;
 			if (ssa_var_num >= 0) {
@@ -700,7 +702,7 @@ ZEND_API void zend_dump_op(const zend_op_array *op_array, const zend_basic_block
 		} else {
 			zend_dump_const(op);
 		}
-	} else if (opline->op2_type & (IS_CV|IS_VAR|IS_TMP_VAR)) {
+	} else if (opline->op2_type & (IS_CV|IS_VAR|IS_TMP_VAR|IS_REG)) {
 		if (ssa_op) {
 			int ssa_var_num = ssa_op->op2_use;
 			if (ssa_var_num >= 0) {
@@ -752,7 +754,7 @@ ZEND_API void zend_dump_op(const zend_op_array *op_array, const zend_basic_block
 		fprintf(stderr, " jmpnz");
 #endif
 	} else if (ssa_op && ssa_op->result_use >= 0) {
-		if (opline->result_type & (IS_CV|IS_VAR|IS_TMP_VAR)) {
+		if (opline->result_type & (IS_CV|IS_VAR|IS_TMP_VAR|IS_REG)) {
 			if (ssa_op) {
 				int ssa_var_num = ssa_op->result_use;
 				if (ssa_var_num >= 0) {

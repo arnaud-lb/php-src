@@ -392,7 +392,7 @@ static zend_always_inline bool try_convert_to_string(zval *op) {
 
 
 ZEND_API bool ZEND_FASTCALL zend_is_true(const zval *op);
-ZEND_API bool ZEND_FASTCALL zend_object_is_true(const zval *op);
+ZEND_API bool ZEND_FASTCALL zend_object_is_true(zend_object *zobj);
 
 static zend_always_inline bool i_zend_is_true(const zval *op)
 {
@@ -430,7 +430,7 @@ again:
 			if (EXPECTED(Z_OBJ_HT_P(op)->cast_object == zend_std_cast_object_tostring)) {
 				result = 1;
 			} else {
-				result = zend_object_is_true(op);
+				result = zend_object_is_true(Z_OBJ_P(op));
 			}
 			break;
 		case IS_RESOURCE:
@@ -794,6 +794,30 @@ overflow: ZEND_ATTRIBUTE_COLD_LABEL
 #endif
 }
 
+static zend_always_inline zval fast_long_add_function_reg(zval *op1, zval *op2)
+{
+#if ZEND_USE_ASM_ARITHMETIC && defined(__x86_64__)
+	zval result;
+	__asm__ goto(
+		"movq	(%1), %%rax\n\t"
+		"addq   (%2), %%rax\n\t"
+		"jo     %l3\n\t"
+		"movq   %%rax, %0\n\t"
+		: "=r"(result.value)
+		: "r"(&op1->value),
+		  "r"(&op2->value)
+		: "rax","cc", "memory"
+		: overflow);
+	result.u1.type_info = IS_LONG;
+	return result;
+overflow: ZEND_ATTRIBUTE_COLD_LABEL
+	ZVAL_DOUBLE(&result, (double) Z_LVAL_P(op1) + (double) Z_LVAL_P(op2));
+	return result;
+#else
+# error TODO
+#endif
+}
+
 static zend_always_inline void fast_long_sub_function(zval *result, zval *op1, zval *op2)
 {
 #if ZEND_USE_ASM_ARITHMETIC && defined(__i386__) && !(4 == __GNUC__ && 8 == __GNUC_MINOR__)
@@ -895,6 +919,30 @@ overflow: ZEND_ATTRIBUTE_COLD_LABEL
 	} else {
 		ZVAL_LONG(result, sub);
 	}
+#endif
+}
+
+static zend_always_inline zval fast_long_sub_function_reg(zval *op1, zval *op2)
+{
+#if ZEND_USE_ASM_ARITHMETIC && defined(__x86_64__)
+	zval result;
+	__asm__ goto(
+		"movq	(%1), %%rax\n\t"
+		"subq   (%2), %%rax\n\t"
+		"jo     %l3\n\t"
+		"movq   %%rax, %0\n\t"
+		: "=r"(result.value)
+		: "r"(&op1->value),
+		  "r"(&op2->value)
+		: "rax","cc", "memory"
+		: overflow);
+	result.u1.type_info = IS_LONG;
+	return result;
+overflow: ZEND_ATTRIBUTE_COLD_LABEL
+	ZVAL_DOUBLE(&result, (double) Z_LVAL_P(op1) - (double) Z_LVAL_P(op2));
+	return result;
+#else
+# error TODO
 #endif
 }
 

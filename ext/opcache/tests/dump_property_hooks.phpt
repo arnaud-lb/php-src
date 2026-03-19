@@ -43,8 +43,8 @@ $_main:
 0001 DO_FCALL
 0002 ASSIGN CV0($a) T1
 0003 INIT_FCALL 1 %d string("var_dump")
-0004 T1 = FETCH_OBJ_R CV0($a) string("prop")
-0005 SEND_VAL T1 1
+0004 %rT1|REG%r = FETCH_OBJ_R CV0($a) string("prop")
+0005 SEND_VAL %rT1|REG%r 1
 0006 DO_ICALL
 0007 ASSIGN_OBJ CV0($a) string("prop")
 0008 OP_DATA int(41)

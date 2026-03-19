@@ -56,8 +56,8 @@ plus1:
      ; (after optimizer)
      ; %s
 0000 CV0($x) = RECV 1
-0001 T1 = ADD CV0($x) int(1)
-0002 RETURN T1
+0001 %rT1|REG%r = ADD CV0($x) int(1)
+0002 RETURN %rT1|REG%r
 array(10) {
   [0]=>
   int(2)

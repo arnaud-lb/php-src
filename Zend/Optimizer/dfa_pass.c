@@ -29,6 +29,7 @@
 #include "zend_call_graph.h"
 #include "zend_inference.h"
 #include "zend_dump.h"
+#include "zend_observer.h"
 
 #ifndef ZEND_DEBUG_DFA
 # define ZEND_DEBUG_DFA ZEND_DEBUG
@@ -1034,6 +1035,136 @@ static bool zend_dfa_try_to_replace_result(zend_op_array *op_array, zend_ssa *ss
 	return false;
 }
 
+#define SET_REG_OP_chain_op1 op1_use_chain
+#define SET_REG_OP_chain_op2 op2_use_chain
+#define SET_REG_OP_chain_result res_use_chain
+#define SET_REG_OP(ssa_op, using_op, opline, var, op) do { \
+		zend_ssa_op *_ssa_op = (ssa_op); \
+		zend_ssa_op *_using_op = (using_op); \
+		zend_op *_opline = (opline); \
+		zend_ssa_var *_var = (var); \
+		_opline->result_type = IS_REG; \
+		(_opline+1)->op ## _type = IS_REG; \
+		_ssa_op->result_def = -1; \
+		_using_op->op ## _use = -1; \
+		ZEND_ASSERT(_using_op->SET_REG_OP_chain_ ## op == -1); \
+		_var->use_chain = -1; \
+		_var->definition = -1; \
+	} while (0)
+
+static inline bool zend_supports_reg_result(uint8_t opcode)
+{
+	return zend_get_opcode_flags(opcode) & ZEND_VM_EXT_RETVAL_REG;
+}
+
+static inline int zend_supports_reg_op(uint8_t opcode)
+{
+	uint64_t flags = zend_get_opcode_flags(opcode);
+
+	if ((ZEND_VM_OP1_FLAGS(flags) & ZEND_VM_OP_REG)) {
+		return 1;
+	}
+	if ((ZEND_VM_OP2_FLAGS(flags) & ZEND_VM_OP_REG)) {
+		return 2;
+	}
+
+	return 0;
+}
+
+/* Update op/result type to IS_REG when possible.
+ *
+ * Right now we support only pairs of subsequent oplines where the first one
+ * defines a TMP 'result', the second one uses it via 'op1' or 'op2',
+ * and the SSA var is used only once.
+ * Chains of INIT_ARRAY/ADD_ARRAY_ELEMENT are not supported (uses 'result').
+ * ZEND_VERIFY_RETURN_TYPE is not supported (defines 'op1'). */
+static bool zend_dfa_reg_op_optimize_op(zend_op_array *op_array, uint32_t i, zend_ssa *ssa)
+{
+	if (i >= op_array->last) {
+		return false;
+	}
+
+	zend_op *opline = &op_array->opcodes[i];
+
+	if (opline->result_type != IS_TMP_VAR) {
+		return false;
+	}
+
+	bool reg_result = zend_supports_reg_result(opline->opcode);
+	int reg_op = zend_supports_reg_op((opline+1)->opcode);
+	if (!reg_result || !reg_op) {
+		return false;
+	}
+
+	zend_ssa_op *ssa_op = &ssa->ops[i];
+	ZEND_ASSERT(ssa_op->result_def >= 0);
+	zend_ssa_var *var = &ssa->vars[ssa_op->result_def];
+	int use = var->use_chain;
+	if (use != i+1) {
+		return false;
+	}
+	if (zend_ssa_next_use(ssa->ops, ssa_op->result_def, use) >= 0) {
+		/* used more than once */
+		return false;
+	}
+
+	/* Do not optimize if opline uses the var, as this would create an op type
+	 * inconsistency */
+	if ((ssa_op->op1_use >= 0 && ssa->vars[ssa_op->op1_use].var == var->var)
+			|| (ssa_op->op2_use >= 0 && ssa->vars[ssa_op->op2_use].var == var->var)
+			|| (ssa_op->result_use >= 0 && ssa->vars[ssa_op->result_use].var == var->var)) {
+		return false;
+	}
+
+	zend_ssa_op *using_op = &ssa->ops[use];
+
+	/* Do not optimize if opline+1 defines the var, as this would create an op
+	 * type inconsistency */
+	if ((using_op->op1_def >= 0 && ssa->vars[using_op->op1_def].var == var->var)
+			|| (using_op->op2_def >= 0 && ssa->vars[using_op->op2_def].var == var->var)
+			|| (using_op->result_def >= 0 && ssa->vars[using_op->result_def].var == var->var)) {
+		return false;
+	}
+
+	switch (reg_op) {
+		case 1:
+			if (using_op->op1_use != ssa_op->result_def) {
+				return false;
+			}
+			SET_REG_OP(ssa_op, using_op, opline, var, op1);
+			break;
+		case 2:
+			if (using_op->op2_use != ssa_op->result_def) {
+				return false;
+			}
+			SET_REG_OP(ssa_op, using_op, opline, var, op2);
+			break;
+		default:
+			ZEND_UNREACHABLE();
+	}
+
+	return true;
+}
+
+static void zend_dfa_reg_op_optimize_op_array(zend_op_array *op_array, zend_optimizer_ctx *ctx, zend_ssa *ssa)
+{
+	if (ZEND_OBSERVER_ENABLED) {
+		// TODO
+		return;
+	}
+#if ZEND_DEBUG_DFA
+	ssa_verify_integrity(op_array, ssa, "before reg op");
+#endif
+
+	for (uint32_t i = 0, last = op_array->last - 1; i < last; i++) {
+		zend_dfa_reg_op_optimize_op(op_array, i, ssa);
+	}
+
+#if ZEND_DEBUG_DFA
+	ssa_verify_integrity(op_array, ssa, "after reg op");
+#endif
+}
+
 void zend_dfa_optimize_op_array(zend_op_array *op_array, zend_optimizer_ctx *ctx, zend_ssa *ssa, zend_call_info **call_map)
 {
 	if (ctx->debug_level & ZEND_DUMP_BEFORE_DFA_PASS) {
@@ -1649,6 +1780,10 @@ void zend_dfa_optimize_op_array(zend_op_array *op_array, zend_optimizer_ctx *ctx
 		ssa_verify_integrity(op_array, ssa, "after dfa");
 #endif
 
+		if (ZEND_OPTIMIZER_PASS_17 & ctx->optimization_level) {
+			zend_dfa_reg_op_optimize_op_array(op_array, ctx, ssa);
+		}
+
 		if (remove_nops) {
 			zend_ssa_remove_nops(op_array, ssa, ctx);
 #if ZEND_DEBUG_DFA
@@ -1660,6 +1795,65 @@ void zend_dfa_optimize_op_array(zend_op_array *op_array, zend_optimizer_ctx *ctx
 	if (ctx->debug_level & ZEND_DUMP_AFTER_DFA_PASS) {
 		zend_dump_op_array(op_array, ZEND_DUMP_SSA, "after dfa pass", ssa);
 	}
+
+#if ZEND_DEBUG && 0
+	for (uint32_t i = 0; op_array->last && i < op_array->last-1; i++) {
+		fprintf(stderr, "considering op\n");
+		const zend_op *opline = &op_array->opcodes[i];
+		if (opline->result_type != IS_TMP_VAR) {
+			continue;
+		}
+		if (zend_is_smart_branch(opline)
+				&& ((opline+1)->opcode == ZEND_JMPZ || (opline+1)->opcode == ZEND_JMPNZ)
+				&& (opline+1)->op1_type == IS_TMP_VAR && (opline+1)->op1.var == opline->result.var) {
+			continue;
+		}
+		if (opline->opcode == ZEND_DO_UCALL || opline->opcode == ZEND_DO_FCALL
+				|| opline->opcode == ZEND_DO_ICALL) {
+			continue;
+		}
+		const zend_ssa_op *ssa_op = &ssa->ops[i];
+		if (ssa_op->result_def == -1) {
+			continue;
+		}
+		const zend_ssa_var *var = &ssa->vars[ssa_op->result_def];
+		int use = var->use_chain;
+		if (use != i+1) {
+			continue;
+		}
+		if (zend_ssa_next_use(ssa->ops, ssa_op->result_def, use) >= 0) {
+			/* Variable is used more than once */
+			continue;
+		}
+		const zend_ssa_op *using_op = &ssa->ops[use];
+		const char *operand;
+		if (using_op->op1_use == ssa_op->result_def) {
+			operand = "op1";
+		} else if (using_op->op2_use == ssa_op->result_def) {
+			operand = "op2";
+		} else {
+			operand = "res";
+		}
+		const zend_string *fname = op_array->function_name;
+		if (fname == NULL) {
+			fname = op_array->filename;
+		}
+		const zend_string *cname;
+		if (op_array->scope) {
+			cname = op_array->scope->name;
+		} else {
+			cname = NULL;
+		}
+		fprintf(stderr, "reg-op candidate: %s::%s %zu %s %s %s\n",
+			cname ? ZSTR_VAL(cname) : NULL,
+			ZSTR_VAL(fname),
+			opline - op_array->opcodes,
+			zend_get_opcode_name(opline->opcode),
+			zend_get_opcode_name((opline+1)->opcode),
+			operand);
+	}
+#endif
+
 }
 
 void zend_optimize_dfa(zend_op_array *op_array, zend_optimizer_ctx *ctx)
