@@ -835,6 +835,7 @@ void *zend_jit_snapshot_handler(ir_ctx *ctx, ir_ref snapshot_ref, ir_insn *snaps
 							addr = (void*)zend_jit_trace_get_exit_addr(exit_point);
 							exit_flags &= ~ZEND_JIT_EXIT_FIXED;
 						}
+						t->stack_map[t->exit_info[exit_point].stack_offset + var].reg = ZREG_NONE;
 						t->stack_map[t->exit_info[exit_point].stack_offset + var].flags = ZREG_TYPE_ONLY;
 					}
 				} else if (!(exit_flags & ZEND_JIT_EXIT_FIXED)) {
