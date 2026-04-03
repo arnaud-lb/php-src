@@ -482,6 +482,33 @@ jobs:
           echo opcache.jit_hot_return=1 >> /etc/php.d/opcache.ini
           echo opcache.jit_hot_side_exit=1 >> /etc/php.d/opcache.ini
           php -v
+      - name: Test Psalm
+        if: ${{ !cancelled() }}
+        run: |
+          mkdir psalm
+          cd psalm
+          git init
+          git remote add origin https://github.com/vimeo/psalm.git
+          rev=41da396ad5d05fb48caa4e5a24be53479a009f60
+          git fetch --depth 1 origin $rev
+          git checkout $rev
+          git rev-parse HEAD
+          php /usr/bin/composer install --no-progress --ignore-platform-req=php+
+          ./psalm --force-jit
+      - name: Test PHPStan
+        if: ${{ !cancelled() }}
+        run: |
+          mkdir phpstan-src
+          cd phpstan-src
+          git init
+          git remote add origin https://github.com/phpstan/phpstan-src.git
+          rev=b70fb0f60f1dca299fbf5a7302f25441c2354cd4
+          git fetch --depth 1 origin $rev
+          git checkout $rev
+          git rev-parse HEAD
+          php /usr/bin/composer install --no-progress --ignore-platform-req=php+
+          sed -i 's/max(80599)/max(99999)/' conf/parametersSchema.neon
+          ./bin/phpstan
       - name: Test AMPHP
         if: ${{ !cancelled() }}
         run: |
