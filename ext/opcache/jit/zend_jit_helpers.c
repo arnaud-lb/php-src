@@ -882,7 +882,8 @@ static zval* ZEND_FASTCALL zend_jit_fetch_dim_rw_helper(zend_array *ht, zval *di
 		case IS_UNDEF:
 			execute_data = EG(current_execute_data);
 			opline = EX(opline);
-			if (UNEXPECTED(opline->opcode == ZEND_HANDLE_EXCEPTION)) {
+			// ???
+			if (UNEXPECTED(opline->opcode == ZEND_HANDLE_DELAYED_ERROR)) {
 				opline = EG(opline_before_exception);
 			}
 			if (opline && !zend_jit_undefined_op_helper_write(ht, opline->op2.var)) {

@@ -5031,7 +5031,7 @@ ZEND_API HashTable *zend_unfinished_execution_gc_ex(zend_execute_data *execute_d
 	}
 
 	uint32_t op_num;
-	if (UNEXPECTED(execute_data->opline->opcode == ZEND_HANDLE_EXCEPTION)) {
+	if (UNEXPECTED(execute_data->opline->opcode == ZEND_HANDLE_DELAYED_ERROR && EG(exception))) {
 		op_num = EG(opline_before_exception) - op_array->opcodes;
 	} else {
 		op_num = execute_data->opline - op_array->opcodes;

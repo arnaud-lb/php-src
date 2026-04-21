@@ -314,7 +314,7 @@ static void zend_generator_dtor_storage(zend_object *object) /* {{{ */
 			if (EG(exception)) {
 				if (EG(current_execute_data)
 				 && EG(current_execute_data)->opline
-				 && EG(current_execute_data)->opline->opcode == ZEND_HANDLE_EXCEPTION) {
+				 && EG(current_execute_data)->opline->opcode == ZEND_HANDLE_DELAYED_ERROR) {
 					EG(current_execute_data)->opline = EG(opline_before_exception);
 					old_opline_before_exception = EG(opline_before_exception);
 				}
@@ -332,7 +332,7 @@ static void zend_generator_dtor_storage(zend_object *object) /* {{{ */
 
 			if (old_exception) {
 				if (old_opline_before_exception) {
-					EG(current_execute_data)->opline = EG(exception_op);
+					EG(current_execute_data)->opline = EG(delayed_error_op);
 					EG(opline_before_exception) = old_opline_before_exception;
 				}
 				if (EG(exception)) {
@@ -835,9 +835,9 @@ try_again:
 	ZEND_ASSERT(generator->execute_data->opline->opcode == ZEND_GENERATOR_CREATE
 			|| generator->execute_data->opline->opcode == ZEND_YIELD
 			|| generator->execute_data->opline->opcode == ZEND_YIELD_FROM
-			/* opline points to EG(exception_op), which is a sequence of
-			 * ZEND_HANDLE_EXCEPTION ops, so the following increment is safe */
-			|| generator->execute_data->opline->opcode == ZEND_HANDLE_EXCEPTION
+			/* opline points to EG(delayed_error_op), which is a sequence of
+			 * ZEND_HANDLE_DELAYED_ERROR ops, so the following increment is safe */
+			|| generator->execute_data->opline->opcode == ZEND_HANDLE_DELAYED_ERROR
 			/* opline points to the start of a finally block minus one op to
 			 * account for the following increment */
 			|| (generator->flags & ZEND_GENERATOR_FORCED_CLOSE));

@@ -173,7 +173,7 @@ ZEND_API void zend_objects_destroy_object(zend_object *object)
 
 		if (old_exception) {
 			if (EG(current_execute_data)) {
-				EG(current_execute_data)->opline = EG(exception_op);
+				EG(current_execute_data)->opline = EG(delayed_error_op);
 				EG(opline_before_exception) = old_opline_before_exception;
 			}
 			if (EG(exception)) {

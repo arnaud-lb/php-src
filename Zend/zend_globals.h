@@ -264,7 +264,6 @@ struct _zend_executor_globals {
 	zend_lazy_objects_store lazy_objects_store;
 	zend_object *exception;
 	const zend_op *opline_before_exception;
-	zend_op exception_op[3];
 	zend_op delayed_error_op[3];
 	zval delayed_error_consts[3];
 

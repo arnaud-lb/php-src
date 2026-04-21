@@ -673,18 +673,6 @@ static void zend_get_windows_version_info(OSVERSIONINFOEX *osvi) /* {{{ */
 /* }}} */
 #endif
 
-static void zend_init_exception_op(void) /* {{{ */
-{
-	memset(EG(exception_op), 0, sizeof(EG(exception_op)));
-	EG(exception_op)[0].opcode = ZEND_HANDLE_EXCEPTION;
-	ZEND_VM_SET_OPCODE_HANDLER(EG(exception_op));
-	EG(exception_op)[1].opcode = ZEND_HANDLE_EXCEPTION;
-	ZEND_VM_SET_OPCODE_HANDLER(EG(exception_op)+1);
-	EG(exception_op)[2].opcode = ZEND_HANDLE_EXCEPTION;
-	ZEND_VM_SET_OPCODE_HANDLER(EG(exception_op)+2);
-}
-/* }}} */
-
 static void zend_init_delayed_error_op(void) /* {{{ */
 {
 	memset(EG(delayed_error_op), 0, sizeof(EG(delayed_error_op)));
@@ -817,7 +805,6 @@ static void executor_globals_ctor(zend_executor_globals *executor_globals) /* {{
 	zend_startup_constants();
 	zend_copy_constants(executor_globals->zend_constants, GLOBAL_CONSTANTS_TABLE);
 	zend_init_rsrc_plist();
-	zend_init_exception_op();
 	zend_init_delayed_error_op();
 	zend_init_call_trampoline_op();
 	memset(&executor_globals->trampoline, 0, sizeof(zend_op_array));
@@ -1075,7 +1062,6 @@ void zend_startup(zend_utility_functions *utility_functions) /* {{{ */
 
 #ifndef ZTS
 	zend_init_rsrc_plist();
-	zend_init_exception_op();
 	zend_init_delayed_error_op();
 	zend_init_call_trampoline_op();
 #endif
@@ -1523,7 +1509,7 @@ ZEND_API ZEND_COLD void zend_error_zstr_at(
 			while (ex && (!ex->func || !ZEND_USER_CODE(ex->func->type))) {
 				ex = ex->prev_execute_data;
 			}
-			if (ex && ex->opline->opcode == ZEND_HANDLE_EXCEPTION &&
+			if (ex && ex->opline->opcode == ZEND_HANDLE_DELAYED_ERROR &&
 			    EG(opline_before_exception)) {
 				opline = EG(opline_before_exception);
 			}

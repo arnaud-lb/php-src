@@ -780,8 +780,8 @@ zend_jit_trace_stop ZEND_FASTCALL zend_jit_trace_execute(zend_execute_data  *ex,
 
 	TRACE_START(ZEND_JIT_TRACE_START, start, op_array, opline);
 
-	if (UNEXPECTED(opline->opcode == ZEND_HANDLE_EXCEPTION)) {
-		/* Abort trace because of exception */
+	if (UNEXPECTED(opline->opcode == ZEND_HANDLE_DELAYED_ERROR)) {
+		/* Abort trace because of error */
 		TRACE_END(ZEND_JIT_TRACE_END, ZEND_JIT_TRACE_STOP_EXCEPTION, opline);
 #ifdef HAVE_GCC_GLOBAL_REGS
 		execute_data = save_execute_data;
@@ -1278,8 +1278,8 @@ zend_jit_trace_stop ZEND_FASTCALL zend_jit_trace_execute(zend_execute_data  *ex,
 			prev_call = EX(call);
 		}
 
-		if (UNEXPECTED(opline->opcode == ZEND_HANDLE_EXCEPTION)) {
-			/* Abort trace because of exception */
+		if (UNEXPECTED(opline->opcode == ZEND_HANDLE_DELAYED_ERROR)) {
+			/* Abort trace because of error */
 			stop = ZEND_JIT_TRACE_STOP_EXCEPTION;
 			break;
 		}

@@ -1976,12 +1976,12 @@ static void zend_jit_tailcall_handler(zend_jit_ctx *jit, ir_ref handler)
 static int zend_jit_exception_handler_stub(zend_jit_ctx *jit)
 {
 	if (ZEND_VM_KIND == ZEND_VM_KIND_HYBRID) {
-		zend_vm_opcode_handler_func_t handler = (zend_vm_opcode_handler_func_t)zend_get_opcode_handler_func(EG(exception_op));
+		zend_vm_opcode_handler_func_t handler = (zend_vm_opcode_handler_func_t)zend_get_opcode_handler_func(EG(delayed_error_op));
 
 		ir_CALL(IR_VOID, ir_CONST_FUNC(handler));
 		ir_TAILCALL(IR_VOID, ir_LOAD_A(jit_IP(jit)));
 	} else {
-		zend_vm_opcode_handler_t handler = EG(exception_op)->handler;
+		zend_vm_opcode_handler_t handler = EG(delayed_error_op)->handler;
 
 		if (GCC_GLOBAL_REGS || ZEND_VM_KIND == ZEND_VM_KIND_TAILCALL) {
 			zend_jit_tailcall_handler(jit, ir_CONST_OPCODE_HANDLER_FUNC(handler));
@@ -2249,19 +2249,19 @@ static int zend_jit_icall_throw_stub(zend_jit_ctx *jit)
 	ir_ref ip, if_set;
 
 	// JIT: zend_rethrow_exception(zend_execute_data *execute_data)
-	// JIT: if (EX(opline)->opcode != ZEND_HANDLE_EXCEPTION) {
+	// JIT: if (EX(opline)->opcode != ZEND_HANDLE_DELAYED_ERROR) {
 	jit_STORE_IP(jit, ir_LOAD_A(jit_EX(opline)));
 	ip = jit_IP(jit);
 	if_set = ir_IF(ir_EQ(ir_LOAD_U8(ir_ADD_OFFSET(ip, offsetof(zend_op, opcode))),
-		ir_CONST_U8(ZEND_HANDLE_EXCEPTION)));
+		ir_CONST_U8(ZEND_HANDLE_DELAYED_ERROR)));
 	ir_IF_FALSE(if_set);
 
 	// JIT: EG(opline_before_exception) = opline;
 	ir_STORE(jit_EG(opline_before_exception), ip);
 	ir_MERGE_WITH_EMPTY_TRUE(if_set);
 
-	// JIT: opline = EG(exception_op);
-	jit_STORE_IP(jit, jit_EG(exception_op));
+	// JIT: opline = EG(delayed_error_op);
+	jit_STORE_IP(jit, jit_EG(delayed_error_op));
 
 	ir_STORE(jit_EX(opline), jit_IP(jit));
 
@@ -2274,19 +2274,19 @@ static int zend_jit_leave_throw_stub(zend_jit_ctx *jit)
 {
 	ir_ref ip, if_set;
 
-	// JIT: if (opline->opcode != ZEND_HANDLE_EXCEPTION) {
+	// JIT: if (opline->opcode != ZEND_HANDLE_DELAYED_ERROR) {
 	jit_STORE_IP(jit, ir_LOAD_A(jit_EX(opline)));
 	ip = jit_IP(jit);
 	if_set = ir_IF(ir_EQ(ir_LOAD_U8(ir_ADD_OFFSET(ip, offsetof(zend_op, opcode))),
-		ir_CONST_U8(ZEND_HANDLE_EXCEPTION)));
+		ir_CONST_U8(ZEND_HANDLE_DELAYED_ERROR)));
 	ir_IF_FALSE(if_set);
 
 	// JIT: EG(opline_before_exception) = opline;
 	ir_STORE(jit_EG(opline_before_exception), ip);
 	ir_MERGE_WITH_EMPTY_TRUE(if_set);
 
-	// JIT: opline = EG(exception_op);
-	jit_STORE_IP(jit, jit_EG(exception_op));
+	// JIT: opline = EG(delayed_error_op);
+	jit_STORE_IP(jit, jit_EG(delayed_error_op));
 
 	if (GCC_GLOBAL_REGS || ZEND_VM_KIND == ZEND_VM_KIND_TAILCALL) {
 		ir_STORE(jit_EX(opline), jit_IP(jit));
@@ -3210,7 +3210,7 @@ static void zend_jit_setup_disasm(void)
 	REGISTER_DATA(EG(jit_trace_num));
 	REGISTER_DATA(EG(vm_stack_top));
 	REGISTER_DATA(EG(vm_stack_end));
-	REGISTER_DATA(EG(exception_op));
+	REGISTER_DATA(EG(delayed_error_op));
 	REGISTER_DATA(EG(symbol_table));
 
 	REGISTER_DATA(CG(map_ptr_base));

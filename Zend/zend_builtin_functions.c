@@ -1974,7 +1974,7 @@ ZEND_API void zend_fetch_debug_backtrace(zval *return_value, int skip_last, int 
 				uint32_t lineno;
 
 				filename = call->func->op_array.filename;
-				if (call->opline->opcode == ZEND_HANDLE_EXCEPTION) {
+				if (call->opline->opcode == ZEND_HANDLE_DELAYED_ERROR) {
 					if (EG(opline_before_exception)) {
 						lineno = EG(opline_before_exception)->lineno;
 					} else {
@@ -2027,7 +2027,7 @@ not_frameless_call:
 			uint32_t lineno;
 
 			filename = prev->func->op_array.filename;
-			if (prev->opline->opcode == ZEND_HANDLE_EXCEPTION) {
+			if (prev->opline->opcode == ZEND_HANDLE_DELAYED_ERROR) {
 				if (EG(opline_before_exception)) {
 					lineno = EG(opline_before_exception)->lineno;
 				} else {

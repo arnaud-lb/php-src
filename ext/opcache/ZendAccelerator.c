@@ -4293,7 +4293,7 @@ static void preload_remove_empty_includes(void)
 						}
 					} else if (opline->opcode != ZEND_NOP &&
 					           opline->opcode != ZEND_RETURN &&
-					           opline->opcode != ZEND_HANDLE_EXCEPTION) {
+					           opline->opcode != ZEND_HANDLE_DELAYED_ERROR) {
 						empty = false;
 						break;
 					}

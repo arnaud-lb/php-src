@@ -77,11 +77,13 @@ ZEND_API void zend_observer_post_startup(void)
 		 * adjust the offset to the observed handler when we know we need to observe. */
 		ZEND_VM_SET_OPCODE_HANDLER(&EG(call_trampoline_op));
 
+#if 0 /* TODO */
 		/* ZEND_HANDLE_EXCEPTION also has SPEC(OBSERVER) and no observer extensions
 		 * exist when zend_init_exception_op() is called. */
 		ZEND_VM_SET_OPCODE_HANDLER(EG(exception_op));
 		ZEND_VM_SET_OPCODE_HANDLER(EG(exception_op) + 1);
 		ZEND_VM_SET_OPCODE_HANDLER(EG(exception_op) + 2);
+#endif
 
 		// Add an observer temporary to store previous observed frames
 		zend_internal_function *zif;

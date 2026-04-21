@@ -8277,6 +8277,10 @@ ZEND_VM_HANDLER(149, ZEND_HANDLE_EXCEPTION, ANY, ANY)
 
 ZEND_VM_HANDLER(212, ZEND_HANDLE_DELAYED_ERROR, ANY, ANY)
 {
+	if (EG(exception)) {
+		ZEND_VM_DISPATCH_TO_HANDLER(ZEND_HANDLE_EXCEPTION);
+	}
+
 	const zend_op *prev_op = EG(opline_before_exception);
 	bool delay = false;
 	switch (prev_op->opcode) {

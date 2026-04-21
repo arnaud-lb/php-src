@@ -698,7 +698,7 @@ ZEND_API uint32_t zend_get_executed_lineno(void) /* {{{ */
 			/* Missing SAVE_OPLINE()? Falling back to first line of function */
 			return ex->func->op_array.opcodes[0].lineno;
 		}
-		if (EG(exception) && ex->opline->opcode == ZEND_HANDLE_EXCEPTION &&
+		if (EG(exception) && ex->opline->opcode == ZEND_HANDLE_DELAYED_ERROR &&
 		    ex->opline->lineno == 0 && EG(opline_before_exception)) {
 			return EG(opline_before_exception)->lineno;
 		}
