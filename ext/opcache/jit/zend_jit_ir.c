@@ -40,9 +40,11 @@
  * https://github.com/llvm/llvm-project/blob/68bfe91b5a34f80dbcc4f0a7fa5d7aa1cdf959c2/llvm/lib/Target/X86/X86CallingConv.td#L1029 */
 #  define ZREG_FP             12 /* IR_REG_R12 */
 #  define ZREG_IP             13 /* IR_REG_R13 */
+#  define ZREG_ERR            14 /* IR_REG_R14 */
 # else
 #  define ZREG_FP             14 /* IR_REG_R14 */
 #  define ZREG_IP             15 /* IR_REG_R15 */
+#  define ZREG_ERR            13 /* IR_REG_R13 */
 # endif
 # define ZREG_FIRST_FPR      16
 # if defined(_WIN64)
@@ -2727,7 +2729,7 @@ static void zend_jit_init_ctx(zend_jit_ctx *jit, uint32_t flags)
 	jit->ctx.set_veneer = zend_jit_set_veneer;
 #endif
 
-	jit->ctx.fixed_regset = (1<<ZREG_FP) | (1<<ZREG_IP);
+	jit->ctx.fixed_regset = (1<<ZREG_FP) | (1<<ZREG_IP) | (1<<ZREG_ERR);
 	if (!(flags & IR_FUNCTION)) {
 		jit->ctx.flags |= IR_NO_STACK_COMBINE;
 		if (ZEND_VM_KIND == ZEND_VM_KIND_CALL || ZEND_VM_KIND == ZEND_VM_KIND_TAILCALL) {
