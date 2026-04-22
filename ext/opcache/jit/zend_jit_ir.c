@@ -272,6 +272,7 @@ static size_t tsrm_tls_offset = -1;
 	_(assign_cv_noref,                IR_FUNCTION | IR_FASTCALL_FUNC) \
 	_(assign_cv,                      IR_FUNCTION | IR_FASTCALL_FUNC) \
 	_(new_array,                      IR_FUNCTION | IR_FASTCALL_FUNC) \
+	_(handle_delayed_effects,         IR_FUNCTION | IR_FASTCALL_FUNC) \
 
 #define JIT_STUB_ID(name, flags) \
 	jit_stub_ ## name,
@@ -298,6 +299,7 @@ typedef struct _zend_jit_ctx {
 	bool                 use_last_valid_opline;
 	bool                 track_last_valid_opline;
 	bool                 reuse_ip;
+	bool                 did_check_exceptions;
 	uint32_t             delayed_call_level;
 	int                  b;           /* current basic block number or -1 */
 #ifdef ZTS
@@ -2725,6 +2727,32 @@ static int zend_jit_assign_cv_stub(zend_jit_ctx *jit)
 	return 1;
 }
 
+static int zend_jit_handle_delayed_effects_stub(zend_jit_ctx *jit)
+{
+	ir_ref if_exception;
+
+	// JIT: EG(opline) = EG(opline_before_exception)
+	ir_STORE(jit_EX(opline), ir_LOAD_A(jit_EG(opline_before_exception)));
+	// JIT: zend_handle_delayed_errors()
+	ir_CALL(IR_VOID, ir_CONST_FUNC(zend_handle_delayed_errors));
+	// JIT: EG(opline_before_exception) = NULL
+	ir_STORE(jit_EG(opline_before_exception), ir_CONST_ADDR(0));
+
+	// JIT: if (EG(delayed_effects) & ZEND_DELAYED_EXCEPTION
+	if_exception = ir_IF(ir_AND_U8(ir_LOAD_U8(jit_EG_delayed_effects(jit)), ir_CONST_U8(ZEND_DELAYED_EXCEPTION)));
+	ir_IF_TRUE(if_exception);
+
+	// pop call frame. FIXME: Support intel CET, Support ARM, frame pointer?
+	ir_RSTORE(IR_REG_SP, ir_ADD_A(ir_RLOAD_A(IR_REG_SP), ir_CONST_ADDR(sizeof(void*)*2)));
+
+	ir_IJMP(jit_STUB_ADDR(jit, jit_stub_exception_handler));
+
+	ir_IF_FALSE(if_exception);
+	ir_RETURN(IR_VOID);
+
+	return 1;
+}
+
 static void zend_jit_init_ctx(zend_jit_ctx *jit, uint32_t flags)
 {
 #if defined (__CET__) && (__CET__ & 1) != 0
@@ -2835,6 +2863,7 @@ static void zend_jit_init_ctx(zend_jit_ctx *jit, uint32_t flags)
 	jit->use_last_valid_opline = false;
 	jit->track_last_valid_opline = false;
 	jit->reuse_ip = false;
+	jit->did_check_exceptions = false;
 	jit->delayed_call_level = 0;
 	delayed_call_chain = false;
 	jit->b = -1;
@@ -4007,6 +4036,8 @@ static void zend_jit_check_exception(zend_jit_ctx *jit)
 	ir_RSTORE(ZREG_ERR, ir_LOAD_U8(jit_EG_delayed_effects(jit)));
 	ir_GUARD_NOT(ir_AND_U8(ir_RLOAD_U8(ZREG_ERR), ir_CONST_U8(ZEND_DELAYED_EXCEPTION)),
 		jit_STUB_ADDR(jit, jit_stub_exception_handler));
+
+	jit->did_check_exceptions = true;
 }
 
 static void zend_jit_check_exception_undef_result(zend_jit_ctx *jit, const zend_op *opline)
@@ -4015,6 +4046,18 @@ static void zend_jit_check_exception_undef_result(zend_jit_ctx *jit, const zend_
 	ir_GUARD_NOT(ir_AND_U8(ir_RLOAD_U8(ZREG_ERR), ir_CONST_U8(ZEND_DELAYED_EXCEPTION)),
 		jit_STUB_ADDR(jit,
 			(opline->result_type & (IS_TMP_VAR|IS_VAR)) ? jit_stub_exception_handler_undef : jit_stub_exception_handler));
+
+	jit->did_check_exceptions = true;
+}
+
+static void zend_jit_check_delayed_effects(zend_jit_ctx *jit)
+{
+	ir_ref if_delayed_effects;
+
+	if_delayed_effects = ir_IF(ir_RLOAD_U8(ZREG_ERR));
+	ir_IF_TRUE_cold(if_delayed_effects);
+	ir_CALL(IR_VOID, jit_STUB_FUNC_ADDR(jit, jit_stub_handle_delayed_effects, IR_FASTCALL_FUNC));
+	ir_MERGE_WITH_EMPTY_FALSE(if_delayed_effects);
 }
 
 static void zend_jit_type_check_undef(zend_jit_ctx  *jit,
@@ -17392,6 +17435,7 @@ static int zend_jit_trace_start(zend_jit_ctx        *jit,
 	}
 
 	ir_STORE(jit_EG(jit_trace_num), ir_CONST_U32(trace_num));
+	ir_RSTORE(ZREG_ERR, ir_CONST_U8(0));
 
 	return 1;
 }

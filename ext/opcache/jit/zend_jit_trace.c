@@ -4095,6 +4095,12 @@ static bool zend_jit_trace_may_throw(const zend_op       *opline,
 	return zend_may_throw_ex(opline, ssa_op, op_array, ssa, t1, t2);
 }
 
+enum zend_jit_check_delayed_effects {
+	ZEND_JIT_CHECK_DELAYED_EFFECTS_UNNEEDED,
+	ZEND_JIT_CHECK_DELAYED_EFFECTS_NOW,
+	ZEND_JIT_CHECK_DELAYED_EFFECTS_LATER,
+};
+
 static zend_vm_opcode_handler_t zend_jit_trace(zend_jit_trace_rec *trace_buffer, uint32_t parent_trace, uint32_t exit_num)
 {
 	zend_vm_opcode_handler_t handler = NULL;
@@ -4136,6 +4142,7 @@ static zend_vm_opcode_handler_t zend_jit_trace(zend_jit_trace_rec *trace_buffer,
 	int checked_stack;
 	int peek_checked_stack;
 	uint32_t frame_flags = 0;
+	int check_delayed_effects = ZEND_JIT_CHECK_DELAYED_EFFECTS_UNNEEDED;
 
 	JIT_G(current_trace) = trace_buffer;
 
@@ -6517,6 +6524,28 @@ static zend_vm_opcode_handler_t zend_jit_trace(zend_jit_trace_rec *trace_buffer,
 			}
 
 done:
+			if (ctx.did_check_exceptions || check_delayed_effects != ZEND_JIT_CHECK_DELAYED_EFFECTS_UNNEEDED) {
+				switch (opline->opcode) {
+					case ZEND_FETCH_W:
+					case ZEND_FETCH_RW:
+					case ZEND_FETCH_FUNC_ARG:
+					case ZEND_FETCH_UNSET:
+					case ZEND_FETCH_DIM_W:
+					case ZEND_FETCH_DIM_RW:
+					case ZEND_FETCH_DIM_UNSET:
+					case ZEND_FETCH_LIST_W:
+					case ZEND_FETCH_OBJ_W:
+					case ZEND_FETCH_OBJ_RW:
+					case ZEND_FETCH_OBJ_UNSET:
+						check_delayed_effects = ZEND_JIT_CHECK_DELAYED_EFFECTS_LATER;
+						break;
+					default:
+						check_delayed_effects = ZEND_JIT_CHECK_DELAYED_EFFECTS_NOW;
+						break;
+				}
+				ctx.did_check_exceptions = false;
+			}
+
 			polymorphic_side_trace = 0;
 			if (zend_jit_dec_call_level(opline->opcode)) {
 				frame->call_level--;
@@ -6875,6 +6904,15 @@ done:
 						p++;
 					}
 					send_result = 0;
+				}
+			}
+
+			if (check_delayed_effects == ZEND_JIT_CHECK_DELAYED_EFFECTS_NOW) {
+				if (!ctx.ctx.control) {
+					check_delayed_effects = ZEND_JIT_CHECK_DELAYED_EFFECTS_LATER;
+				} else {
+					zend_jit_check_delayed_effects(jit);
+					check_delayed_effects = ZEND_JIT_CHECK_DELAYED_EFFECTS_UNNEEDED;
 				}
 			}
 		} else if (p->op == ZEND_JIT_TRACE_ENTER) {

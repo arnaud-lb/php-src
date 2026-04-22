@@ -2510,7 +2510,7 @@ ZEND_API ZEND_COLD zval* ZEND_FASTCALL zend_undefined_offset_write(HashTable *ht
 	if (!(GC_FLAGS(ht) & IS_ARRAY_IMMUTABLE)) {
 		GC_ADDREF(ht);
 	}
-	zend_undefined_offset(lval);
+	zend_undefined_offset_delayed(lval);
 	if (!(GC_FLAGS(ht) & IS_ARRAY_IMMUTABLE) && GC_DELREF(ht) != 1) {
 		if (!GC_REFCOUNT(ht)) {
 			zend_array_destroy(ht);

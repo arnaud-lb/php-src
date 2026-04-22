@@ -1412,3 +1412,10 @@ zend_jit_trace_stop ZEND_FASTCALL zend_jit_trace_execute(zend_execute_data  *ex,
 
 	return stop | halt;
 }
+
+void zend_jit_handle_delayed_effects(void)
+{
+	EX(opline) = EG(opline_before_exception);
+	zend_handle_delayed_errors();
+	EG(opline_before_exception) = NULL;
+}

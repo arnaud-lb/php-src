@@ -794,4 +794,6 @@ static zend_always_inline bool is_signed(double d)
 	return (((unsigned char*)&d)[sizeof(double)-1] & 0x80) != 0;
 }
 
+void zend_jit_handle_delayed_effects(void);
+
 #endif /* ZEND_JIT_INTERNAL_H */
