@@ -3322,6 +3322,7 @@ static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV_
 			cleanup_live_vars(execute_data, op_num, try_catch->finally_op);
 			Z_OBJ_P(fast_call) = EG(exception);
 			EG(exception) = NULL;
+			EG(delayed_effects) &= ~ZEND_DELAYED_EXCEPTION;
 			Z_OPLINE_NUM_P(fast_call) = (uint32_t)-1;
 			ZEND_VM_JMP_EX(&EX(func)->op_array.opcodes[try_catch->finally_op], 0);
 
@@ -3347,6 +3348,7 @@ static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV_
 					}
 				} else {
 					ex = EG(exception) = Z_OBJ_P(fast_call);
+					EG(delayed_effects) |= ZEND_DELAYED_EXCEPTION;
 				}
 			}
 		}
@@ -3375,6 +3377,8 @@ static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV_
 
 static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_HANDLE_EXCEPTION_SPEC_HANDLER(ZEND_OPCODE_HANDLER_ARGS)
 {
+	ZEND_ASSERT(EG(delayed_effects) & ZEND_DELAYED_EXCEPTION);
+
 	const zend_op *throw_op = EG(opline_before_exception);
 
 	if (zend_hash_num_elements(&EG(delayed_errors))) {
@@ -3444,6 +3448,8 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_HANDLE_DELAYE
 	if (EG(exception)) {
 		ZEND_VM_TAIL_CALL(ZEND_HANDLE_EXCEPTION_SPEC_HANDLER(ZEND_OPCODE_HANDLER_ARGS_PASSTHRU));
 	}
+
+	ZEND_ASSERT(EG(delayed_effects) & ZEND_DELAYED_ERROR);
 
 	const zend_op *prev_op = EG(opline_before_exception);
 	const zend_op *executed_op = prev_op;
@@ -3606,7 +3612,10 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_FAST_RET_SPEC
 
 	/* special case for unhandled exceptions */
 	EG(exception) = Z_OBJ_P(fast_call);
-	Z_OBJ_P(fast_call) = NULL;
+	if (EG(exception)) {
+		EG(delayed_effects) |= ZEND_DELAYED_EXCEPTION;
+		Z_OBJ_P(fast_call) = NULL;
+	}
 	current_try_catch_offset = opline->op2.num;
 	current_op_num = opline - EX(func)->op_array.opcodes;
 	ZEND_VM_DISPATCH_TO_HELPER(zend_dispatch_try_catch_finally_helper_SPEC(ZEND_OPCODE_HANDLER_ARGS_PASSTHRU_EX current_try_catch_offset, current_op_num));
@@ -5245,6 +5254,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_CATCH_SPEC_CO
 
 	exception = EG(exception);
 	EG(exception) = NULL;
+	EG(delayed_effects) &= ~ZEND_DELAYED_EXCEPTION;
 	if (RETURN_VALUE_USED(opline)) {
 		/* Always perform a strict assignment. There is a reasonable expectation that if you
 		 * write "catch (Exception $e)" then $e will actually be instanceof Exception. As such,
@@ -56081,6 +56091,8 @@ static ZEND_VM_HOT ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_NOP_SP
 static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV_EX  zend_dispatch_try_catch_finally_helper_SPEC_TAILCALL(ZEND_OPCODE_HANDLER_ARGS_EX uint32_t try_catch_offset, uint32_t op_num);
 static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_HANDLE_EXCEPTION_SPEC_TAILCALL_HANDLER(ZEND_OPCODE_HANDLER_ARGS)
 {
+	ZEND_ASSERT(EG(delayed_effects) & ZEND_DELAYED_EXCEPTION);
+
 	const zend_op *throw_op = EG(opline_before_exception);
 
 	if (zend_hash_num_elements(&EG(delayed_errors))) {
@@ -56150,6 +56162,8 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_HANDLE_DELAYED_ERR
 	if (EG(exception)) {
 		ZEND_VM_TAIL_CALL(ZEND_HANDLE_EXCEPTION_SPEC_TAILCALL_HANDLER(ZEND_OPCODE_HANDLER_ARGS_PASSTHRU));
 	}
+
+	ZEND_ASSERT(EG(delayed_effects) & ZEND_DELAYED_ERROR);
 
 	const zend_op *prev_op = EG(opline_before_exception);
 	const zend_op *executed_op = prev_op;
@@ -56312,7 +56326,10 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_FAST_RET_SPEC_TAIL
 
 	/* special case for unhandled exceptions */
 	EG(exception) = Z_OBJ_P(fast_call);
-	Z_OBJ_P(fast_call) = NULL;
+	if (EG(exception)) {
+		EG(delayed_effects) |= ZEND_DELAYED_EXCEPTION;
+		Z_OBJ_P(fast_call) = NULL;
+	}
 	current_try_catch_offset = opline->op2.num;
 	current_op_num = opline - EX(func)->op_array.opcodes;
 	ZEND_VM_DISPATCH_TO_HELPER(zend_dispatch_try_catch_finally_helper_SPEC_TAILCALL(ZEND_OPCODE_HANDLER_ARGS_PASSTHRU_EX current_try_catch_offset, current_op_num));
@@ -57951,6 +57968,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_CATCH_SPEC_CONST_T
 
 	exception = EG(exception);
 	EG(exception) = NULL;
+	EG(delayed_effects) &= ~ZEND_DELAYED_EXCEPTION;
 	if (RETURN_VALUE_USED(opline)) {
 		/* Always perform a strict assignment. There is a reasonable expectation that if you
 		 * write "catch (Exception $e)" then $e will actually be instanceof Exception. As such,
@@ -106345,6 +106363,7 @@ static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV_EX  z
 			cleanup_live_vars(execute_data, op_num, try_catch->finally_op);
 			Z_OBJ_P(fast_call) = EG(exception);
 			EG(exception) = NULL;
+			EG(delayed_effects) &= ~ZEND_DELAYED_EXCEPTION;
 			Z_OPLINE_NUM_P(fast_call) = (uint32_t)-1;
 			ZEND_VM_JMP_EX(&EX(func)->op_array.opcodes[try_catch->finally_op], 0);
 
@@ -106370,6 +106389,7 @@ static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV_EX  z
 					}
 				} else {
 					ex = EG(exception) = Z_OBJ_P(fast_call);
+					EG(delayed_effects) |= ZEND_DELAYED_EXCEPTION;
 				}
 			}
 		}

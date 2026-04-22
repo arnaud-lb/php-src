@@ -1941,6 +1941,7 @@ static void remember_prev_exception(zend_object **prev_exception)
 		}
 		*prev_exception = EG(exception);
 		EG(exception) = NULL;
+		EG(delayed_effects) &= ~ZEND_DELAYED_EXCEPTION;
 	}
 }
 
@@ -1989,6 +1990,9 @@ static zend_never_inline void gc_call_destructors_in_fiber(void)
 	}
 
 	EG(exception) = exception;
+	if (exception) {
+		EG(delayed_effects) |= ZEND_DELAYED_EXCEPTION;
+	}
 }
 
 /* Perform a garbage collection run. The default implementation of gc_collect_cycles. */

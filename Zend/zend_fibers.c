@@ -775,7 +775,10 @@ static void zend_fiber_object_destroy(zend_object *object)
 	}
 
 	zend_object *exception = EG(exception);
-	EG(exception) = NULL;
+	if (exception) {
+		EG(exception) = NULL;
+		EG(delayed_effects) &= ~ZEND_DELAYED_EXCEPTION;
+	}
 
 	zval graceful_exit;
 	ZVAL_OBJ(&graceful_exit, zend_create_graceful_exit());
@@ -802,6 +805,10 @@ static void zend_fiber_object_destroy(zend_object *object)
 	} else {
 		zval_ptr_dtor(&transfer.value);
 		EG(exception) = exception;
+	}
+
+	if (EG(exception)) {
+		EG(delayed_effects) |= ZEND_DELAYED_EXCEPTION;
 	}
 }
 

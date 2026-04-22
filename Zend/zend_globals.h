@@ -170,6 +170,8 @@ struct _zend_compiler_globals {
 #endif
 };
 
+#define ZEND_DELAYED_EXCEPTION (1<<0)
+#define ZEND_DELAYED_ERROR     (1<<1)
 
 struct _zend_executor_globals {
 	zval uninitialized_zval;
@@ -271,6 +273,7 @@ struct _zend_executor_globals {
 
 	bool active;
 	uint8_t flags;
+	uint8_t delayed_effects; /* Set of ZEND_DELAYED_* */
 
 	zend_long assertions;
 

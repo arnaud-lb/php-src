@@ -178,6 +178,7 @@ ZEND_API ZEND_COLD void zend_throw_exception_internal(zend_object *exception) /*
 		if (previous) {
 			return;
 		}
+		EG(delayed_effects) |= ZEND_DELAYED_EXCEPTION;
 	}
 	if (!EG(current_execute_data)) {
 		if (exception && (exception->ce == zend_ce_parse_error || exception->ce == zend_ce_compile_error)) {
@@ -222,6 +223,7 @@ ZEND_API void zend_clear_exception(void) /* {{{ */
 	/* exception may have destructor */
 	exception = EG(exception);
 	EG(exception) = NULL;
+	EG(delayed_effects) &= ~ZEND_DELAYED_EXCEPTION;
 	OBJ_RELEASE(exception);
 	if (EG(current_execute_data)) {
 		EG(current_execute_data)->opline = EG(opline_before_exception);
@@ -921,6 +923,7 @@ ZEND_API ZEND_COLD zend_result zend_exception_error(zend_object *ex, int severit
 	ZVAL_OBJ(&exception, ex);
 	ce_exception = ex->ce;
 	EG(exception) = NULL;
+	EG(delayed_effects) &= ~ZEND_DELAYED_EXCEPTION;
 
 	zval_ptr_dtor(&EG(last_fatal_error_backtrace));
 	ZVAL_UNDEF(&EG(last_fatal_error_backtrace));
@@ -1043,6 +1046,7 @@ ZEND_API ZEND_COLD void zend_throw_unwind_exit(void)
 {
 	ZEND_ASSERT(!EG(exception));
 	EG(exception) = zend_create_unwind_exit();
+	EG(delayed_effects) |= ZEND_DELAYED_EXCEPTION;
 	EG(opline_before_exception) = EG(current_execute_data)->opline;
 	EG(current_execute_data)->opline = EG(delayed_error_op);
 }
@@ -1051,6 +1055,7 @@ ZEND_API ZEND_COLD void zend_throw_graceful_exit(void)
 {
 	ZEND_ASSERT(!EG(exception));
 	EG(exception) = zend_create_graceful_exit();
+	EG(delayed_effects) |= ZEND_DELAYED_EXCEPTION;
 	EG(opline_before_exception) = EG(current_execute_data)->opline;
 	EG(current_execute_data)->opline = EG(delayed_error_op);
 }

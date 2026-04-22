@@ -3955,6 +3955,7 @@ static bool preload_try_resolve_constants(zend_class_entry *ce)
 		}
 	} while (changed && !ok);
 	EG(exception) = NULL;
+	EG(delayed_effects) &= ~ZEND_DELAYED_EXCEPTION;
 	CG(in_compilation) = false;
 
 	if (ok) {

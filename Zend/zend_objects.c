@@ -165,7 +165,10 @@ ZEND_API void zend_objects_destroy_object(zend_object *object)
 					old_opline_before_exception = EG(opline_before_exception);
 				}
 				old_exception = EG(exception);
-				EG(exception) = NULL;
+				if (old_exception) {
+					EG(exception) = NULL;
+					EG(delayed_effects) &= ~ZEND_DELAYED_EXCEPTION;
+				}
 			}
 		}
 
@@ -178,8 +181,10 @@ ZEND_API void zend_objects_destroy_object(zend_object *object)
 			}
 			if (EG(exception)) {
 				zend_exception_set_previous(EG(exception), old_exception);
+				ZEND_ASSERT(EG(delayed_effects) & ZEND_DELAYED_EXCEPTION);
 			} else {
 				EG(exception) = old_exception;
+				EG(delayed_effects) |= ZEND_DELAYED_EXCEPTION;
 			}
 		}
 		OBJ_RELEASE(object);

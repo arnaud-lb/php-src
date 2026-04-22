@@ -1515,6 +1515,7 @@ ZEND_API ZEND_COLD void zend_error_zstr_at(
 			}
 			zend_exception_error(EG(exception), E_WARNING);
 			EG(exception) = NULL;
+			EG(delayed_effects) &= ~ZEND_DELAYED_EXCEPTION;
 			if (opline) {
 				ex->opline = opline;
 			}
@@ -1822,6 +1823,8 @@ ZEND_API ZEND_COLD void zend_error_delayed(int type, const char *format, ...)
 
 	zend_hash_next_index_insert_ptr(&EG(delayed_errors), info);
 
+	EG(delayed_effects) |= ZEND_DELAYED_ERROR;
+
 	if (EG(current_execute_data)->opline != EG(delayed_error_op)) {
 		EG(opline_before_exception) = EG(current_execute_data)->opline;
 		EG(current_execute_data)->opline = EG(delayed_error_op);
@@ -1958,6 +1961,7 @@ ZEND_API ZEND_COLD void zend_user_exception_handler(void) /* {{{ */
 
 	old_exception = EG(exception);
 	EG(exception) = NULL;
+	EG(delayed_effects) &= ~ZEND_DELAYED_EXCEPTION;
 	ZVAL_OBJ(&params[0], old_exception);
 
 	ZVAL_COPY_VALUE(&orig_user_exception_handler, &EG(user_exception_handler));
@@ -1969,10 +1973,12 @@ ZEND_API ZEND_COLD void zend_user_exception_handler(void) /* {{{ */
 		if (EG(exception)) {
 			OBJ_RELEASE(EG(exception));
 			EG(exception) = NULL;
+			EG(delayed_effects) &= ~ZEND_DELAYED_EXCEPTION;
 		}
 		OBJ_RELEASE(old_exception);
 	} else {
 		EG(exception) = old_exception;
+		EG(delayed_effects) |= ZEND_DELAYED_EXCEPTION;
 	}
 
 	if (Z_TYPE(EG(user_exception_handler)) == IS_UNDEF) {

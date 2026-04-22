@@ -4877,6 +4877,7 @@ ZEND_VM_HANDLER(107, ZEND_CATCH, CONST, JMP_ADDR, LAST_CATCH|CACHE_SLOT)
 
 	exception = EG(exception);
 	EG(exception) = NULL;
+	EG(delayed_effects) &= ~ZEND_DELAYED_EXCEPTION;
 	if (RETURN_VALUE_USED(opline)) {
 		/* Always perform a strict assignment. There is a reasonable expectation that if you
 		 * write "catch (Exception $e)" then $e will actually be instanceof Exception. As such,
@@ -8160,6 +8161,7 @@ ZEND_VM_HELPER(zend_dispatch_try_catch_finally_helper, ANY, ANY, uint32_t try_ca
 			cleanup_live_vars(execute_data, op_num, try_catch->finally_op);
 			Z_OBJ_P(fast_call) = EG(exception);
 			EG(exception) = NULL;
+			EG(delayed_effects) &= ~ZEND_DELAYED_EXCEPTION;
 			Z_OPLINE_NUM_P(fast_call) = (uint32_t)-1;
 			ZEND_VM_JMP_EX(&EX(func)->op_array.opcodes[try_catch->finally_op], 0);
 
@@ -8185,6 +8187,7 @@ ZEND_VM_HELPER(zend_dispatch_try_catch_finally_helper, ANY, ANY, uint32_t try_ca
 					}
 				} else {
 					ex = EG(exception) = Z_OBJ_P(fast_call);
+					EG(delayed_effects) |= ZEND_DELAYED_EXCEPTION;
 				}
 			}
 		}
@@ -8213,6 +8216,8 @@ ZEND_VM_HELPER(zend_dispatch_try_catch_finally_helper, ANY, ANY, uint32_t try_ca
 
 ZEND_VM_HANDLER(149, ZEND_HANDLE_EXCEPTION, ANY, ANY)
 {
+	ZEND_ASSERT(EG(delayed_effects) & ZEND_DELAYED_EXCEPTION);
+
 	const zend_op *throw_op = EG(opline_before_exception);
 
 	if (zend_hash_num_elements(&EG(delayed_errors))) {
@@ -8282,6 +8287,8 @@ ZEND_VM_HANDLER(212, ZEND_HANDLE_DELAYED_ERROR, ANY, ANY)
 	if (EG(exception)) {
 		ZEND_VM_DISPATCH_TO_HANDLER(ZEND_HANDLE_EXCEPTION);
 	}
+
+	ZEND_ASSERT(EG(delayed_effects) & ZEND_DELAYED_ERROR);
 
 	const zend_op *prev_op = EG(opline_before_exception);
 	const zend_op *executed_op = prev_op;
@@ -8783,7 +8790,10 @@ ZEND_VM_HANDLER(163, ZEND_FAST_RET, ANY, TRY_CATCH)
 
 	/* special case for unhandled exceptions */
 	EG(exception) = Z_OBJ_P(fast_call);
-	Z_OBJ_P(fast_call) = NULL;
+	if (EG(exception)) {
+		EG(delayed_effects) |= ZEND_DELAYED_EXCEPTION;
+		Z_OBJ_P(fast_call) = NULL;
+	}
 	current_try_catch_offset = opline->op2.num;
 	current_op_num = opline - EX(func)->op_array.opcodes;
 	ZEND_VM_DISPATCH_TO_HELPER(zend_dispatch_try_catch_finally_helper, try_catch_offset, current_try_catch_offset, op_num, current_op_num);

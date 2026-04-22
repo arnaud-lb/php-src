@@ -136,6 +136,7 @@ ZEND_ATTRIBUTE_UNUSED static void opcache_invalidate(void) {
 	steps_left = MAX_STEPS;
 	zend_object *exception = EG(exception);
 	EG(exception) = NULL;
+	EG(delayed_effects) &= ~ZEND_DELAYED_EXCEPTION;
 	zval retval, args[2];
 	zend_function *fn = zend_hash_str_find_ptr(CG(function_table), ZEND_STRL("opcache_invalidate"));
 	ZEND_ASSERT(fn != NULL);
@@ -146,5 +147,8 @@ ZEND_ATTRIBUTE_UNUSED static void opcache_invalidate(void) {
 	ZEND_ASSERT(Z_TYPE(retval) == IS_TRUE);
 	zval_ptr_dtor(&args[0]);
 	zval_ptr_dtor(&retval);
-	EG(exception) = exception;
+	if (exception) {
+		EG(exception) = exception;
+		EG(delayed_effects) |= ZEND_DELAYED_EXCEPTION;
+	}
 }

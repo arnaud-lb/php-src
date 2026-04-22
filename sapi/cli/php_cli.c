@@ -1070,6 +1070,7 @@ do_repeat:
 					zend_printf("Exception: %s\n", Z_STRVAL_P(msg));
 					zend_object_release(EG(exception));
 					EG(exception) = NULL;
+					EG(delayed_effects) &= ~ZEND_DELAYED_EXCEPTION;
 					EG(exit_status) = 1;
 				} else {
 					zend_print_zval(&ref, 0);
