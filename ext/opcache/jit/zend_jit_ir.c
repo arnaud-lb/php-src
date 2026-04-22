@@ -320,6 +320,7 @@ typedef struct _zend_jit_ctx {
 	int                  delay_var;
 	ir_refs             *delay_refs;
 	ir_ref               eg_exception_addr;
+	ir_ref               eg_delayed_effects_addr;
 	HashTable            addr_hash;
 	ir_ref               stub_addr[jit_last_stub];
 } zend_jit_ctx;
@@ -604,6 +605,21 @@ static ir_ref jit_EG_exception(zend_jit_ctx *jit)
 	if (UNEXPECTED(!ref)) {
 		ref = ir_unique_const_addr(&jit->ctx, (uintptr_t)&EG(exception));
 		jit->eg_exception_addr = ref;
+	}
+	return ref;
+#endif
+}
+
+static ir_ref jit_EG_delayed_effects(zend_jit_ctx *jit)
+{
+#ifdef ZTS
+	return jit_EG(delayed_effects);
+#else
+	ir_ref ref = jit->eg_delayed_effects_addr;
+
+	if (UNEXPECTED(!ref)) {
+		ref = ir_unique_const_addr(&jit->ctx, (uintptr_t)&EG(delayed_effects));
+		jit->eg_delayed_effects_addr = ref;
 	}
 	return ref;
 #endif
@@ -2838,6 +2854,7 @@ static void zend_jit_init_ctx(zend_jit_ctx *jit, uint32_t flags)
 	jit->delay_var = -1;
 	jit->delay_refs = NULL;
 	jit->eg_exception_addr = 0;
+	jit->eg_delayed_effects_addr = 0;
 	zend_hash_init(&jit->addr_hash, 64, NULL, NULL, 0);
 	memset(jit->stub_addr, 0, sizeof(jit->stub_addr));
 
@@ -3213,6 +3230,7 @@ static void zend_jit_setup_disasm(void)
 	REGISTER_DATA(EG(vm_stack_top));
 	REGISTER_DATA(EG(vm_stack_end));
 	REGISTER_DATA(EG(delayed_error_op));
+	REGISTER_DATA(EG(delayed_effects));
 	REGISTER_DATA(EG(symbol_table));
 
 	REGISTER_DATA(CG(map_ptr_base));
@@ -3986,13 +4004,15 @@ static int zend_jit_set_cond(zend_jit_ctx *jit, const zend_op *opline, const zen
 /* PHP JIT handlers */
 static void zend_jit_check_exception(zend_jit_ctx *jit)
 {
-	ir_GUARD_NOT(ir_LOAD_A(jit_EG_exception(jit)),
+	ir_RSTORE(ZREG_ERR, ir_LOAD_U8(jit_EG_delayed_effects(jit)));
+	ir_GUARD_NOT(ir_AND_U8(ir_RLOAD_U8(ZREG_ERR), ir_CONST_U8(ZEND_DELAYED_EXCEPTION)),
 		jit_STUB_ADDR(jit, jit_stub_exception_handler));
 }
 
 static void zend_jit_check_exception_undef_result(zend_jit_ctx *jit, const zend_op *opline)
 {
-	ir_GUARD_NOT(ir_LOAD_A(jit_EG_exception(jit)),
+	ir_RSTORE(ZREG_ERR, ir_LOAD_U8(jit_EG_delayed_effects(jit)));
+	ir_GUARD_NOT(ir_AND_U8(ir_RLOAD_U8(ZREG_ERR), ir_CONST_U8(ZEND_DELAYED_EXCEPTION)),
 		jit_STUB_ADDR(jit,
 			(opline->result_type & (IS_TMP_VAR|IS_VAR)) ? jit_stub_exception_handler_undef : jit_stub_exception_handler));
 }
