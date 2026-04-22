@@ -212,6 +212,7 @@ void fuzzer_request_shutdown(void)
 		if (EG(exception)) {
 			zend_object_release(EG(exception));
 			EG(exception) = NULL;
+			EG(delayed_effects) &= ~ZEND_DELAYED_EXCEPTION;
 		}
 
 		/* Some fuzzers (like unserialize) may create circular structures. Make sure we free them.

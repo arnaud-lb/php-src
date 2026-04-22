@@ -693,6 +693,7 @@ static inline void phpdbg_handle_exception(void) /* {{{ */
 	zval rv, tmp;
 
 	EG(exception) = NULL;
+	EG(delayed_effects) &= ~ZEND_DELAYED_EXCEPTION;
 
 	zend_call_known_instance_method_with_0_params(ex->ce->__tostring, ex, &tmp);
 	file = zval_get_string(zend_read_property_ex(zend_get_exception_base(ex), ex, ZSTR_KNOWN(ZEND_STR_FILE), /* silent */ true, &rv));
