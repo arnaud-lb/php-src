@@ -56520,14 +56520,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_NULL_HANDLER(
 # define ZEND_VM_TAIL_CALL(call)               ZEND_MUSTTAIL return call
 # define ZEND_VM_CONTINUE()                    ZEND_VM_TAIL_CALL(opline->handler(ZEND_OPCODE_HANDLER_ARGS_PASSTHRU))
 # define ZEND_VM_RETURN()                      opline = &call_halt_op; ZEND_VM_CONTINUE()
-# define ZEND_VM_DISPATCH_TO_HELPER(call) \
-    do { \
-        opline = call; \
-        if (UNEXPECTED(((uintptr_t)opline & ZEND_VM_ENTER_BIT))) { \
-            return opline; \
-        } \
-        ZEND_VM_TAIL_CALL(opline->handler(ZEND_OPCODE_HANDLER_ARGS_PASSTHRU)); \
-    } while (0)
+# define ZEND_VM_DISPATCH_TO_HELPER(call) return call
 # define ZEND_VM_DISPATCH_TO_LEAVE_HELPER(helper) opline = &call_leave_op; SAVE_OPLINE(); ZEND_VM_CONTINUE()
 # define ZEND_VM_INTERRUPT()        ZEND_VM_TAIL_CALL(zend_interrupt_helper_SPEC_TAILCALL(ZEND_OPCODE_HANDLER_ARGS_PASSTHRU))
 
