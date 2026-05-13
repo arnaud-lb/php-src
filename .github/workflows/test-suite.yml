@@ -490,6 +490,19 @@ jobs:
       - name: Test AMPHP
         if: ${{ !cancelled() }}
         run: |
+          # Workaround to enable SHA1 signatures again in openssl
+          cat << 'EOF' > /tmp/openssl-override.cnf
+          .include /etc/ssl/openssl.cnf
+
+          [openssl_init]
+          ssl_conf = ssl_sect
+
+          [ssl_sect]
+          system_default = system_default_sect
+
+          [system_default_sect]
+          CipherString = DEFAULT@SECLEVEL=1
+          EOF
           repositories="amp cache dns file http parallel parser pipeline process serialization socket sync websocket-client websocket-server"
           X=0
           for repository in $repositories; do
@@ -499,7 +512,7 @@ jobs:
             git rev-parse HEAD
             php /usr/bin/composer install --no-progress --ignore-platform-req=php+
             EXIT_CODE=0
-            vendor/bin/phpunit || EXIT_CODE=$?
+            OPENSSL_CONF=/tmp/openssl-override.cnf vendor/bin/phpunit || EXIT_CODE=$?
             echo -e "\n::endgroup::"
             if [ ${EXIT_CODE:-0} -gt 128 ]; then
               X=1;
