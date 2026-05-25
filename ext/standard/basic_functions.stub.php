@@ -3598,6 +3598,13 @@ function sapi_windows_vt100_support($stream, ?bool $enable = null): bool {}
 /** @param resource $stream */
 function stream_set_chunk_size($stream, int $size): int {}
 
+enum StreamOperation {
+    case Read;
+    case Write;
+};
+
+function stream_set_hook(?callable $hook): ?callable {}
+
 #if (defined(HAVE_SYS_TIME_H) || defined(PHP_WIN32))
 /** @param resource $stream */
 function stream_set_timeout($stream, int $seconds, int $microseconds = 0): bool {}

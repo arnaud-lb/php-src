@@ -102,6 +102,7 @@ typedef struct {
 	HashTable *wrapper_logged_errors;	/* key: wrapper address; value: linked list of error entries */
 	php_stream_error_state stream_error_state;
 	int pclose_wait;
+	zend_fcall_info_cache hook_fcc;
 #ifdef HAVE_GETHOSTBYNAME_R
 	struct hostent tmp_host_info;
 	char *tmp_host_buf;

@@ -30,6 +30,7 @@
 #include <stddef.h>
 #include <fcntl.h>
 #include "php_streams_int.h"
+#include "zend_enum.h"
 
 /* {{{ resource and registration code */
 /* Global wrapper hash, copied to FG(stream_wrappers) on registration of volatile wrapper */
@@ -432,6 +433,13 @@ PHPAPI zend_result _php_stream_fill_read_buffer(php_stream *stream, size_t size)
 			php_stream_filter_status_t status = PSFS_ERR_FATAL;
 			php_stream_filter *filter;
 
+			if (php_stream_call_hook(stream, ZEND_ENUM_StreamOperation_Read)) {
+				if (stream->eof || (stream->writepos - stream->readpos >= (zend_off_t)to_read_now)) {
+					break;
+				}
+				// TODO: stream closed?
+			}
+
 			/* read a chunk into a bucket */
 			justread = stream->ops->read(stream, chunk_buf, stream->chunk_size);
 			if (justread < 0 && stream->writepos == stream->readpos) {
@@ -559,6 +567,13 @@ PHPAPI zend_result _php_stream_fill_read_buffer(php_stream *stream, size_t size)
 						stream->is_persistent);
 			}
 
+			if (php_stream_call_hook(stream, ZEND_ENUM_StreamOperation_Read)) {
+				if (UNEXPECTED(stream->writepos - stream->readpos >= (zend_off_t)size)) {
+					return SUCCESS;
+				}
+				// TODO: stream closed?
+			}
+
 			justread = stream->ops->read(stream, (char*)stream->readbuf + stream->writepos,
 					stream->readbuflen - stream->writepos
 					);
@@ -612,6 +627,14 @@ PHPAPI ssize_t _php_stream_read(php_stream *stream, char *buf, size_t size)
 		}
 
 		if (!stream->readfilters.head && ((stream->flags & PHP_STREAM_FLAG_NO_BUFFER) || stream->chunk_size == 1)) {
+
+			if (php_stream_call_hook(stream, ZEND_ENUM_StreamOperation_Read)) {
+				if (UNEXPECTED(stream->writepos > stream->readpos)) {
+					// TODO: stream closed?
+					continue;
+				}
+			}
+
 			toread = stream->ops->read(stream, buf, size);
 			if (toread < 0) {
 				/* Report an error if the read failed and we did not read any data
@@ -1043,6 +1066,7 @@ static ssize_t _php_stream_write_buffer(php_stream *stream, const char *buf, siz
 	 * current stream->position. This means invalidating the read buffer and then
 	 * performing a low-level seek */
 	if (stream->ops->seek && (stream->flags & PHP_STREAM_FLAG_NO_SEEK) == 0 && stream->readpos != stream->writepos) {
+seek:
 		stream->readpos = stream->writepos = 0;
 
 		stream->ops->seek(stream, stream->position, SEEK_SET, &stream->position);
@@ -1058,6 +1082,12 @@ static ssize_t _php_stream_write_buffer(php_stream *stream, const char *buf, siz
 	}
 
 	while (count > 0) {
+		if (php_stream_call_hook(stream, ZEND_ENUM_StreamOperation_Write)) {
+			if (stream->ops->seek && (stream->flags & PHP_STREAM_FLAG_NO_SEEK) == 0 && stream->readpos != stream->writepos) {
+				goto seek;
+			}
+			// TODO: eof? closed?
+		}
 		ssize_t justwrote = stream->ops->write(stream, buf, MIN(chunk_size, count));
 		if (justwrote <= 0) {
 			/* If we already successfully wrote some bytes and a write error occurred
@@ -2517,3 +2547,27 @@ overflow:
 	return -1;
 }
 /* }}} */
+
+static zend_object *php_stream_operation_get_case(zend_enum_StreamOperation operation)
+{
+	switch (operation) {
+		case ZEND_ENUM_StreamOperation_Read:
+			return zend_enum_get_case_cstr(php_stream_operation_ce, "Read");
+		case ZEND_ENUM_StreamOperation_Write:
+			return zend_enum_get_case_cstr(php_stream_operation_ce, "Write");
+		default:
+			ZEND_UNREACHABLE();
+	}
+}
+
+PHPAPI bool php_stream_call_hook(php_stream *stream, zend_enum_StreamOperation operation)
+{
+	if (!ZEND_FCC_INITIALIZED(FG(hook_fcc))) {
+		return false;
+	}
+	zval params[2];
+	ZVAL_RES(&params[0], stream->res);
+	ZVAL_OBJ(&params[1], php_stream_operation_get_case(operation));
+	zend_call_known_fcc(&FG(hook_fcc), NULL, 2, params, NULL);
+	return true;
+}

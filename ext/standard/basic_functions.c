@@ -137,6 +137,9 @@ typedef struct {
 static void user_shutdown_function_dtor(zval *zv);
 static void user_tick_function_dtor(user_tick_function_entry *tick_function_entry);
 
+// TODO: move elsewhere
+PHPAPI zend_class_entry *php_stream_operation_ce;
+
 static const zend_module_dep standard_deps[] = { /* {{{ */
 	ZEND_MOD_REQUIRED("random")
 	ZEND_MOD_REQUIRED("uri")
@@ -339,6 +342,8 @@ PHP_MINIT_FUNCTION(basic) /* {{{ */
 	BASIC_MINIT_SUBMODULE(stream_errors)
 	BASIC_MINIT_SUBMODULE(user_streams)
 
+	php_stream_operation_ce = register_class_StreamOperation();
+
 	php_register_url_stream_wrapper("php", &php_stream_php_wrapper);
 	php_register_url_stream_wrapper("file", &php_plain_files_wrapper);
 	php_register_url_stream_wrapper("glob", &php_glob_stream_wrapper);
@@ -424,6 +429,8 @@ PHP_RINIT_FUNCTION(basic) /* {{{ */
 	/* Default to global filters only */
 	FG(stream_filters) = NULL;
 
+	FG(hook_fcc) = empty_fcall_info_cache;
+
 	return SUCCESS;
 }
 /* }}} */
@@ -484,6 +491,11 @@ PHP_RSHUTDOWN_FUNCTION(basic) /* {{{ */
 
 	BG(page_uid) = -1;
 	BG(page_gid) = -1;
+
+	if (ZEND_FCC_INITIALIZED(FG(hook_fcc))) {
+		zend_fcc_dtor(&FG(hook_fcc));
+	}
+
 	return SUCCESS;
 }
 /* }}} */

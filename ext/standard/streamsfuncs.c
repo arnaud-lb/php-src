@@ -1836,3 +1836,27 @@ PHP_FUNCTION(stream_socket_shutdown)
 }
 /* }}} */
 #endif
+
+PHP_FUNCTION(stream_set_hook)
+{
+	zend_fcall_info fci;
+	zend_fcall_info_cache fcc;
+
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_FUNC_OR_NULL(fci, fcc)
+	ZEND_PARSE_PARAMETERS_END();
+
+	if (ZEND_FCC_INITIALIZED(FG(hook_fcc))) {
+		zend_get_callable_zval_from_fcc(&FG(hook_fcc), return_value);
+		zend_fcc_dtor(&FG(hook_fcc));
+	}
+
+	if (!ZEND_FCI_INITIALIZED(fci)) {
+		return;
+	}
+
+	if (!ZEND_FCC_INITIALIZED(fcc)) {
+		zend_is_callable_ex(&fci.function_name, NULL, IS_CALLABLE_SUPPRESS_DEPRECATIONS, NULL, &fcc, NULL);
+	}
+	zend_fcc_dup(&FG(hook_fcc), &fcc);
+}

@@ -1,5 +1,5 @@
 /* This is a generated file, edit basic_functions.stub.php instead.
- * Stub hash: 3b1649a3abb3cfb5cb39d93f30a97765fe862d67
+ * Stub hash: 48fe141fe56ba9216148703cc7da09d770835b1c
  * Has decl header: yes */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_set_time_limit, 0, 1, _IS_BOOL, 0)
@@ -2014,6 +2014,10 @@ ZEND_END_ARG_INFO()
 
 #define arginfo_stream_set_chunk_size arginfo_stream_set_write_buffer
 
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_stream_set_hook, 0, 1, IS_CALLABLE, 1)
+	ZEND_ARG_TYPE_INFO(0, hook, IS_CALLABLE, 1)
+ZEND_END_ARG_INFO()
+
 #if (defined(HAVE_SYS_TIME_H) || defined(PHP_WIN32))
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_stream_set_timeout, 0, 2, _IS_BOOL, 0)
 	ZEND_ARG_INFO(0, stream)
@@ -2851,6 +2855,7 @@ ZEND_FUNCTION(stream_isatty);
 ZEND_FUNCTION(sapi_windows_vt100_support);
 #endif
 ZEND_FUNCTION(stream_set_chunk_size);
+ZEND_FUNCTION(stream_set_hook);
 #if (defined(HAVE_SYS_TIME_H) || defined(PHP_WIN32))
 ZEND_FUNCTION(stream_set_timeout);
 #endif
@@ -3470,6 +3475,7 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_FE(sapi_windows_vt100_support, arginfo_sapi_windows_vt100_support)
 #endif
 	ZEND_FE(stream_set_chunk_size, arginfo_stream_set_chunk_size)
+	ZEND_FE(stream_set_hook, arginfo_stream_set_hook)
 #if (defined(HAVE_SYS_TIME_H) || defined(PHP_WIN32))
 	ZEND_FE(stream_set_timeout, arginfo_stream_set_timeout)
 	ZEND_RAW_FENTRY("socket_set_timeout", zif_stream_set_timeout, arginfo_socket_set_timeout, ZEND_ACC_DEPRECATED, NULL, NULL)
@@ -4060,6 +4066,17 @@ static zend_class_entry *register_class_RoundingMode(void)
 	zend_enum_add_case_cstr(class_entry, "NegativeInfinity", NULL);
 
 	zend_enum_add_case_cstr(class_entry, "PositiveInfinity", NULL);
+
+	return class_entry;
+}
+
+static zend_class_entry *register_class_StreamOperation(void)
+{
+	zend_class_entry *class_entry = zend_register_internal_enum("StreamOperation", IS_UNDEF, NULL);
+
+	zend_enum_add_case_cstr(class_entry, "Read", NULL);
+
+	zend_enum_add_case_cstr(class_entry, "Write", NULL);
 
 	return class_entry;
 }
