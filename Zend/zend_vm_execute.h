@@ -444,7 +444,11 @@ static zend_vm_opcode_handler_func_t zend_vm_get_opcode_handler_func(uint8_t opc
 # define ZEND_VM_ENTER()           execute_data = EG(current_execute_data); LOAD_OPLINE(); ZEND_VM_ENTER_EX()
 # define ZEND_VM_LEAVE()           return (zend_op*)((uintptr_t)opline | ZEND_VM_ENTER_BIT)
 #endif
-#define ZEND_VM_INTERRUPT()      ZEND_VM_TAIL_CALL(zend_interrupt_helper_SPEC(ZEND_OPCODE_HANDLER_ARGS_PASSTHRU));
+#if ZEND_VM_KIND == ZEND_VM_KIND_TAILCALL
+# define ZEND_VM_INTERRUPT()       return zend_interrupt(ZEND_OPCODE_HANDLER_ARGS_PASSTHRU)
+#else
+# define ZEND_VM_INTERRUPT()       ZEND_VM_TAIL_CALL(zend_interrupt_helper_SPEC(ZEND_OPCODE_HANDLER_ARGS_PASSTHRU));
+#endif
 #ifdef ZEND_VM_FP_GLOBAL_REG
 #define ZEND_VM_LOOP_INTERRUPT() zend_interrupt_helper_SPEC(ZEND_OPCODE_HANDLER_ARGS_PASSTHRU);
 #else
@@ -455,6 +459,12 @@ static zend_vm_opcode_handler_func_t zend_vm_get_opcode_handler_func(uint8_t opc
 static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV zend_interrupt_helper_SPEC(ZEND_OPCODE_HANDLER_ARGS);
 static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_NULL_HANDLER(ZEND_OPCODE_HANDLER_ARGS);
 
+#if ZEND_VM_KIND == ZEND_VM_KIND_TAILCALL
+static ZEND_COLD zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV zend_interrupt(ZEND_OPCODE_HANDLER_ARGS) {
+	SAVE_OPLINE();
+	return &call_interrupt_op;
+}
+#endif
 static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV_EX  zend_add_helper_SPEC(ZEND_OPCODE_HANDLER_ARGS_EX zval *op_1, zval *op_2)
 {
 	USE_OPLINE
@@ -4131,10 +4141,9 @@ static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV 
 		zend_interrupt_function(execute_data);
 	}
 	if (UNEXPECTED(EG(exception))) {
-		// if (EG(opline_before_exception) == opline) {
-			zend_interrupt_consume(ZEND_OPCODE_HANDLER_ARGS_PASSTHRU);
-		// }
-		LOAD_OPLINE();
+		zend_interrupt_consume(execute_data, opline);
+		opline = EG(exception_op);
+		ZEND_VM_CONTINUE();
 	}
 	if (zend_interrupt_function) {
 		ZEND_VM_ENTER();
@@ -53634,12 +53643,6 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_NULL_HANDLER(
 	zend_error_noreturn(E_ERROR, "Invalid opcode %d/%d/%d.", OPLINE->opcode, OPLINE->op1_type, OPLINE->op2_type);
 }
 
-#if ZEND_VM_KIND == ZEND_VM_KIND_TAILCALL
-static ZEND_COLD zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV zend_interrupt(ZEND_OPCODE_HANDLER_ARGS) {
-	SAVE_OPLINE();
-	return &call_interrupt_op;
-}
-#endif
 
 #if (ZEND_VM_KIND == ZEND_VM_KIND_HYBRID)
 # undef ZEND_VM_TAIL_CALL
@@ -53691,6 +53694,10 @@ static const zend_op call_interrupt_op = {
     .handler = zend_interrupt_helper_SPEC_TAILCALL,
 };
 
+static ZEND_COLD zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV zend_interrupt_TAILCALL(ZEND_OPCODE_HANDLER_ARGS) {
+	SAVE_OPLINE();
+	ZEND_VM_TAIL_CALL(zend_interrupt_helper_SPEC_TAILCALL(ZEND_OPCODE_HANDLER_ARGS_PASSTHRU));
+}
 static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV_EX  zend_add_helper_SPEC_TAILCALL(ZEND_OPCODE_HANDLER_ARGS_EX zval *op_1, zval *op_2);
 static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV_EX  zend_sub_helper_SPEC_TAILCALL(ZEND_OPCODE_HANDLER_ARGS_EX zval *op_1, zval *op_2);
 static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV_EX  zend_mul_helper_SPEC_TAILCALL(ZEND_OPCODE_HANDLER_ARGS_EX zval *op_1, zval *op_2);
@@ -56941,10 +56948,9 @@ static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV  zend
 		zend_interrupt_function(execute_data);
 	}
 	if (UNEXPECTED(EG(exception))) {
-		// if (EG(opline_before_exception) == opline) {
-			zend_interrupt_consume(ZEND_OPCODE_HANDLER_ARGS_PASSTHRU);
-		// }
-		LOAD_OPLINE();
+		zend_interrupt_consume(execute_data, opline);
+		opline = EG(exception_op);
+		ZEND_VM_CONTINUE();
 	}
 	if (zend_interrupt_function) {
 		ZEND_VM_ENTER();
@@ -106145,10 +106151,6 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_HALT_TAILCALL_HAND
 	return (zend_op*) ZEND_VM_ENTER_BIT;
 }
 
-static ZEND_COLD zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV zend_interrupt_TAILCALL(ZEND_OPCODE_HANDLER_ARGS) {
-	SAVE_OPLINE();
-	ZEND_VM_TAIL_CALL(zend_interrupt_helper_SPEC_TAILCALL(ZEND_OPCODE_HANDLER_ARGS_PASSTHRU));
-}
 /* The following helpers can not tailcall due to signature mismatch. Redefine some macros so they do not enforce tailcall. */
 #pragma push_macro("ZEND_VM_CONTINUE")
 #undef  ZEND_VM_CONTINUE

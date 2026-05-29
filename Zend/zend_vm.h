@@ -43,6 +43,7 @@ void zend_vm_dtor(void);
 const struct _zend_op *zend_vm_handle_interrupt(struct _zend_execute_data *execute_data, const struct _zend_op *opline);
 #endif
 
+
 END_EXTERN_C()
 
 #define ZEND_VM_SET_OPCODE_HANDLER(opline) zend_vm_set_opcode_handler(opline)

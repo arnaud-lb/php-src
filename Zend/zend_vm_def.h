@@ -10738,10 +10738,9 @@ ZEND_VM_HELPER(zend_interrupt_helper, ANY, ANY)
 		zend_interrupt_function(execute_data);
 	}
 	if (UNEXPECTED(EG(exception))) {
-		// if (EG(opline_before_exception) == opline) {
-			zend_interrupt_consume(ZEND_OPCODE_HANDLER_ARGS_PASSTHRU);
-		// }
-		LOAD_OPLINE();
+		zend_interrupt_consume(execute_data, opline);
+		opline = EG(exception_op);
+		ZEND_VM_CONTINUE();
 	}
 	if (zend_interrupt_function) {
 		ZEND_VM_ENTER();

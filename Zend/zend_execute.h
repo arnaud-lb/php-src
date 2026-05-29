@@ -293,6 +293,8 @@ ZEND_API zend_result ZEND_FASTCALL zval_update_constant_with_ctx(zval *pp, zend_
  */
 ZEND_API ZEND_COLD void ZEND_FASTCALL zend_fcall_interrupt(zend_execute_data *call);
 
+void zend_interrupt_consume(zend_execute_data *execute_data, const zend_op *opline);
+
 /* dedicated Zend executor functions - do not use! */
 struct _zend_vm_stack {
 	zval *top;

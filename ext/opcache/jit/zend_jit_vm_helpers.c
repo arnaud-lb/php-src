@@ -69,6 +69,10 @@ ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV zend_jit_leave_func_helper_tai
 		execute_data = EX(prev_execute_data);
 		zend_vm_stack_free_call_frame_ex(call_info, old_execute_data);
 
+		if (UNEXPECTED(zend_atomic_bool_load_ex(&EG(vm_interrupt)))) {
+			zend_fcall_interrupt(execute_data);
+		}
+
 		if (UNEXPECTED(EG(exception) != NULL)) {
 			const zend_op *old_opline = EX(opline);
 			zend_throw_exception_internal(NULL);
@@ -119,6 +123,10 @@ ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL zend_jit_leave_nested_func_helper(ZEND_OPC
 	old_execute_data = execute_data;
 	execute_data = EX(prev_execute_data);
 	zend_vm_stack_free_call_frame_ex(call_info, old_execute_data);
+
+	if (UNEXPECTED(zend_atomic_bool_load_ex(&EG(vm_interrupt)))) {
+		zend_fcall_interrupt(execute_data);
+	}
 
 	if (UNEXPECTED(EG(exception) != NULL)) {
 		const zend_op *old_opline = EX(opline);

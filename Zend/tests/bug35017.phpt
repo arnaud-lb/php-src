@@ -2,7 +2,7 @@
 Bug #35017 (Exception thrown in error handler may cause unexpected behavior)
 --FILE--
 <?php
-set_error_handler('errorHandler');
+set_error_handler('errorHandler', delay: false);
 try {
     if ($a) {
         echo "1\n";

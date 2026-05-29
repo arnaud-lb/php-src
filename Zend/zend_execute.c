@@ -6003,11 +6003,16 @@ static zend_always_inline zend_execute_data *_zend_vm_stack_push_call_frame(uint
 /* This callback disables optimization of "vm_stack_data" variable in VM */
 ZEND_API void (ZEND_FASTCALL *zend_touch_vm_stack_data)(void *vm_stack_data) = NULL;
 
-void zend_interrupt_consume(EXECUTE_DATA_D OPLINE_DC)
+void zend_interrupt_consume(zend_execute_data *execute_data, const zend_op *opline)
 {
 	/* Interrupts are handled before executing opline, but exception handling
 	 * assumes that a throwing opline was executed.
-	 * Here we need to consume inputs and and initialize outputs. */
+	 * If an exception was thrown by the interrupt handler, we need to consume
+	 * inputs and and initialize outputs. */
+
+	if (EG(opline_before_exception) != opline) {
+		return;
+	}
 
 	if (opline
 			&& opline->result_type & (IS_TMP_VAR|IS_VAR)
