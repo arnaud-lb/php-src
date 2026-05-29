@@ -1726,6 +1726,17 @@ function gen_executor_code($f, $spec, $kind, $prolog, &$switch_labels = array())
 
     $delayed_helpers = fopen("php://memory", "w+");
 
+    switch ($kind) {
+        case ZEND_VM_KIND_CALL:
+            out($f, "#if ZEND_VM_KIND == ZEND_VM_KIND_TAILCALL\n");
+            gen_interrupt_func($f, $kind, $spec);
+            out($f, "#endif\n");
+            break;
+        case ZEND_VM_KIND_TAILCALL:
+            gen_interrupt_func($f, $kind, $spec);
+            break;
+    }
+
     if ($spec) {
         // Produce specialized executor
         $op1t = $op_types_ex;
@@ -1814,14 +1825,10 @@ function gen_executor_code($f, $spec, $kind, $prolog, &$switch_labels = array())
     switch ($kind) {
         case ZEND_VM_KIND_CALL:
             gen_null_handler($f, $kind);
-            out($f, "#if ZEND_VM_KIND == ZEND_VM_KIND_TAILCALL\n");
-            gen_interrupt_func($f, $kind, $spec);
-            out($f, "#endif\n");
             break;
         case ZEND_VM_KIND_TAILCALL:
             gen_null_handler($f, $kind);
             gen_halt_handler($f, $kind);
-            gen_interrupt_func($f, $kind, $spec);
             break;
         case ZEND_VM_KIND_SWITCH:
             out($f,"default: ZEND_NULL_LABEL:\n");
@@ -2040,7 +2047,11 @@ function gen_executor($f, $skl, $spec, $kind, $executor_name, $initializer_name)
                             out($f,"# define ZEND_VM_ENTER()           execute_data = EG(current_execute_data); LOAD_OPLINE(); ZEND_VM_ENTER_EX()\n");
                             out($f,"# define ZEND_VM_LEAVE()           return (zend_op*)((uintptr_t)opline | ZEND_VM_ENTER_BIT)\n");
                             out($f,"#endif\n");
-                            out($f,"#define ZEND_VM_INTERRUPT()      ZEND_VM_TAIL_CALL(zend_interrupt_helper".($spec?"_SPEC":"")."(ZEND_OPCODE_HANDLER_ARGS_PASSTHRU));\n");
+                            out($f,"#if ZEND_VM_KIND == ZEND_VM_KIND_TAILCALL\n");
+                            out($f,"# define ZEND_VM_INTERRUPT()       return zend_interrupt(ZEND_OPCODE_HANDLER_ARGS_PASSTHRU)\n");
+                            out($f,"#else\n");
+                            out($f,"# define ZEND_VM_INTERRUPT()       ZEND_VM_TAIL_CALL(zend_interrupt_helper".($spec?"_SPEC":"")."(ZEND_OPCODE_HANDLER_ARGS_PASSTHRU));\n");
+                            out($f,"#endif\n");
                             out($f,"#ifdef ZEND_VM_FP_GLOBAL_REG\n");
                             out($f,"#define ZEND_VM_LOOP_INTERRUPT() zend_interrupt_helper".($spec?"_SPEC":"")."(ZEND_OPCODE_HANDLER_ARGS_PASSTHRU);\n");
                             out($f,"#else\n");
