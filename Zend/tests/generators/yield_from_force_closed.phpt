@@ -22,6 +22,7 @@ try {
     $gen = gen2();
     $gen->rewind();
     unset($gen);
+    (function () {})();
 } catch (Error $e) {
     echo $e, "\n";
 }

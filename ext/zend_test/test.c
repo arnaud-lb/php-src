@@ -1932,6 +1932,17 @@ static PHP_FUNCTION(zend_test_gh18756)
 	zend_mm_shutdown(heap, true, false);
 }
 
+static PHP_FUNCTION(zend_test_rc_string)
+{
+	zend_string *str;
+
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_STR(str)
+	ZEND_PARSE_PARAMETERS_END();
+
+	RETURN_STR(zend_string_init(ZSTR_VAL(str), ZSTR_LEN(str), 0));
+}
+
 static PHP_FUNCTION(zend_test_opcache_preloading)
 {
 	ZEND_PARSE_PARAMETERS_NONE();

@@ -130,7 +130,9 @@ typedef struct _zend_error_info {
 	uint32_t lineno;
 	zend_string *filename;
 	zend_string *message;
+	int error_reporting;
 } zend_error_info;
+
 
 struct _zend_inheritance_cache_entry {
 	zend_inheritance_cache_entry *next;
@@ -385,6 +387,9 @@ extern ZEND_API zend_result (*zend_post_startup_cb)(void);
 extern ZEND_API void (*zend_post_shutdown_cb)(void);
 
 extern ZEND_API void (*zend_accel_schedule_restart_hook)(int reason);
+
+/* Callback for loading of not preloaded part of the script */
+extern ZEND_API zend_result (*zend_preload_autoload)(zend_string *filename);
 
 ZEND_API ZEND_COLD void zend_error(int type, const char *format, ...) ZEND_ATTRIBUTE_FORMAT(printf, 2, 3);
 ZEND_API ZEND_COLD ZEND_NORETURN void zend_error_noreturn(int type, const char *format, ...) ZEND_ATTRIBUTE_FORMAT(printf, 2, 3);

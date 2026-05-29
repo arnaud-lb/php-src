@@ -10,7 +10,7 @@ function eh()
     return false;
 }
 
-set_error_handler("eh");
+set_error_handler("eh", delay: false);
 $a = $empty($b);
 ?>
 --EXPECTF--

@@ -1,5 +1,7 @@
 --TEST--
 Bug #78598: Changing array during undef index RW error segfaults
+--INI--
+opcache.jit=0
 --FILE--
 <?php
 
@@ -25,7 +27,31 @@ var_dump($my_var);
 
 ?>
 --EXPECT--
-int(0)
-int(0)
-int(0)
-int(0)
+array(1) {
+  [0]=>
+  string(3) "xyz"
+}
+array(1) {
+  [0]=>
+  array(1) {
+    [0]=>
+    array(1) {
+      [0]=>
+      string(3) "xyz"
+    }
+  }
+}
+array(1) {
+  ["foo"]=>
+  string(3) "xyz"
+}
+array(1) {
+  ["foo"]=>
+  array(1) {
+    ["bar"]=>
+    array(1) {
+      ["baz"]=>
+      string(3) "xyz"
+    }
+  }
+}

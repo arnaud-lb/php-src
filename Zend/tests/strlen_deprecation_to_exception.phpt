@@ -5,7 +5,7 @@ strlen() null deprecation warning promoted to exception
 
 set_error_handler(function($_, $msg) {
     throw new Exception($msg);
-});
+}, delay: false);
 try {
     strlen(null);
 } catch (Exception $e) {

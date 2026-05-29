@@ -3,7 +3,7 @@ Exception during nested rope
 --FILE--
 <?php
 
-set_error_handler(function() { throw new Exception; });
+set_error_handler(function() { throw new Exception; }, delay: false);
 
 try {
     $a = "foo";

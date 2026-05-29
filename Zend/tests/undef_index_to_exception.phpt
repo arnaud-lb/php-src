@@ -1,11 +1,13 @@
 --TEST--
 Converting undefined index/offset notice to exception
+--INI--
+opcache.jit=0
 --FILE--
 <?php
 
 set_error_handler(function($_, $msg) {
     throw new Exception($msg);
-});
+}, delay: false);
 
 $test = [];
 try {

@@ -198,6 +198,9 @@ void init_executor(void) /* {{{ */
 
 	zend_max_execution_timer_init();
 	zend_fiber_init();
+
+	zend_hash_init(&EG(delayed_effects), 0, NULL, NULL, 0);
+
 	zend_weakrefs_init();
 
 	zend_hash_init(&EG(callable_convert_cache), 8, NULL, ZVAL_PTR_DTOR, 0);
@@ -528,6 +531,9 @@ void shutdown_executor(void) /* {{{ */
 	EG(ht_iterators_used) = 0;
 
 	zend_shutdown_fpu();
+
+	zend_discard_delayed_effects();
+	zend_hash_destroy(&EG(delayed_effects));
 }
 /* }}} */
 

@@ -26,6 +26,7 @@ $map[$obj] = new class {
 
 echo "Before unset:\n";
 unset($obj);
+(function() {})();
 echo "After unset:\n";
 var_dump($map);
 
@@ -33,6 +34,7 @@ echo "\nDestroying map with live object:\n";
 $obj = new stdClass;
 $map[$obj] = 3;
 unset($map);
+(function() {})();
 var_dump($obj);
 
 echo "\nObject freed by GC:\n";
@@ -41,6 +43,7 @@ $obj = new stdClass;
 $obj->obj = $obj;
 $map[$obj] = 4;
 unset($obj);
+(function() {})();
 var_dump($map);
 gc_collect_cycles();
 var_dump($map);
@@ -50,49 +53,52 @@ $map = new WeakMap;
 $obj = new stdClass;
 $map[$obj] = $obj;
 unset($obj);
+(function() {})();
 var_dump($map);
 unset($map);
+(function() {})();
 
 echo "\nStoring map in itself:\n";
 $map = new WeakMap;
 $map[$map] = $map;
 var_dump($map);
 unset($map);
+(function() {})();
 
 ?>
---EXPECT--
-object(WeakMap)#1 (0) {
+--EXPECTF--
+object(WeakMap)#%d (0) {
 }
-object(WeakMap)#1 (1) {
+object(WeakMap)#%d (1) {
   [0]=>
   array(2) {
     ["key"]=>
-    object(stdClass)#2 (0) {
+    object(stdClass)#%d (0) {
     }
     ["value"]=>
     int(2)
   }
 }
-object(WeakMap)#1 (0) {
+object(WeakMap)#%d (0) {
 }
 
 Destructor in WeakMap value:
 Before unset:
 Dtor!
 After unset:
-object(WeakMap)#1 (0) {
+object(WeakMap)#%d (0) {
 }
 
 Destroying map with live object:
-object(stdClass)#2 (0) {
+object(stdClass)#%d (0) {
 }
 
 Object freed by GC:
-object(WeakMap)#1 (1) {
+object(WeakMap)#%d (1) {
   [0]=>
   array(2) {
     ["key"]=>
-    object(stdClass)#3 (1) {
+    object(stdClass)#%d (1) {
       ["obj"]=>
       *RECURSION*
     }
@@ -100,24 +106,24 @@ object(WeakMap)#1 (1) {
     int(4)
   }
 }
-object(WeakMap)#1 (0) {
+object(WeakMap)#%d (0) {
 }
 
 Storing object as own value:
-object(WeakMap)#3 (1) {
+object(WeakMap)#%d (1) {
   [0]=>
   array(2) {
     ["key"]=>
-    object(stdClass)#1 (0) {
+    object(stdClass)#%d (0) {
     }
     ["value"]=>
-    object(stdClass)#1 (0) {
+    object(stdClass)#%d (0) {
     }
   }
 }
 
 Storing map in itself:
-object(WeakMap)#3 (1) {
+object(WeakMap)#%d (1) {
   [0]=>
   array(2) {
     ["key"]=>

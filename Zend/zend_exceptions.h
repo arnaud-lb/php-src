@@ -38,6 +38,7 @@ extern ZEND_API zend_class_entry *zend_ce_arithmetic_error;
 extern ZEND_API zend_class_entry *zend_ce_division_by_zero_error;
 extern ZEND_API zend_class_entry *zend_ce_unhandled_match_error;
 extern ZEND_API zend_class_entry *zend_ce_request_parse_body_exception;
+extern ZEND_API zend_class_entry *zend_ce_promoted_error_exception;
 
 ZEND_API void zend_exception_set_previous(zend_object *exception, zend_object *add_previous);
 
@@ -73,6 +74,7 @@ ZEND_API ZEND_COLD void zend_throw_unwind_exit(void);
 ZEND_API ZEND_COLD void zend_throw_graceful_exit(void);
 ZEND_API bool zend_is_unwind_exit(const zend_object *ex);
 ZEND_API bool zend_is_graceful_exit(const zend_object *ex);
+ZEND_API bool zend_is_promoted_error_exception(const zend_object *ex);
 
 #include "zend_globals.h"
 

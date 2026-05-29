@@ -4951,7 +4951,7 @@ ZEND_API bool zend_may_throw_ex(const zend_op *opline, const zend_ssa_op *ssa_op
 		}
 	} else if (opline->op1_type & (IS_TMP_VAR|IS_VAR)) {
 		if ((t1 & MAY_BE_RC1)
-		 && (t1 & (MAY_BE_OBJECT|MAY_BE_RESOURCE|MAY_BE_ARRAY_OF_OBJECT|MAY_BE_ARRAY_OF_RESOURCE|MAY_BE_ARRAY_OF_ARRAY))) {
+		 && (t1 & (MAY_BE_RESOURCE|MAY_BE_ARRAY_OF_RESOURCE|MAY_BE_ARRAY_OF_ARRAY))) {
 			switch (opline->opcode) {
 				case ZEND_CASE:
 				case ZEND_CASE_STRICT:
@@ -4972,7 +4972,7 @@ ZEND_API bool zend_may_throw_ex(const zend_op *opline, const zend_ssa_op *ssa_op
 				case ZEND_MAKE_REF:
 					break;
 				default:
-					/* destructor may be called */
+					/* resource destructor may be called */
 					return 1;
 			}
 		}
@@ -4992,14 +4992,14 @@ ZEND_API bool zend_may_throw_ex(const zend_op *opline, const zend_ssa_op *ssa_op
 		}
 	} else if (opline->op2_type & (IS_TMP_VAR|IS_VAR)) {
 		if ((t2 & MAY_BE_RC1)
-		 && (t2 & (MAY_BE_OBJECT|MAY_BE_RESOURCE|MAY_BE_ARRAY_OF_OBJECT|MAY_BE_ARRAY_OF_RESOURCE|MAY_BE_ARRAY_OF_ARRAY))) {
+		 && (t2 & (MAY_BE_RESOURCE|MAY_BE_ARRAY_OF_RESOURCE|MAY_BE_ARRAY_OF_ARRAY))) {
 			switch (opline->opcode) {
 				case ZEND_ASSIGN:
 				case ZEND_FE_FETCH_R:
 				case ZEND_FE_FETCH_RW:
 					break;
 				default:
-					/* destructor may be called */
+					/* resource destructor may be called */
 					return 1;
 			}
 		}
@@ -5178,11 +5178,11 @@ ZEND_API bool zend_may_throw_ex(const zend_op *opline, const zend_ssa_op *ssa_op
 			}
 			ZEND_FALLTHROUGH;
 		case ZEND_UNSET_VAR:
-			return (t1 & (MAY_BE_OBJECT|MAY_BE_RESOURCE|MAY_BE_ARRAY_OF_OBJECT|MAY_BE_ARRAY_OF_RESOURCE|MAY_BE_ARRAY_OF_ARRAY));
+			return (t1 & (MAY_BE_RESOURCE|MAY_BE_ARRAY_OF_RESOURCE|MAY_BE_ARRAY_OF_ARRAY));
 		case ZEND_BIND_STATIC:
 		case ZEND_BIND_INIT_STATIC_OR_JMP:
-			if (t1 & (MAY_BE_OBJECT|MAY_BE_RESOURCE|MAY_BE_ARRAY_OF_OBJECT|MAY_BE_ARRAY_OF_RESOURCE|MAY_BE_ARRAY_OF_ARRAY)) {
-				/* Destructor may throw. */
+			if (t1 & (MAY_BE_RESOURCE|MAY_BE_ARRAY_OF_RESOURCE|MAY_BE_ARRAY_OF_ARRAY)) {
+				/* resource destructor may throw. */
 				return 1;
 			}
 			return 0;
@@ -5192,7 +5192,7 @@ ZEND_API bool zend_may_throw_ex(const zend_op *opline, const zend_ssa_op *ssa_op
 					return 1;
 				}
 			}
-			if (t1 & (MAY_BE_ARRAY_OF_OBJECT|MAY_BE_ARRAY_OF_RESOURCE|MAY_BE_ARRAY_OF_ARRAY|MAY_BE_ARRAY_OF_REF)) {
+			if (t1 & (MAY_BE_ARRAY_OF_RESOURCE|MAY_BE_ARRAY_OF_ARRAY|MAY_BE_ARRAY_OF_REF)) {
 				return 1;
 			}
 			return (t1 & (MAY_BE_OBJECT|MAY_BE_RESOURCE|MAY_BE_TRUE|MAY_BE_FALSE|MAY_BE_STRING|MAY_BE_LONG|MAY_BE_DOUBLE)) || opline->op2_type == IS_UNUSED ||
@@ -5317,7 +5317,7 @@ ZEND_API bool zend_may_throw_ex(const zend_op *opline, const zend_ssa_op *ssa_op
 			}
 			if (opline->op2_type == IS_CV
 			 && (t2 & MAY_BE_RC1)
-			 && (t2 & (MAY_BE_OBJECT|MAY_BE_RESOURCE|MAY_BE_ARRAY_OF_OBJECT|MAY_BE_ARRAY_OF_RESOURCE|MAY_BE_ARRAY_OF_ARRAY))) {
+			 && (t2 & (MAY_BE_RESOURCE|MAY_BE_ARRAY_OF_RESOURCE|MAY_BE_ARRAY_OF_ARRAY))) {
 				return 1;
 			}
 			return 0;

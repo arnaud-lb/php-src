@@ -20,6 +20,7 @@ class Test1 {
 $callback = function (): int {
     try {
         new Test1;
+        (function() {})();
     } catch (Error $e) {
         return count($e->getTrace());
     }
@@ -37,7 +38,7 @@ $fiber = new Fiber($callback);
 $fiber->start();
 $depth2 = $fiber->getReturn();
 
-var_dump($depth1 > $depth2);
+var_dump($depth1 >= $depth2);
 
 ?>
 --EXPECTF--

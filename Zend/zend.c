@@ -1447,6 +1447,7 @@ ZEND_API ZEND_COLD void zend_error_zstr_at(
 	bool orig_record_errors;
 	zend_err_buf orig_errors_buf;
 	zend_result res;
+	bool will_bail = (type & E_FATAL_ERRORS) && !(type & E_DONT_BAIL);
 
 	/* If we're executing a function during SCCP, count any warnings that may be emitted,
 	 * but don't perform any other error handling. */
@@ -1457,7 +1458,7 @@ ZEND_API ZEND_COLD void zend_error_zstr_at(
 	}
 
 	/* Emit any delayed error before handling fatal error */
-	if ((type & E_FATAL_ERRORS) && !(type & E_DONT_BAIL) && EG(errors).size) {
+	if (will_bail && EG(errors).size) {
 		zend_err_buf errors_buf = EG(errors);
 		EG(errors).size = 0;
 
@@ -1491,9 +1492,54 @@ ZEND_API ZEND_COLD void zend_error_zstr_at(
 		EG(errors).errors[EG(errors).size - 1] = info;
 
 		/* Do not process non-fatal recorded error */
-		if (!(type & E_FATAL_ERRORS) || (type & E_DONT_BAIL)) {
+		if (!will_bail) {
 			return;
 		}
+	}
+
+	/* Delay non-bailing errors while executing in the VM, but only if a user
+	 * error handler will actually be called for this error. */
+	bool may_call_user_error_handler = !will_bail
+		&& !(type & (E_CORE_WARNING | E_COMPILE_WARNING))
+		&& Z_TYPE(EG(user_error_handler)) != IS_UNDEF
+		&& (EG(user_error_handler_error_reporting) & type)
+		&& EG(error_handling) == EH_NORMAL;
+	if (may_call_user_error_handler
+			&& !(orig_type & E_NO_DELAY) && EG(current_execute_data)) {
+
+		/* Check if the installed error handler requested to be called without
+		 * delaying. In this case, we promote the error to an exception. The
+		 * error handler will be called as part of exception handling. */
+		if (EG(user_error_handler_error_reporting) & ZEND_ERROR_HANDLER_NO_DELAY) {
+			if (!(EG(error_reporting) & type)) {
+				/* Error was silenced. Do not promote to exception as the error
+				 * handler does not have a chance to prevent that. */
+				return;
+			}
+			if (EG(exception)) {
+				/* Promoting this error would override the existing exception,
+				 * but, we want the first exception/error to have precedence. */
+				return;
+			}
+			zend_object *obj = zend_throw_error_exception(
+				zend_ce_promoted_error_exception, message, /* code */ 0, type);
+			zval tmp;
+			ZVAL_STR_COPY(&tmp, error_filename);
+			zend_update_property_ex(zend_ce_exception, obj, ZSTR_KNOWN(ZEND_STR_FILE), &tmp);
+			zval_ptr_dtor(&tmp);
+			ZVAL_LONG(&tmp, error_lineno);
+			zend_update_property_ex(zend_ce_exception, obj, ZSTR_KNOWN(ZEND_STR_LINE), &tmp);
+			return;
+		}
+		zend_error_info *info = emalloc(sizeof(zend_error_info));
+		info->type = type;
+		info->lineno = error_lineno;
+		info->filename = zend_string_copy(error_filename);
+		info->message = zend_string_copy(message);
+		info->error_reporting = EG(error_reporting);
+		zend_hash_next_index_insert_ptr(&EG(delayed_effects), info);
+		zend_atomic_bool_store_ex(&EG(vm_interrupt), true);
+		return;
 	}
 
 	// Always clear the last backtrace.
@@ -1970,6 +2016,9 @@ ZEND_API zend_result zend_execute_script(int type, zval *retval, zend_file_handl
 	zend_result ret = SUCCESS;
 	if (op_array) {
 		zend_execute(op_array, retval);
+		if (zend_hash_num_elements(&EG(delayed_effects))) {
+			zend_handle_delayed_effects();
+		}
 		if (UNEXPECTED(EG(exception))) {
 			if (Z_TYPE(EG(user_exception_handler)) != IS_UNDEF) {
 				zend_user_exception_handler();

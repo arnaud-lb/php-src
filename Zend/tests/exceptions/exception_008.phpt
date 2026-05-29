@@ -20,6 +20,7 @@ class TestSecond
 $ar = array(new TestFirst, new TestSecond);
 
 unset($ar);
+(function () {})();
 
 ?>
 ===DONE===
