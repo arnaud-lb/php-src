@@ -2041,7 +2041,7 @@ static int zend_jit(const zend_op_array *op_array, zend_ssa *ssa, const zend_op 
 							if (Z_MODE(res_addr) != IS_REG
 							 && (i + 1) <= end
 							 && zend_jit_next_is_send_result(opline)
-							 && (!(op1_info & MAY_HAVE_DTOR) || !(op1_info & MAY_BE_RC1))) {
+							 && (!(op1_info & MAY_HAVE_UNDELAYED_DTOR) || !(op1_info & MAY_BE_RC1))) {
 								i++;
 								res_addr = ZEND_ADDR_MEM_ZVAL(ZREG_RX, (opline+1)->result.var);
 								if (!zend_jit_reuse_ip(&ctx)) {

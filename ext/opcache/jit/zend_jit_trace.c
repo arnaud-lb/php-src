@@ -5638,7 +5638,7 @@ static zend_vm_opcode_handler_t zend_jit_trace(zend_jit_trace_rec *trace_buffer,
 										if (!zend_jit_free_cv(&ctx, info, j)) {
 											goto jit_failure;
 										}
-										if (info & (MAY_BE_OBJECT|MAY_BE_RESOURCE|MAY_BE_ARRAY_OF_OBJECT|MAY_BE_ARRAY_OF_ARRAY|MAY_BE_ARRAY_OF_RESOURCE)) {
+										if (info & (MAY_BE_RESOURCE|MAY_BE_ARRAY_OF_ARRAY|MAY_BE_ARRAY_OF_RESOURCE)) {
 											if (info & MAY_BE_RC1) {
 												may_throw = 1;
 											}

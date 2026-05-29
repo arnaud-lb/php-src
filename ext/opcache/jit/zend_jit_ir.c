@@ -1792,7 +1792,7 @@ static void jit_ZVAL_DTOR(zend_jit_ctx *jit, ir_ref ref, uint32_t op_info, const
 				return;
 		} else if (type == IS_ARRAY) {
 			if ((op_info) & (MAY_BE_ARRAY_KEY_STRING|MAY_BE_ARRAY_OF_STRING|MAY_BE_ARRAY_OF_ARRAY|MAY_BE_ARRAY_OF_OBJECT|MAY_BE_ARRAY_OF_RESOURCE|MAY_BE_ARRAY_OF_REF)) {
-				if (opline && ((op_info) & (MAY_BE_ARRAY_OF_ARRAY|MAY_BE_ARRAY_OF_OBJECT|MAY_BE_ARRAY_OF_RESOURCE|MAY_BE_ARRAY_OF_REF))) {
+				if (opline && ((op_info) & (MAY_BE_ARRAY_OF_ARRAY|MAY_BE_ARRAY_OF_RESOURCE|MAY_BE_ARRAY_OF_REF))) {
 					jit_SET_EX_OPLINE(jit, opline);
 				}
 				ir_CALL_1(IR_VOID, ir_CONST_FC_FUNC(zend_array_destroy), ref);
@@ -11230,7 +11230,7 @@ static int zend_jit_leave_func(zend_jit_ctx         *jit,
 		/* exception might be thrown during destruction of unused return value */
 		may_throw = may_throw || ((opline->op1_type & (IS_VAR|IS_TMP_VAR))
 			 && (op1_info & MAY_BE_RC1)
-			 && (op1_info & (MAY_BE_OBJECT|MAY_BE_RESOURCE|MAY_BE_ARRAY_OF_OBJECT|MAY_BE_ARRAY_OF_RESOURCE|MAY_BE_ARRAY_OF_ARRAY)));
+			 && (op1_info & (MAY_BE_RESOURCE|MAY_BE_ARRAY_OF_RESOURCE|MAY_BE_ARRAY_OF_ARRAY)));
 
 		ir_ref if_interrupt = ir_IF(ir_LOAD_U8(jit_EG(vm_interrupt)));
 		ir_IF_TRUE_cold(if_interrupt);
@@ -12884,14 +12884,14 @@ static int zend_jit_fetch_dim_read(zend_jit_ctx       *jit,
 #endif
 
 		if (opline->op2_type & (IS_TMP_VAR|IS_VAR)) {
-			if ((op2_info & MAY_HAVE_DTOR) && (op2_info & MAY_BE_RC1)) {
+			if ((op2_info & MAY_HAVE_UNDELAYED_DTOR) && (op2_info & MAY_BE_RC1)) {
 				may_throw = 1;
 			}
 			jit_FREE_OP(jit,  opline->op2_type, opline->op2, op2_info, opline);
 		}
 		if (opline->opcode != ZEND_FETCH_LIST_R && !op1_avoid_refcounting) {
 			if (opline->op1_type & (IS_TMP_VAR|IS_VAR)) {
-				if ((op1_info & MAY_HAVE_DTOR) && (op1_info & MAY_BE_RC1)) {
+				if ((op1_info & MAY_HAVE_UNDELAYED_DTOR) && (op1_info & MAY_BE_RC1)) {
 					may_throw = 1;
 				}
 				jit_FREE_OP(jit,  opline->op1_type, opline->op1, op1_info, opline);
@@ -13182,7 +13182,7 @@ static int zend_jit_fetch_dim(zend_jit_ctx   *jit,
 #endif
 
 	if ((opline->op2_type & (IS_TMP_VAR|IS_VAR))
-	 && (op2_info & MAY_HAVE_DTOR)
+	 && (op2_info & MAY_HAVE_UNDELAYED_DTOR)
 	 && (op2_info & MAY_BE_RC1)) {
 		may_throw = 1;
 	}
@@ -15570,7 +15570,7 @@ long_math:
 	jit_FREE_OP(jit, (opline+1)->op1_type, (opline+1)->op1, val_info, opline);
 
 	if (opline->op1_type != IS_UNUSED && !delayed_fetch_this && !op1_indirect) {
-		if ((op1_info & MAY_HAVE_DTOR) && (op1_info & MAY_BE_RC1)) {
+		if ((op1_info & MAY_HAVE_UNDELAYED_DTOR) && (op1_info & MAY_BE_RC1)) {
 			may_throw = true;
 		}
 		jit_FREE_OP(jit, opline->op1_type, opline->op1, op1_info, opline);
@@ -16048,7 +16048,7 @@ static int zend_jit_incdec_obj(zend_jit_ctx         *jit,
 	}
 
 	if ((opline->op1_type & (IS_VAR|IS_TMP_VAR)) && !delayed_fetch_this && !op1_indirect) {
-		if ((op1_info & MAY_HAVE_DTOR) && (op1_info & MAY_BE_RC1)) {
+		if ((op1_info & MAY_HAVE_UNDELAYED_DTOR) && (op1_info & MAY_BE_RC1)) {
 			may_throw = true;
 		}
 		jit_FREE_OP(jit, opline->op1_type, opline->op1, op1_info, opline);
@@ -17926,7 +17926,7 @@ static void jit_frameless_icall2(zend_jit_ctx *jit, const zend_op *opline, uint3
 	if ((opline->op1_type & (IS_VAR|IS_TMP_VAR)) != 0
 	 && (opline->op2_type & (IS_VAR|IS_TMP_VAR)) != 0
 	 && (op2_info & MAY_BE_RC1)
-	 && (op2_info & (MAY_BE_OBJECT|MAY_BE_RESOURCE|MAY_BE_ARRAY_OF_OBJECT|MAY_BE_ARRAY_OF_RESOURCE|MAY_BE_ARRAY_OF_ARRAY))) {
+	 && (op2_info & (MAY_BE_RESOURCE|MAY_BE_ARRAY_OF_RESOURCE|MAY_BE_ARRAY_OF_ARRAY))) {
 		jit_set_Z_TYPE_INFO(jit, op1_addr, IS_UNDEF);
 		if (JIT_G(current_frame)) {
 			SET_STACK_TYPE(JIT_G(current_frame)->stack,
@@ -18008,10 +18008,10 @@ static void jit_frameless_icall3(zend_jit_ctx *jit, const zend_op *opline, uint3
 	if ((opline->op1_type & (IS_VAR|IS_TMP_VAR))
 	 && (((opline->op2_type & (IS_VAR|IS_TMP_VAR))
 	   && (op2_info & MAY_BE_RC1)
-	   && (op2_info & (MAY_BE_OBJECT|MAY_BE_RESOURCE|MAY_BE_ARRAY_OF_OBJECT|MAY_BE_ARRAY_OF_RESOURCE|MAY_BE_ARRAY_OF_ARRAY)))
+	   && (op2_info & (MAY_BE_RESOURCE|MAY_BE_ARRAY_OF_RESOURCE|MAY_BE_ARRAY_OF_ARRAY)))
 	  || ((op_data_type & (IS_VAR|IS_TMP_VAR))
 	   && (op1_data_info & MAY_BE_RC1)
-	   && (op1_data_info & (MAY_BE_OBJECT|MAY_BE_RESOURCE|MAY_BE_ARRAY_OF_OBJECT|MAY_BE_ARRAY_OF_RESOURCE|MAY_BE_ARRAY_OF_ARRAY))))) {
+	   && (op1_data_info & (MAY_BE_RESOURCE|MAY_BE_ARRAY_OF_RESOURCE|MAY_BE_ARRAY_OF_ARRAY))))) {
 	    op1_undef = true;
 		jit_set_Z_TYPE_INFO(jit, op1_addr, IS_UNDEF);
 		if (JIT_G(current_frame)) {
@@ -18026,7 +18026,7 @@ static void jit_frameless_icall3(zend_jit_ctx *jit, const zend_op *opline, uint3
 	 && (opline->op2_type & (IS_VAR|IS_TMP_VAR)) != 0
 	 && (op_data_type & (IS_VAR|IS_TMP_VAR)) != 0
 	 && (op1_data_info & MAY_BE_RC1)
-	 && (op1_data_info & (MAY_BE_OBJECT|MAY_BE_RESOURCE|MAY_BE_ARRAY_OF_OBJECT|MAY_BE_ARRAY_OF_RESOURCE|MAY_BE_ARRAY_OF_ARRAY))) {
+	 && (op1_data_info & (MAY_BE_RESOURCE|MAY_BE_ARRAY_OF_RESOURCE|MAY_BE_ARRAY_OF_ARRAY))) {
 		jit_set_Z_TYPE_INFO(jit, op2_addr, IS_UNDEF);
 		if (JIT_G(current_frame)) {
 			SET_STACK_TYPE(JIT_G(current_frame)->stack,

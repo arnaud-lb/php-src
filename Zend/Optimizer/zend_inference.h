@@ -34,6 +34,10 @@
 	(MAY_BE_OBJECT|MAY_BE_RESOURCE \
 	|MAY_BE_ARRAY_OF_ARRAY|MAY_BE_ARRAY_OF_OBJECT|MAY_BE_ARRAY_OF_RESOURCE)
 
+#define MAY_HAVE_UNDELAYED_DTOR \
+	(MAY_BE_RESOURCE \
+	|MAY_BE_ARRAY_OF_ARRAY|MAY_BE_ARRAY_OF_RESOURCE)
+
 #define DEFINE_SSA_OP_HAS_RANGE(opN) \
 	static zend_always_inline bool _ssa_##opN##_has_range(const zend_op_array *op_array, const zend_ssa *ssa, const zend_op *opline, const zend_ssa_op *ssa_op) \
 	{ \
