@@ -1506,7 +1506,16 @@ ZEND_API ZEND_COLD void zend_error_zstr_at(
 		&& EG(error_handling) == EH_NORMAL;
 	if (may_call_user_error_handler
 			&& !(orig_type & E_NO_DELAY) && EG(current_execute_data)) {
+
+		/* Check if the installed error handler requested to be called without
+		 * delaying. In this case, we promote the error to an exception. The
+		 * error handler will be called as part of exception handling. */
 		if (EG(user_error_handler_error_reporting) & ZEND_ERROR_HANDLER_NO_DELAY) {
+			if (!(EG(error_reporting) & type)) {
+				/* Error was silenced. Do not promote to exception as the error
+				 * handler does not have a chance to prevent that. */
+				return;
+			}
 			if (EG(exception)) {
 				/* Promoting this error would override the existing exception,
 				 * but, we want the first exception/error to have precedence. */
