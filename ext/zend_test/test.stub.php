@@ -360,6 +360,9 @@ function zend_test_override_libxml_global_state(): void {}
 
     /** @compile-time-eval */
     function zend_test_gh19792(): void {}
+
+    /* Return a non-interned copy of $str */
+    function zend_test_rc_string(string $str): string {}
 }
 
 namespace ZendTestNS {

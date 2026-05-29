@@ -359,14 +359,19 @@ static zend_always_inline zend_execute_data *zend_vm_stack_push_call_frame_ex(ui
 	if (UNEXPECTED(used_stack > (size_t)(((char*)EG(vm_stack_end)) - (char*)call))) {
 		if (UNEXPECTED(zend_atomic_bool_load_ex(&EG(vm_interrupt)))) {
 			zend_fcall_interrupt(EG(current_execute_data));
+			if (UNEXPECTED(EG(exception))) {
+				return NULL;
+			}
 		}
 		call = (zend_execute_data*)zend_vm_stack_extend(used_stack);
 		ZEND_ASSERT_VM_STACK_GLOBAL;
 		zend_vm_init_call_frame(call, call_info | ZEND_CALL_ALLOCATED, func, num_args, object_or_called_scope);
+		ZEND_ASSERT(call);
 		return call;
 	} else {
 		EG(vm_stack_top) = (zval*)((char*)call + used_stack);
 		zend_vm_init_call_frame(call, call_info, func, num_args, object_or_called_scope);
+		ZEND_ASSERT(call);
 		return call;
 	}
 }

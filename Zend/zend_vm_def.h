@@ -2150,6 +2150,10 @@ ZEND_VM_C_LABEL(fetch_obj_r_fast_copy):
 							call_info |= ZEND_CALL_RELEASE_THIS;
 						}
 						zend_execute_data *call = zend_vm_stack_push_call_frame(call_info, hook, 0, zobj);
+						if (UNEXPECTED(!call)) {
+							ZVAL_NULL(EX_VAR(opline->result.var));
+							ZEND_VM_C_GOTO(fetch_obj_r_finish);
+						}
 						call->prev_execute_data = execute_data;
 						call->call = NULL;
 						call->return_value = EX_VAR(opline->result.var);
@@ -3776,6 +3780,10 @@ ZEND_VM_HOT_OBJ_HANDLER(112, ZEND_INIT_METHOD_CALL, CONST|TMP|UNUSED|THIS|CV, CO
 
 	call = zend_vm_stack_push_call_frame(call_info,
 		fbc, opline->extended_value, obj);
+	if (UNEXPECTED(!call)) {
+		FREE_OP1();
+		HANDLE_EXCEPTION();
+	}
 	call->prev_execute_data = EX(call);
 	EX(call) = call;
 
@@ -3909,6 +3917,9 @@ ZEND_VM_HANDLER(113, ZEND_INIT_STATIC_METHOD_CALL, UNUSED|CLASS_FETCH|CONST|VAR,
 
 	call = zend_vm_stack_push_call_frame(call_info,
 		fbc, opline->extended_value, ce);
+	if (UNEXPECTED(!call)) {
+		HANDLE_EXCEPTION();
+	}
 	call->prev_execute_data = EX(call);
 	EX(call) = call;
 
@@ -3937,6 +3948,9 @@ ZEND_VM_HOT_HANDLER(59, ZEND_INIT_FCALL_BY_NAME, ANY, CONST, NUM|CACHE_SLOT)
 	}
 	call = _zend_vm_stack_push_call_frame(ZEND_CALL_NESTED_FUNCTION,
 		fbc, opline->extended_value, NULL);
+	if (UNEXPECTED(!call)) {
+		HANDLE_EXCEPTION();
+	}
 	call->prev_execute_data = EX(call);
 	EX(call) = call;
 
@@ -4062,6 +4076,9 @@ ZEND_VM_HANDLER(118, ZEND_INIT_USER_CALL, CONST, CONST|TMP|CV, NUM)
 
 	call = zend_vm_stack_push_call_frame(call_info,
 		func, opline->extended_value, object_or_called_scope);
+	if (UNEXPECTED(!call)) {
+		HANDLE_EXCEPTION();
+	}
 	call->prev_execute_data = EX(call);
 	EX(call) = call;
 
@@ -4095,6 +4112,9 @@ ZEND_VM_HOT_HANDLER(69, ZEND_INIT_NS_FCALL_BY_NAME, ANY, CONST, NUM|CACHE_SLOT)
 
 	call = _zend_vm_stack_push_call_frame(ZEND_CALL_NESTED_FUNCTION,
 		fbc, opline->extended_value, NULL);
+	if (UNEXPECTED(!call)) {
+		HANDLE_EXCEPTION();
+	}
 	call->prev_execute_data = EX(call);
 	EX(call) = call;
 
@@ -4124,6 +4144,9 @@ ZEND_VM_HOT_HANDLER(61, ZEND_INIT_FCALL, NUM, CONST, NUM|CACHE_SLOT)
 	call = _zend_vm_stack_push_call_frame_ex(
 		opline->op1.num, ZEND_CALL_NESTED_FUNCTION,
 		fbc, opline->extended_value, NULL);
+	if (UNEXPECTED(!call)) {
+		HANDLE_EXCEPTION();
+	}
 	call->prev_execute_data = EX(call);
 	EX(call) = call;
 
@@ -4143,6 +4166,9 @@ ZEND_VM_HOT_TYPE_SPEC_HANDLER(ZEND_INIT_FCALL, Z_EXTRA_P(RT_CONSTANT(op, op->op2
 	call = _zend_vm_stack_push_call_frame_ex(
 		opline->op1.num, ZEND_CALL_NESTED_FUNCTION,
 		fbc, opline->extended_value, NULL);
+	if (UNEXPECTED(!call)) {
+		HANDLE_EXCEPTION();
+	}
 	call->prev_execute_data = EX(call);
 	EX(call) = call;
 	ZEND_VM_NEXT_OPCODE();
@@ -6062,6 +6088,9 @@ ZEND_VM_HANDLER(68, ZEND_NEW, UNUSED|CLASS_FETCH|CONST|VAR, UNUSED|CACHE_SLOT, N
 		call = zend_vm_stack_push_call_frame(
 			ZEND_CALL_FUNCTION, (zend_function *) &zend_pass_function,
 			opline->extended_value, NULL);
+		if (UNEXPECTED(!call)) {
+			HANDLE_EXCEPTION();
+		}
 	} else {
 		if (EXPECTED(constructor->type == ZEND_USER_FUNCTION) && UNEXPECTED(!RUN_TIME_CACHE(&constructor->op_array))) {
 			init_func_run_time_cache(&constructor->op_array);
@@ -6072,6 +6101,9 @@ ZEND_VM_HANDLER(68, ZEND_NEW, UNUSED|CLASS_FETCH|CONST|VAR, UNUSED|CACHE_SLOT, N
 			constructor,
 			opline->extended_value,
 			Z_OBJ_P(result));
+		if (UNEXPECTED(!call)) {
+			HANDLE_EXCEPTION();
+		}
 		Z_ADDREF_P(result);
 	}
 
@@ -6624,6 +6656,7 @@ ZEND_VM_HANDLER(73, ZEND_INCLUDE_OR_EVAL, CONST|TMP|CV, ANY, EVAL, SPEC(OBSERVER
 	inc_filename = GET_OP1_ZVAL_PTR(BP_VAR_R);
 	new_op_array = zend_include_or_eval(inc_filename, opline->extended_value);
 	if (UNEXPECTED(EG(exception) != NULL)) {
+ZEND_VM_C_LABEL(handle_exception):
 		FREE_OP1();
 		if (new_op_array != ZEND_FAKE_OP_ARRAY && new_op_array != NULL) {
 			destroy_op_array(new_op_array);
@@ -6664,6 +6697,9 @@ ZEND_VM_HANDLER(73, ZEND_INCLUDE_OR_EVAL, CONST|TMP|CV, ANY, EVAL, SPEC(OBSERVER
 			(Z_TYPE_INFO(EX(This)) & ZEND_CALL_HAS_THIS) | ZEND_CALL_NESTED_CODE | ZEND_CALL_HAS_SYMBOL_TABLE,
 			(zend_function*)new_op_array, 0,
 			Z_PTR(EX(This)));
+		if (UNEXPECTED(!call)) {
+			ZEND_VM_C_GOTO(handle_exception);
+		}
 
 		if (EX_CALL_INFO() & ZEND_CALL_HAS_SYMBOL_TABLE) {
 			call->symbol_table = EX(symbol_table);
@@ -10116,6 +10152,10 @@ ZEND_VM_HANDLER(209, ZEND_INIT_PARENT_PROPERTY_HOOK_CALL, CONST, UNUSED|NUM, NUM
 		call = zend_vm_stack_push_call_frame(
 			ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS,
 			hook, opline->extended_value, Z_OBJ_P(ZEND_THIS));
+		if (UNEXPECTED(!call)) {
+			UNDEF_RESULT();
+			HANDLE_EXCEPTION();
+		}
 		if (EXPECTED(hook->type == ZEND_USER_FUNCTION)) {
 			if (UNEXPECTED(!RUN_TIME_CACHE(&hook->op_array))) {
 				init_func_run_time_cache(&hook->op_array);
@@ -10127,6 +10167,10 @@ ZEND_VM_HANDLER(209, ZEND_INIT_PARENT_PROPERTY_HOOK_CALL, CONST, UNUSED|NUM, NUM
 		call = zend_vm_stack_push_call_frame(
 			ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_HAS_THIS,
 			fbc, opline->extended_value, Z_OBJ_P(ZEND_THIS));
+		if (UNEXPECTED(!call)) {
+			UNDEF_RESULT();
+			HANDLE_EXCEPTION();
+		}
 	}
 
 	call->prev_execute_data = EX(call);
