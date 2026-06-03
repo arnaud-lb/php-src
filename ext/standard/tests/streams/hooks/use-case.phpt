@@ -139,5 +139,5 @@ $scheduler->run(function () {
 > GET / HTTP/1.0
 > Host: localhost
 < HTTP/1.0 200 OK
-< 
+<
 < Hello world!

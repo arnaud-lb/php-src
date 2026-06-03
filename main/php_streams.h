@@ -669,8 +669,14 @@ extern const php_stream_wrapper_ops *php_stream_user_wrapper_ops;
 
 PHPAPI extern zend_class_entry *php_stream_operation_ce;
 
-/* Call stream hook if any. Returns true if a hook was called. */
-PHPAPI bool php_stream_call_hook(php_stream *stream, zend_enum_StreamOperation);
+C23_ENUM(php_stream_hook_result, uint8_t) {
+	PHP_STREAM_HOOK_NO_HOOK, /* No hook was invoked */
+	PHP_STREAM_HOOK_INVOKED, /* Hook was invoked */
+	PHP_STREAM_HOOK_STREAM_CLOSED, /* Stream was closed during hook invokation */
+};
+
+/* Call stream hook if any */
+PHPAPI php_stream_hook_result php_stream_call_hook(php_stream *stream, zend_enum_StreamOperation);
 
 static inline bool php_is_stream_path(const char *filename)
 {
