@@ -92,34 +92,45 @@ function go($fn) {
 }
 
 $scheduler->run(function () {
-    [$client, $server] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
-
-    go(function () use ($client) {
-        fwrite($client, "GET / HTTP/1.0\r\n");
-        fwrite($client, "Host: localhost\r\n");
-        fwrite($client, "\r\n");
-        while (!feof($client)) {
-            echo "< " . trim(fgets($client)) . "\n";
-        }
-        fclose($client);
-    });
+    $server = stream_socket_server('tcp://localhost:0');
+    $socket_name = stream_socket_get_name($server, false);
+    if (!preg_match('/:(\d+)$/', $socket_name, $m)) {
+        die("Could not extract port from '$socket_name'");
+    }
+    $port = $m[1];
 
     go(function () use ($server) {
-        $headers = [];
-        while (!feof($server)) {
-            $line = fgets($server);
-            if ($line === false) {
-                break;
+        $client = stream_socket_accept($server);
+        go(function () use ($client) {
+            $headers = [];
+            while (!feof($client)) {
+                $line = fgets($client);
+                if ($line === false) {
+                    break;
+                }
+                if ($line === "\r\n") {
+                    break;
+                }
+                $headers[] = $line;
             }
-            if ($line === "\r\n") {
-                break;
+            foreach ($headers as $header) {
+                echo "> " . trim($header) . "\n";
             }
-            $headers[] = $line;
+            fwrite($client, "HTTP/1.0 200 OK\r\n");
+            fwrite($client, "\r\n");
+            fwrite($client, "Hello world!\n");
+        });
+    });
+
+    go(function () use ($port) {
+        $fd = stream_socket_client("tcp://localhost:$port");
+        fwrite($fd, "GET / HTTP/1.0\r\n");
+        fwrite($fd, "Host: localhost\r\n");
+        fwrite($fd, "\r\n");
+        while (!feof($fd)) {
+            echo "< " . trim(fgets($fd)) . "\n";
         }
-        foreach ($headers as $header) {
-            echo "> " . trim($header) . "\n";
-        }
-        fwrite($server, "Hello world!\n");
+        fclose($fd);
     });
 });
 
@@ -127,4 +138,6 @@ $scheduler->run(function () {
 --EXPECT--
 > GET / HTTP/1.0
 > Host: localhost
+< HTTP/1.0 200 OK
+< 
 < Hello world!

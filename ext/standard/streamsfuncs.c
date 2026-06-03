@@ -311,6 +311,9 @@ PHP_FUNCTION(stream_socket_accept)
 
 	php_stream_error_operation_begin();
 
+	php_stream_call_hook(stream, ZEND_ENUM_StreamOperation_Read);
+	// TODO: closed?
+
 	if (0 == php_stream_xport_accept(stream, &clistream,
 				zpeername ? &peername : NULL,
 				NULL, NULL,
