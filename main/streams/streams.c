@@ -26,11 +26,18 @@
 #include "ext/standard/file.h"
 #include "ext/standard/basic_functions.h" /* for BG(CurrentStatFile) */
 #include "ext/standard/php_string.h" /* for php_memnstr, used by php_stream_get_record() */
+#include "ext/standard/io_poll.h"
 #include "ext/uri/php_uri.h"
 #include <stddef.h>
 #include <fcntl.h>
 #include "php_streams_int.h"
 #include "zend_enum.h"
+
+#ifdef HAVE_POLL_H
+#include <poll.h>
+#elif HAVE_SYS_POLL_H
+#include <sys/poll.h>
+#endif
 
 /* {{{ resource and registration code */
 /* Global wrapper hash, copied to FG(stream_wrappers) on registration of volatile wrapper */
@@ -433,18 +440,6 @@ PHPAPI zend_result _php_stream_fill_read_buffer(php_stream *stream, size_t size)
 			php_stream_filter_status_t status = PSFS_ERR_FATAL;
 			php_stream_filter *filter;
 
-			switch (php_stream_call_hook(stream, ZEND_ENUM_StreamOperation_Read)) {
-				case PHP_STREAM_HOOK_INVOKED:
-					// ???: Should polling mechanisms report streams as
-					//      ready when read buffer is non-empty?
-					if (stream->eof || (stream->writepos - stream->readpos >= (zend_off_t)to_read_now)) {
-						goto done;
-					}
-					break;
-				case PHP_STREAM_HOOK_NO_HOOK:
-					break;
-			}
-
 			/* read a chunk into a bucket */
 			justread = stream->ops->read(stream, chunk_buf, stream->chunk_size);
 			if (justread < 0 && stream->writepos == stream->readpos) {
@@ -548,7 +543,6 @@ PHPAPI zend_result _php_stream_fill_read_buffer(php_stream *stream, size_t size)
 			}
 		}
 
-done:
 		efree(chunk_buf);
 		return SUCCESS;
 	} else {
@@ -571,16 +565,6 @@ done:
 				stream->readbuflen += stream->chunk_size;
 				stream->readbuf = perealloc(stream->readbuf, stream->readbuflen,
 						stream->is_persistent);
-			}
-
-			switch (php_stream_call_hook(stream, ZEND_ENUM_StreamOperation_Read)) {
-				case PHP_STREAM_HOOK_INVOKED:
-					if (UNEXPECTED(stream->writepos - stream->readpos >= (zend_off_t)size)) {
-						return SUCCESS;
-					}
-					break;
-				case PHP_STREAM_HOOK_NO_HOOK:
-					break;
 			}
 
 			justread = stream->ops->read(stream, (char*)stream->readbuf + stream->writepos,
@@ -636,17 +620,6 @@ PHPAPI ssize_t _php_stream_read(php_stream *stream, char *buf, size_t size)
 		}
 
 		if (!stream->readfilters.head && ((stream->flags & PHP_STREAM_FLAG_NO_BUFFER) || stream->chunk_size == 1)) {
-
-			switch (php_stream_call_hook(stream, ZEND_ENUM_StreamOperation_Read)) {
-				case PHP_STREAM_HOOK_INVOKED:
-					if (UNEXPECTED(stream->writepos > stream->readpos)) {
-						continue;
-					}
-					break;
-				case PHP_STREAM_HOOK_NO_HOOK:
-					break;
-			}
-
 			toread = stream->ops->read(stream, buf, size);
 			if (toread < 0) {
 				/* Report an error if the read failed and we did not read any data
@@ -1078,7 +1051,6 @@ static ssize_t _php_stream_write_buffer(php_stream *stream, const char *buf, siz
 	 * current stream->position. This means invalidating the read buffer and then
 	 * performing a low-level seek */
 	if (stream->ops->seek && (stream->flags & PHP_STREAM_FLAG_NO_SEEK) == 0 && stream->readpos != stream->writepos) {
-seek:
 		stream->readpos = stream->writepos = 0;
 
 		stream->ops->seek(stream, stream->position, SEEK_SET, &stream->position);
@@ -1094,16 +1066,6 @@ seek:
 	}
 
 	while (count > 0) {
-		switch (php_stream_call_hook(stream, ZEND_ENUM_StreamOperation_Write)) {
-			case PHP_STREAM_HOOK_INVOKED:
-				if (stream->ops->seek && (stream->flags & PHP_STREAM_FLAG_NO_SEEK) == 0 && stream->readpos != stream->writepos) {
-					goto seek;
-				}
-				break;
-			case PHP_STREAM_HOOK_NO_HOOK:
-				break;
-		}
-
 		ssize_t justwrote = stream->ops->write(stream, buf, MIN(chunk_size, count));
 		if (justwrote <= 0) {
 			/* If we already successfully wrote some bytes and a write error occurred
@@ -2564,34 +2526,81 @@ overflow:
 }
 /* }}} */
 
-static zend_object *php_stream_operation_get_case(zend_enum_StreamOperation operation)
+// TODO: move to io_poll.c
+static void php_pollfd_events_to_io_poll_events(zend_array *dest, int events)
 {
-	switch (operation) {
-		case ZEND_ENUM_StreamOperation_Read:
-			return zend_enum_get_case_cstr(php_stream_operation_ce, "Read");
-		case ZEND_ENUM_StreamOperation_Write:
-			return zend_enum_get_case_cstr(php_stream_operation_ce, "Write");
-		default:
-			ZEND_UNREACHABLE();
+	zval zv;
+
+	ZEND_ASSERT(!(events & ~(POLLIN|POLLPRI|POLLOUT|POLLERR|POLLHUP)));
+
+	if (events & POLLIN) {
+		ZVAL_OBJ_COPY(&zv, zend_enum_get_case_cstr(php_io_poll_event_class_entry, "Read"));
+		zend_hash_next_index_insert(dest, &zv);
+	}
+	if (events & POLLPRI) {
+		/* TODO: This event is set in a few places, but there is no equivalent in Io\Poll */
+	}
+	if (events & POLLOUT) {
+		ZVAL_OBJ_COPY(&zv, zend_enum_get_case_cstr(php_io_poll_event_class_entry, "Write"));
+		zend_hash_next_index_insert(dest, &zv);
+	}
+	if (events & POLLERR) {
+		ZVAL_OBJ_COPY(&zv, zend_enum_get_case_cstr(php_io_poll_event_class_entry, "Error"));
+		zend_hash_next_index_insert(dest, &zv);
+	}
+	if (events & POLLHUP) {
+		ZVAL_OBJ_COPY(&zv, zend_enum_get_case_cstr(php_io_poll_event_class_entry, "HangUp"));
+		zend_hash_next_index_insert(dest, &zv);
 	}
 }
 
-PHPAPI php_stream_hook_result php_stream_call_hook(php_stream *stream, zend_enum_StreamOperation operation)
+// TODO: return a ZEND_ENUM_
+PHPAPI zend_object *php_stream_call_hook(php_stream *stream, int events)
 {
 	if (!ZEND_FCC_INITIALIZED(FG(hook_fcc))) {
-		return PHP_STREAM_HOOK_NO_HOOK;
+		return NULL;
 	}
 
 	uint32_t orig_no_fclose = stream->flags & PHP_STREAM_FLAG_NO_FCLOSE;
 	stream->flags |= PHP_STREAM_FLAG_NO_FCLOSE;
 
+	zend_array *events_array = zend_new_array(0);
+	php_pollfd_events_to_io_poll_events(events_array, events);
+
+	// TODO: timeout
 	zval params[2];
 	ZVAL_RES(&params[0], stream->res);
-	ZVAL_OBJ(&params[1], php_stream_operation_get_case(operation));
-	zend_call_known_fcc(&FG(hook_fcc), NULL, 2, params, NULL);
+	ZVAL_ARR(&params[1], events_array);
+
+	zval return_value;
+	zend_call_known_fcc(&FG(hook_fcc), &return_value, 2, params, NULL);
+
+	zend_array_release(events_array);
+
+	if (EG(exception)) {
+		goto error;
+	}
+	if (UNEXPECTED(Z_TYPE(return_value) != IS_OBJECT
+				|| Z_OBJCE(return_value) != php_stream_hook_result_ce)) {
+		zend_type_error("stream hook must return an instance of %s, %s returned",
+				ZSTR_VAL(php_stream_hook_result_ce->name),
+				zend_zval_type_name(&return_value));
+		goto error;
+	}
 
 	stream->flags &= ~PHP_STREAM_FLAG_NO_FCLOSE;
 	stream->flags |= orig_no_fclose;
 
-	return PHP_STREAM_HOOK_INVOKED;
+	return Z_OBJ(return_value);
+
+error:
+	zval_ptr_dtor(&return_value);
+
+	stream->flags &= ~PHP_STREAM_FLAG_NO_FCLOSE;
+	stream->flags |= orig_no_fclose;
+
+	zend_object *result = zend_enum_get_case_cstr(php_stream_hook_result_ce, "Error");
+	GC_ADDREF(result);
+
+	return result;
 }

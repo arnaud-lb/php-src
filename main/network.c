@@ -807,7 +807,8 @@ PHPAPI int php_network_get_sock_name(php_socket_t sock,
  * version of the address will be emalloc'd and returned.
  * */
 
-PHPAPI php_socket_t php_network_accept_incoming_ex(php_socket_t srvsock,
+PHPAPI php_socket_t php_network_accept_incoming_ex(php_stream *stream,
+		php_socket_t srvsock,
 		zend_string **textaddr,
 		struct sockaddr **addr,
 		socklen_t *addrlen,
@@ -818,16 +819,17 @@ PHPAPI php_socket_t php_network_accept_incoming_ex(php_socket_t srvsock,
 		)
 {
 	php_socket_t clisock = -1;
-	int error = 0, n;
+	int error = 0;
+	php_pollstream_result result;
 	php_sockaddr_storage sa;
 	socklen_t sl;
 
-	n = php_pollfd_for(srvsock, PHP_POLLREADABLE, timeout);
+	result = php_pollstream_for(stream, srvsock, PHP_POLLREADABLE, timeout);
 
-	if (n == 0) {
+	if (result == PHP_POLLSTREAM_TIMEOUT) {
 		error = PHP_TIMEOUT_ERROR_VALUE;
-	} else if (n == -1) {
-		error = php_socket_errno();
+	} else if (result == PHP_POLLSTREAM_ERROR) {
+		error = php_socket_errno(); // TODO
 	} else {
 		sl = sizeof(sa);
 
@@ -866,7 +868,8 @@ PHPAPI php_socket_t php_network_accept_incoming_ex(php_socket_t srvsock,
 	return clisock;
 }
 
-PHPAPI php_socket_t php_network_accept_incoming(php_socket_t srvsock,
+PHPAPI php_socket_t php_network_accept_incoming(php_stream *stream,
+		php_socket_t srvsock,
 		zend_string **textaddr,
 		struct sockaddr **addr,
 		socklen_t *addrlen,
@@ -878,7 +881,7 @@ PHPAPI php_socket_t php_network_accept_incoming(php_socket_t srvsock,
 {
 	php_sockvals sockvals = { .mask = tcp_nodelay ? PHP_SOCKVAL_TCP_NODELAY : 0 };
 
-	return php_network_accept_incoming_ex(srvsock, textaddr, addr, addrlen, timeout, error_string,
+	return php_network_accept_incoming_ex(stream, srvsock, textaddr, addr, addrlen, timeout, error_string,
 			error_code, &sockvals);
 }
 

@@ -1,5 +1,11 @@
 /* This is a generated file, edit basic_functions.stub.php instead.
+<<<<<<< HEAD
  * Stub hash: 48fe141fe56ba9216148703cc7da09d770835b1c
+||||||| parent of 6f8cd98087d (Call the hook in php_pollfd_for)
+ * Stub hash: 7875f65f7ae0c4b2491295c6613afe628db17168
+=======
+ * Stub hash: 5b3a836c82a9be012550252226392be28e805dce
+>>>>>>> 6f8cd98087d (Call the hook in php_pollfd_for)
  * Has decl header: yes */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_set_time_limit, 0, 1, _IS_BOOL, 0)
@@ -4070,13 +4076,15 @@ static zend_class_entry *register_class_RoundingMode(void)
 	return class_entry;
 }
 
-static zend_class_entry *register_class_StreamOperation(void)
+static zend_class_entry *register_class_StreamHookResult(void)
 {
-	zend_class_entry *class_entry = zend_register_internal_enum("StreamOperation", IS_UNDEF, NULL);
+	zend_class_entry *class_entry = zend_register_internal_enum("StreamHookResult", IS_UNDEF, NULL);
 
-	zend_enum_add_case_cstr(class_entry, "Read", NULL);
+	zend_enum_add_case_cstr(class_entry, "Error", NULL);
 
-	zend_enum_add_case_cstr(class_entry, "Write", NULL);
+	zend_enum_add_case_cstr(class_entry, "Timeout", NULL);
+
+	zend_enum_add_case_cstr(class_entry, "Ready", NULL);
 
 	return class_entry;
 }

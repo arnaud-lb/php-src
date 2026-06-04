@@ -91,14 +91,14 @@ retry:
 				sock->timeout_event = false;
 
 				do {
-					retval = php_pollfd_for(sock->socket, POLLOUT, ptimeout);
+					retval = php_pollstream_for(stream, sock->socket, POLLOUT, ptimeout);
 
-					if (retval == 0) {
+					if (retval == PHP_POLLSTREAM_TIMEOUT) {
 						sock->timeout_event = true;
 						break;
 					}
 
-					if (retval > 0) {
+					if (retval == PHP_POLLSTREAM_READY) {
 						/* writable now; retry */
 						goto retry;
 					}
@@ -150,12 +150,12 @@ static void php_sock_stream_wait_for_data(php_stream *stream, php_netstream_data
 	}
 
 	while(1) {
-		retval = php_pollfd_for(sock->socket, PHP_POLLREADABLE, ptimeout);
+		retval = php_pollstream_for(stream, sock->socket, PHP_POLLREADABLE, ptimeout);
 
-		if (retval == 0)
+		if (retval == PHP_POLLSTREAM_TIMEOUT)
 			sock->timeout_event = true;
 
-		if (retval >= 0)
+		if (retval == PHP_POLLSTREAM_READY)
 			break;
 
 		if (php_socket_errno() != EINTR)
@@ -372,7 +372,7 @@ static int php_sockop_set_option(php_stream *stream, int option, int value, void
 						!(stream->flags & PHP_STREAM_FLAG_NO_IO) &&
 						((MSG_DONTWAIT != 0) || !sock->is_blocked)
 					) ||
-					php_pollfd_for(sock->socket, PHP_POLLREADABLE|POLLPRI, &tv) > 0
+					php_pollstream_for(stream, sock->socket, PHP_POLLREADABLE|POLLPRI, &tv) == PHP_POLLSTREAM_READY
 				) {
 					/* the poll() call was skipped if the socket is non-blocking (or MSG_DONTWAIT is available) and if the timeout is zero */
 #ifdef PHP_WIN32
@@ -978,7 +978,7 @@ static inline int php_tcp_sockop_accept(php_stream *stream, php_netstream_data_t
 		}
 	}
 
-	php_socket_t clisock = php_network_accept_incoming_ex(sock->socket,
+	php_socket_t clisock = php_network_accept_incoming_ex(stream, sock->socket,
 		xparam->want_textaddr ? &xparam->outputs.textaddr : NULL,
 		xparam->want_addr ? &xparam->outputs.addr : NULL,
 		xparam->want_addr ? &xparam->outputs.addrlen : NULL,

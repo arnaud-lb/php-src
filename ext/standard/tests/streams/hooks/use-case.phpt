@@ -3,20 +3,24 @@ Stream hook: use case
 --FILE--
 <?php
 
+use Io\Poll\Context;
+
 class Scheduler
 {
-    private $readFds = [];
-    private $writeFds = [];
-    private $readFibers = [];
-    private $writeFibers = [];
-
+    private $pollContext;
+    private $fds = [];
     private $ready = [];
+
+    public function __construct()
+    {
+        $this->pollContext = new Context();
+    }
 
     public function run($main)
     {
         $this->ready[] = new Fiber($main);
 
-        while ($this->ready !== [] || $this->readFds !== [] || $this->writeFds !== []) {
+        while ($this->ready !== [] || $this->fds !== []) {
             $this->runReadyFibers();
             $this->pollFds();
         }
@@ -32,38 +36,34 @@ class Scheduler
 
     public function pollFds()
     {
-        if ($this->readFds !== [] || $this->writeFds !== []) {
-            $read = $this->readFds;
-            $write = $this->writeFds;
-            $except = [];
-            stream_select($read, $write, $except, null);
-            foreach ($read as $fd) {
-                $id = (int)$fd;
-                array_push($this->ready, ...$this->readFibers[$id]);
-                unset($this->readFds[$id]);
-                unset($this->readFibers[$id]);
-            }
-            foreach ($write as $fd) {
-                $id = (int)$fd;
-                array_push($this->ready, ...$this->writeFibers[$id]);
-                unset($this->writeFds[$id]);
-                unset($this->writeFibers[$id]);
+        if ($this->fds !== []) {
+
+            $watchers = $this->pollContext->wait();
+
+            foreach ($watchers as $watcher) {
+                $id = (int)$watcher->getHandle()->getStream();
+                unset($this->fds[$id]);
+
+                $this->ready[] = $watcher->getData();
+
+                $watcher->remove();
             }
         }
     }
 
-    public function waitRead($fd) {
+    public function pollFd($fd, array $events)
+    {
         $id = (int)$fd;
-        $this->readFds[$id] = $fd;
-        $this->readFibers[$id][] = Fiber::getCurrent();
-        Fiber::suspend();
-    }
+        if (isset($this->fds[$id])) {
+            throw new Exception();
+        }
 
-    public function waitWrite($fd) {
-        $id = (int)$fd;
-        $this->writeFds[$id] = $fd;
-        $this->writeFibers[$id][] = Fiber::getCurrent();
+        $this->fds[$id] = $id;
+        $this->pollContext->add(new StreamPollHandle($fd), $events, Fiber::getCurrent());
+
         Fiber::suspend();
+
+        return StreamHookResult::Ready;
     }
 
     public function go(callable $fn) {
@@ -75,16 +75,7 @@ class Scheduler
 
 $scheduler = new Scheduler();
 
-stream_set_hook(function ($fd, StreamOperation $operation) use ($scheduler) {
-    switch ($operation) {
-        case StreamOperation::Read:
-            $scheduler->waitRead($fd);
-            break;
-        case StreamOperation::Write:
-            $scheduler->waitWrite($fd);
-            break;
-    }
-});
+stream_set_hook($scheduler->pollFd(...));
 
 function go($fn) {
     global $scheduler;
@@ -119,6 +110,7 @@ $scheduler->run(function () {
             fwrite($client, "HTTP/1.0 200 OK\r\n");
             fwrite($client, "\r\n");
             fwrite($client, "Hello world!\n");
+            fclose($client);
         });
     });
 
@@ -130,7 +122,6 @@ $scheduler->run(function () {
         while (!feof($fd)) {
             echo trim("< " . fgets($fd)) . "\n";
         }
-        fclose($fd);
     });
 });
 

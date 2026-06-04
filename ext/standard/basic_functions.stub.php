@@ -3598,9 +3598,10 @@ function sapi_windows_vt100_support($stream, ?bool $enable = null): bool {}
 /** @param resource $stream */
 function stream_set_chunk_size($stream, int $size): int {}
 
-enum StreamOperation {
-    case Read;
-    case Write;
+enum StreamHookResult {
+    case Error;
+    case Timeout;
+    case Ready;
 };
 
 function stream_set_hook(?callable $hook): ?callable {}
