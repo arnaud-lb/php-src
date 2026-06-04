@@ -128,7 +128,7 @@ $scheduler->run(function () {
         fwrite($fd, "Host: localhost\r\n");
         fwrite($fd, "\r\n");
         while (!feof($fd)) {
-            echo "< " . trim(fgets($fd)) . "\n";
+            echo trim("< " . fgets($fd)) . "\n";
         }
         fclose($fd);
     });

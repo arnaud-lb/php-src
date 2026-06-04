@@ -1,7 +1,5 @@
 --TEST--
 Stream hook: closed during read hook
---XFAIL--
-UAF in _php_stream_get_line
 --FILE--
 <?php
 
@@ -14,3 +12,6 @@ $fd = fopen(__FILE__, 'r');
 var_dump(fgets($fd));
 ?>
 --EXPECTF--
+Warning: fclose(): cannot close the provided stream, as it must not be manually closed in %s on line %d
+string(6) "<?php
+"

@@ -672,7 +672,6 @@ PHPAPI extern zend_class_entry *php_stream_operation_ce;
 C23_ENUM(php_stream_hook_result, uint8_t) {
 	PHP_STREAM_HOOK_NO_HOOK, /* No hook was invoked */
 	PHP_STREAM_HOOK_INVOKED, /* Hook was invoked */
-	PHP_STREAM_HOOK_STREAM_CLOSED, /* Stream was closed during hook invokation */
 };
 
 /* Call stream hook if any */

@@ -312,14 +312,7 @@ PHP_FUNCTION(stream_socket_accept)
 	php_stream_error_operation_begin();
 
 	// ???: Timeout handling?
-	switch (php_stream_call_hook(stream, ZEND_ENUM_StreamOperation_Read)) {
-		case PHP_STREAM_HOOK_STREAM_CLOSED:
-			RETVAL_FALSE;
-			goto out;
-		case PHP_STREAM_HOOK_INVOKED:
-		case PHP_STREAM_HOOK_NO_HOOK:
-			break;
-	}
+	php_stream_call_hook(stream, ZEND_ENUM_StreamOperation_Read);
 
 	if (0 == php_stream_xport_accept(stream, &clistream,
 				zpeername ? &peername : NULL,
@@ -339,7 +332,6 @@ PHP_FUNCTION(stream_socket_accept)
 		RETVAL_FALSE;
 	}
 
-out:
 	php_stream_error_operation_end_for_stream(stream);
 
 	if (errstr) {
