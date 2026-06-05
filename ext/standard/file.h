@@ -15,7 +15,9 @@
 #ifndef FILE_H
 #define FILE_H
 
-#include "php_network.h"
+#ifdef HAVE_GETHOSTBYNAME_R
+# include <netdb.h>
+#endif
 
 PHP_MINIT_FUNCTION(file);
 PHP_MSHUTDOWN_FUNCTION(file);
@@ -102,7 +104,8 @@ typedef struct {
 	HashTable *wrapper_logged_errors;	/* key: wrapper address; value: linked list of error entries */
 	php_stream_error_state stream_error_state;
 	int pclose_wait;
-	zend_fcall_info_cache hook_fcc;
+	zval io_hooks;
+	zend_fcall_info_cache io_hooks_poll_fcc;
 #ifdef HAVE_GETHOSTBYNAME_R
 	struct hostent tmp_host_info;
 	char *tmp_host_buf;
@@ -118,5 +121,6 @@ extern PHPAPI int file_globals_id;
 extern PHPAPI php_file_globals file_globals;
 #endif
 
+#include "php_network.h"
 
 #endif /* FILE_H */

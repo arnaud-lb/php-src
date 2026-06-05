@@ -12,17 +12,19 @@
    +----------------------------------------------------------------------+
 */
 
-#ifndef PHP_IO_POLL_H
-#define PHP_IO_POLL_H
+#ifndef PHP_IO_HOOKS_H
+#define PHP_IO_HOOKS_H
 
-#include "Zend/zend_types.h"
 #include "main/php.h"
+#include "Zend/zend_types.h"
+#include "ext/standard/file.h"
 
-PHPAPI extern zend_class_entry *php_io_poll_event_class_entry;
-PHPAPI extern zend_class_entry *php_stream_poll_handle_class_entry;
+PHPAPI extern zend_class_entry *php_io_hooks_poll_result_ce;
 
-PHPAPI zend_result php_io_poll_events_to_event_enums(uint32_t events, zval *event_enums);
+#define PHP_HAS_IO_POLL_HOOK() ZEND_FCC_INITIALIZED(FG(io_hooks_poll_fcc))
 
-PHPAPI void php_stream_poll_handle_from_stream(zval *dest, php_stream *stream);
+PHPAPI zend_object *php_io_hooks_poll_stream(php_stream *stream, int events, const struct timeval *timeout);
 
-#endif /* PHP_IO_POLL_H */
+PHP_MINIT_FUNCTION(io_hooks);
+
+#endif /* PHP_IO_HOOKS_H */

@@ -3,20 +3,21 @@ Stream hook: use case
 --FILE--
 <?php
 
-use Io\Poll\Context;
+use Io\Hooks\{Hooks, PollInfo, PollResult};
+use Io\Poll\{Context, Event};
 
-class Scheduler
+class Scheduler implements Hooks
 {
-    private $pollContext;
-    private $fds = [];
-    private $ready = [];
+    private Context $pollContext;
+    private array $fds = [];
+    private array $ready = [];
 
     public function __construct()
     {
         $this->pollContext = new Context();
     }
 
-    public function run($main)
+    public function run($main): void
     {
         $this->ready[] = new Fiber($main);
 
@@ -26,7 +27,7 @@ class Scheduler
         }
     }
 
-    public function runReadyFibers()
+    public function runReadyFibers(): void
     {
         while ($this->ready !== []) {
             $fiber = array_shift($this->ready);
@@ -34,10 +35,9 @@ class Scheduler
         }
     }
 
-    public function pollFds()
+    public function pollFds(): void
     {
         if ($this->fds !== []) {
-
             $watchers = $this->pollContext->wait();
 
             foreach ($watchers as $watcher) {
@@ -51,22 +51,24 @@ class Scheduler
         }
     }
 
-    public function pollFd($fd, array $events)
+    public function poll(PollInfo $info): PollResult
     {
-        $id = (int)$fd;
+        $stream = $info->handle->getStream();
+        $id = (int)$stream;
         if (isset($this->fds[$id])) {
             throw new Exception();
         }
 
         $this->fds[$id] = $id;
-        $this->pollContext->add(new StreamPollHandle($fd), $events, Fiber::getCurrent());
+        $this->pollContext->add($info->handle, $info->events, Fiber::getCurrent());
 
         Fiber::suspend();
 
-        return StreamHookResult::Ready;
+        return PollResult::Ready;
     }
 
-    public function go(callable $fn) {
+    public function go(callable $fn): void
+    {
         $this->ready[] = new Fiber($fn);
         $this->ready[] = Fiber::getCurrent();
         Fiber::suspend();
@@ -75,7 +77,7 @@ class Scheduler
 
 $scheduler = new Scheduler();
 
-stream_set_hook($scheduler->pollFd(...));
+Io\Hooks\set_hooks($scheduler);
 
 function go($fn) {
     global $scheduler;

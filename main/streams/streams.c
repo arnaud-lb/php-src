@@ -26,18 +26,10 @@
 #include "ext/standard/file.h"
 #include "ext/standard/basic_functions.h" /* for BG(CurrentStatFile) */
 #include "ext/standard/php_string.h" /* for php_memnstr, used by php_stream_get_record() */
-#include "ext/standard/io_poll.h"
 #include "ext/uri/php_uri.h"
 #include <stddef.h>
 #include <fcntl.h>
 #include "php_streams_int.h"
-#include "zend_enum.h"
-
-#ifdef HAVE_POLL_H
-#include <poll.h>
-#elif HAVE_SYS_POLL_H
-#include <sys/poll.h>
-#endif
 
 /* {{{ resource and registration code */
 /* Global wrapper hash, copied to FG(stream_wrappers) on registration of volatile wrapper */
@@ -2526,81 +2518,3 @@ overflow:
 }
 /* }}} */
 
-// TODO: move to io_poll.c
-static void php_pollfd_events_to_io_poll_events(zend_array *dest, int events)
-{
-	zval zv;
-
-	ZEND_ASSERT(!(events & ~(POLLIN|POLLPRI|POLLOUT|POLLERR|POLLHUP)));
-
-	if (events & POLLIN) {
-		ZVAL_OBJ_COPY(&zv, zend_enum_get_case_cstr(php_io_poll_event_class_entry, "Read"));
-		zend_hash_next_index_insert(dest, &zv);
-	}
-	if (events & POLLPRI) {
-		/* TODO: This event is set in a few places, but there is no equivalent in Io\Poll */
-	}
-	if (events & POLLOUT) {
-		ZVAL_OBJ_COPY(&zv, zend_enum_get_case_cstr(php_io_poll_event_class_entry, "Write"));
-		zend_hash_next_index_insert(dest, &zv);
-	}
-	if (events & POLLERR) {
-		ZVAL_OBJ_COPY(&zv, zend_enum_get_case_cstr(php_io_poll_event_class_entry, "Error"));
-		zend_hash_next_index_insert(dest, &zv);
-	}
-	if (events & POLLHUP) {
-		ZVAL_OBJ_COPY(&zv, zend_enum_get_case_cstr(php_io_poll_event_class_entry, "HangUp"));
-		zend_hash_next_index_insert(dest, &zv);
-	}
-}
-
-// TODO: return a ZEND_ENUM_
-PHPAPI zend_object *php_stream_call_hook(php_stream *stream, int events)
-{
-	if (!ZEND_FCC_INITIALIZED(FG(hook_fcc))) {
-		return NULL;
-	}
-
-	uint32_t orig_no_fclose = stream->flags & PHP_STREAM_FLAG_NO_FCLOSE;
-	stream->flags |= PHP_STREAM_FLAG_NO_FCLOSE;
-
-	zend_array *events_array = zend_new_array(0);
-	php_pollfd_events_to_io_poll_events(events_array, events);
-
-	// TODO: timeout
-	zval params[2];
-	ZVAL_RES(&params[0], stream->res);
-	ZVAL_ARR(&params[1], events_array);
-
-	zval return_value;
-	zend_call_known_fcc(&FG(hook_fcc), &return_value, 2, params, NULL);
-
-	zend_array_release(events_array);
-
-	if (EG(exception)) {
-		goto error;
-	}
-	if (UNEXPECTED(Z_TYPE(return_value) != IS_OBJECT
-				|| Z_OBJCE(return_value) != php_stream_hook_result_ce)) {
-		zend_type_error("stream hook must return an instance of %s, %s returned",
-				ZSTR_VAL(php_stream_hook_result_ce->name),
-				zend_zval_type_name(&return_value));
-		goto error;
-	}
-
-	stream->flags &= ~PHP_STREAM_FLAG_NO_FCLOSE;
-	stream->flags |= orig_no_fclose;
-
-	return Z_OBJ(return_value);
-
-error:
-	zval_ptr_dtor(&return_value);
-
-	stream->flags &= ~PHP_STREAM_FLAG_NO_FCLOSE;
-	stream->flags |= orig_no_fclose;
-
-	zend_object *result = zend_enum_get_case_cstr(php_stream_hook_result_ce, "Error");
-	GC_ADDREF(result);
-
-	return result;
-}

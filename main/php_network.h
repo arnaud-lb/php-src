@@ -17,6 +17,7 @@
 
 #include <php.h>
 #include "zend_enum.h"
+#include "ext/standard/io_hooks.h"
 
 #ifndef PHP_WIN32
 # undef closesocket
@@ -222,9 +223,7 @@ typedef enum php_pollstream_result {
 
 static inline php_pollstream_result php_pollstream_for(php_stream *stream, php_socket_t fd, int events, struct timeval *timeouttv)
 {
-	zend_object *result = php_stream_call_hook(stream, events);
-
-	if (result == NULL) {
+	if (!PHP_HAS_IO_POLL_HOOK()) {
 		int n = php_pollfd_for(fd, events, timeouttv);
 		if (n > 0) {
 			return PHP_POLLSTREAM_READY;
@@ -234,6 +233,8 @@ static inline php_pollstream_result php_pollstream_for(php_stream *stream, php_s
 		}
 		return PHP_POLLSTREAM_ERROR;
 	}
+
+	zend_object *result = php_io_hooks_poll_stream(stream, events, timeouttv);
 
 	const char *name = Z_STRVAL_P(zend_enum_fetch_case_name(result));
 	OBJ_RELEASE(result);
@@ -252,10 +253,11 @@ static inline php_pollstream_result php_pollstream_for(php_stream *stream, php_s
 	}
 }
 
-static inline php_pollstream_result php_pollstream_for_ms(php_stream *stream, php_socket_t fd, int events, int timeout)
+static inline php_pollstream_result php_pollstream_for_ms(php_stream *stream, php_socket_t fd, int events, int timeout_ms)
 {
 	struct timeval timeouttv = {
-		.tv_usec = timeout,
+		.tv_sec = timeout_ms / 1000,
+		.tv_usec = (timeout_ms % 1000) * 1000,
 	};
 
 	return php_pollstream_for(stream, fd, events, &timeouttv);

@@ -37,7 +37,7 @@ static zend_class_entry *php_io_poll_failed_wait_class_entry;
 static zend_class_entry *php_io_poll_inactive_watcher_class_entry;
 static zend_class_entry *php_io_poll_handle_already_watched_class_entry;
 static zend_class_entry *php_io_poll_invalid_handle_class_entry;
-static zend_class_entry *php_stream_poll_handle_class_entry;
+PHPAPI zend_class_entry *php_stream_poll_handle_class_entry;
 
 /* Object handlers */
 static zend_object_handlers php_io_poll_context_object_handlers;
@@ -112,7 +112,7 @@ static uint32_t php_io_poll_event_enums_to_events(zval *event_enums)
 	return events;
 }
 
-static zend_result php_io_poll_events_to_event_enums(uint32_t events, zval *event_enums)
+PHPAPI zend_result php_io_poll_events_to_event_enums(uint32_t events, zval *event_enums)
 {
 	zval enum_case;
 
@@ -219,6 +219,18 @@ static php_poll_handle_ops php_stream_poll_handle_ops = {
 	.is_valid = php_stream_poll_handle_is_valid,
 	.cleanup = php_stream_poll_handle_cleanup
 };
+
+PHPAPI void php_stream_poll_handle_from_stream(zval *dest, php_stream *stream)
+{
+	object_init_ex(dest, php_stream_poll_handle_class_entry);
+
+	php_poll_handle_object *intern = PHP_POLL_HANDLE_OBJ_FROM_ZV(dest);
+	php_stream_poll_handle_data *data = emalloc(sizeof(php_stream_poll_handle_data));
+	data->stream = stream;
+	intern->handle_data = data;
+
+	GC_ADDREF(stream->res);
+}
 
 /* Handle interface internal only */
 static int php_stream_poll_handle_implement_interface(zend_class_entry *interface, zend_class_entry *implementor)

@@ -22,7 +22,6 @@
 #include <sys/stat.h>
 #include "zend.h"
 #include "zend_stream.h"
-#include "ext/standard/basic_functions_decl.h"
 
 BEGIN_EXTERN_C()
 PHPAPI int php_file_le_stream(void);
@@ -667,10 +666,6 @@ PHPAPI HashTable *_php_get_stream_filters_hash(void);
 PHPAPI HashTable *php_get_stream_filters_hash_global(void);
 extern const php_stream_wrapper_ops *php_stream_user_wrapper_ops;
 
-PHPAPI extern zend_class_entry *php_stream_hook_result_ce;
-
-/* Call stream hook if any */
-PHPAPI zend_object *php_stream_call_hook(php_stream *stream, int events);
 
 static inline bool php_is_stream_path(const char *filename)
 {
