@@ -15,10 +15,14 @@ fclose($conn);
 fclose($server);
 
 class CloseOnceHooks implements Hooks {
-    public function poll(PollInfo $info): PollResult {
-        fclose($info->handle->getStream());
+    public function poll(PollInfo ...$infos): PollResult {
+        fclose($infos[0]->handle->getStream());
         Io\Hooks\set_hooks(null);
-        return PollResult::Ready;
+        $result = new PollResult();
+        $result->handle = $infos[0]->handle;
+        $result->events = $infos[0]->events;
+        $result->timeout = false;
+        return $result;
     }
 }
 

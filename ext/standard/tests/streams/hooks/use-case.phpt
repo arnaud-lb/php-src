@@ -11,6 +11,7 @@ class Scheduler implements Hooks
     private Context $pollContext;
     private array $fds = [];
     private array $ready = [];
+    private array $fiberWatchers = [];  // spl_object_id(fiber) => Watcher[]
 
     public function __construct()
     {
@@ -19,7 +20,7 @@ class Scheduler implements Hooks
 
     public function run($main): void
     {
-        $this->ready[] = new Fiber($main);
+        $this->ready[] = [new Fiber($main), null];
 
         while ($this->ready !== [] || $this->fds !== []) {
             $this->runReadyFibers();
@@ -30,8 +31,8 @@ class Scheduler implements Hooks
     public function runReadyFibers(): void
     {
         while ($this->ready !== []) {
-            $fiber = array_shift($this->ready);
-            $fiber->isSuspended() ? $fiber->resume() : $fiber->start();
+            [$fiber, $resumeValue] = array_shift($this->ready);
+            $fiber->isSuspended() ? $fiber->resume($resumeValue) : $fiber->start();
         }
     }
 
@@ -41,36 +42,54 @@ class Scheduler implements Hooks
             $watchers = $this->pollContext->wait();
 
             foreach ($watchers as $watcher) {
-                $id = (int)$watcher->getHandle()->getStream();
-                unset($this->fds[$id]);
+                [$fiber] = $watcher->getData();
+                $fiberId = spl_object_id($fiber);
 
-                $this->ready[] = $watcher->getData();
+                if (!isset($this->fiberWatchers[$fiberId])) {
+                    continue;  // another watcher from the same poll() already handled this fiber
+                }
 
-                $watcher->remove();
+                // Remove all watchers registered for this fiber (including the one that fired)
+                foreach ($this->fiberWatchers[$fiberId] as $w) {
+                    $id = (int)$w->getHandle()->getStream();
+                    unset($this->fds[$id]);
+                    $w->remove();
+                }
+                unset($this->fiberWatchers[$fiberId]);
+
+                $this->ready[] = [$fiber, [$watcher->getHandle(), $watcher->getTriggeredEvents()]];
             }
         }
     }
 
-    public function poll(PollInfo $info): PollResult
+    public function poll(PollInfo ...$infos): PollResult
     {
-        $stream = $info->handle->getStream();
-        $id = (int)$stream;
-        if (isset($this->fds[$id])) {
-            throw new Exception();
+        $fiber = Fiber::getCurrent();
+        $fiberId = spl_object_id($fiber);
+        $this->fiberWatchers[$fiberId] = [];
+
+        foreach ($infos as $info) {
+            $id = (int)$info->handle->getStream();
+            if (isset($this->fds[$id])) {
+                throw new Exception();
+            }
+            $this->fds[$id] = $id;
+            $this->fiberWatchers[$fiberId][] = $this->pollContext->add($info->handle, $info->events, [$fiber]);
         }
 
-        $this->fds[$id] = $id;
-        $this->pollContext->add($info->handle, $info->events, Fiber::getCurrent());
+        [$readyHandle, $readyEvents] = Fiber::suspend();
 
-        Fiber::suspend();
-
-        return PollResult::Ready;
+        $result = new PollResult();
+        $result->handle = $readyHandle;
+        $result->events = $readyEvents;
+        $result->timeout = false;
+        return $result;
     }
 
     public function go(callable $fn): void
     {
-        $this->ready[] = new Fiber($fn);
-        $this->ready[] = Fiber::getCurrent();
+        $this->ready[] = [new Fiber($fn), null];
+        $this->ready[] = [Fiber::getCurrent(), null];
         Fiber::suspend();
     }
 }

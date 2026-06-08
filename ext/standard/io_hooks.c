@@ -51,7 +51,6 @@ static void php_pollfd_events_to_io_poll_events(zend_array *dest, int events)
 	}
 }
 
-// TODO: return a ZEND_ENUM_*
 PHPAPI zend_object *php_io_hooks_poll_stream(php_stream *stream, int events, const struct timeval *timeout)
 {
 	uint32_t orig_no_fclose = stream->flags & PHP_STREAM_FLAG_NO_FCLOSE;
@@ -106,15 +105,13 @@ PHPAPI zend_object *php_io_hooks_poll_stream(php_stream *stream, int events, con
 	return Z_OBJ(retval);
 
 return_error:
+	ZEND_ASSERT(EG(exception));
 	zval_ptr_dtor(&retval);
 
 	stream->flags &= ~PHP_STREAM_FLAG_NO_FCLOSE;
 	stream->flags |= orig_no_fclose;
 
-	zend_object *err = zend_enum_get_case_cstr(php_io_hooks_poll_result_ce, "Error");
-	GC_ADDREF(err);
-
-	return err;
+	return NULL;
 }
 
 PHP_FUNCTION(Io_Hooks_set_hooks)

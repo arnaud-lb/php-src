@@ -235,22 +235,16 @@ static inline php_pollstream_result php_pollstream_for(php_stream *stream, php_s
 	}
 
 	zend_object *result = php_io_hooks_poll_stream(stream, events, timeouttv);
+	if (result == NULL) {
+		return PHP_POLLSTREAM_ERROR;
+	}
 
-	const char *name = Z_STRVAL_P(zend_enum_fetch_case_name(result));
+	zval rv;
+	zval *timeout_prop = zend_read_property(php_io_hooks_poll_result_ce, result, "timeout", sizeof("timeout") - 1, /* silent */ 1, &rv);
+	bool timed_out = zend_is_true(timeout_prop);
 	OBJ_RELEASE(result);
 
-	if (!strcmp(name, "Error")) {
-#ifdef PHP_WIN32
-		WSASetLastError(0);
-#else
-		errno = 0;
-#endif
-		return PHP_POLLSTREAM_ERROR;
-	} else if (!strcmp(name, "Timeout")) {
-		return PHP_POLLSTREAM_TIMEOUT;
-	} else {
-		return PHP_POLLSTREAM_READY;
-	}
+	return timed_out ? PHP_POLLSTREAM_TIMEOUT : PHP_POLLSTREAM_READY;
 }
 
 static inline php_pollstream_result php_pollstream_for_ms(php_stream *stream, php_socket_t fd, int events, int timeout_ms)

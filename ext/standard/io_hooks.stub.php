@@ -13,14 +13,15 @@ namespace Io\Hooks {
         public int $timeout_ms;
     }
 
-    enum PollResult {
-        case Error;
-        case Timeout;
-        case Ready;
+    final class PollResult {
+        public Handle $handle;
+        /* @var Io\Poll\Event[] */
+        public array $events;
+        public bool $timeout;
     }
 
     interface Hooks {
-        public function poll(PollInfo $info): PollResult;
+        public function poll(PollInfo ...$info): PollResult;
     }
 
     function set_hooks(?Hooks $hooks): ?Hooks {}
