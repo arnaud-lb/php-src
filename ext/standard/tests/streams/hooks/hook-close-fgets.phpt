@@ -15,15 +15,16 @@ fclose($conn);
 fclose($server);
 
 class CloseOnceHooks implements Hooks {
-    public function poll(PollInfo ...$infos): PollResult {
-        fclose($infos[0]->handle->getStream());
+    public function poll(PollInfo $info): PollResult {
+        fclose($info->handle->getStream());
         Io\Hooks\set_hooks(null);
         $result = new PollResult();
-        $result->handle = $infos[0]->handle;
-        $result->events = $infos[0]->events;
+        $result->handle = $info->handle;
+        $result->events = $info->events;
         $result->timeout = false;
         return $result;
     }
+    public function poll_multi(?int $timeout_ms, PollInfo ...$info): array { throw new \Exception("poll_multi not implemented"); }
 }
 
 Io\Hooks\set_hooks(new CloseOnceHooks());

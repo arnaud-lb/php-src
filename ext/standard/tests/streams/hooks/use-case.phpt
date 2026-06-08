@@ -11,7 +11,8 @@ class Scheduler implements Hooks
     private Context $pollContext;
     private array $fds = [];
     private array $ready = [];
-    private array $fiberWatchers = [];  // spl_object_id(fiber) => Watcher[]
+    private array $fiberWatchers = [];   // fiberId => Watcher[]
+    private array $fiberDeadlines = [];  // fiberId => [deadline_ns, fiber, PollInfo]
 
     public function __construct()
     {
@@ -22,7 +23,7 @@ class Scheduler implements Hooks
     {
         $this->ready[] = [new Fiber($main), null];
 
-        while ($this->ready !== [] || $this->fds !== []) {
+        while ($this->ready !== [] || $this->fds !== [] || $this->fiberDeadlines !== []) {
             $this->runReadyFibers();
             $this->pollFds();
         }
@@ -38,52 +39,103 @@ class Scheduler implements Hooks
 
     public function pollFds(): void
     {
-        if ($this->fds !== []) {
-            $watchers = $this->pollContext->wait();
+        if ($this->fds === [] && $this->fiberDeadlines === []) {
+            return;
+        }
 
-            foreach ($watchers as $watcher) {
-                [$fiber] = $watcher->getData();
-                $fiberId = spl_object_id($fiber);
-
-                if (!isset($this->fiberWatchers[$fiberId])) {
-                    continue;  // another watcher from the same poll() already handled this fiber
-                }
-
-                // Remove all watchers registered for this fiber (including the one that fired)
-                foreach ($this->fiberWatchers[$fiberId] as $w) {
-                    $id = (int)$w->getHandle()->getStream();
-                    unset($this->fds[$id]);
-                    $w->remove();
-                }
-                unset($this->fiberWatchers[$fiberId]);
-
-                $this->ready[] = [$fiber, [$watcher->getHandle(), $watcher->getTriggeredEvents()]];
+        // Compute wait() timeout from the nearest deadline
+        $timeoutSec = null;
+        $timeoutUsec = 0;
+        $now = hrtime(true);
+        foreach ($this->fiberDeadlines as [$deadline]) {
+            $remaining = $deadline - $now;
+            if ($remaining <= 0) {
+                $timeoutSec = 0;
+                $timeoutUsec = 0;
+                break;
             }
+            $remainingUsec = intdiv($remaining, 1_000);
+            if ($timeoutSec === null || $remainingUsec < $timeoutSec * 1_000_000 + $timeoutUsec) {
+                $timeoutSec = intdiv($remainingUsec, 1_000_000);
+                $timeoutUsec = $remainingUsec % 1_000_000;
+            }
+        }
+
+        $watchers = $this->pollContext->wait($timeoutSec, $timeoutUsec);
+
+        // Handle ready handles
+        foreach ($watchers as $watcher) {
+            [$fiber] = $watcher->getData();
+            $fiberId = spl_object_id($fiber);
+
+            if (!isset($this->fiberWatchers[$fiberId])) {
+                continue;
+            }
+
+            $this->removeAllFiberWatchers($fiberId);
+            unset($this->fiberDeadlines[$fiberId]);
+
+            $result = new PollResult();
+            $result->handle = $watcher->getHandle();
+            $result->events = $watcher->getTriggeredEvents();
+            $result->timeout = false;
+
+            $this->ready[] = [$fiber, $result];
+        }
+
+        // Handle expired deadlines
+        $now = hrtime(true);
+        foreach ($this->fiberDeadlines as $fiberId => [$deadline, $fiber, $info]) {
+            if ($deadline > $now) {
+                continue;
+            }
+
+            $this->removeAllFiberWatchers($fiberId);
+            unset($this->fiberDeadlines[$fiberId]);
+
+            $result = new PollResult();
+            $result->handle = $info->handle;
+            $result->events = $info->events;
+            $result->timeout = true;
+
+            $this->ready[] = [$fiber, $result];
         }
     }
 
-    public function poll(PollInfo ...$infos): PollResult
+    private function removeAllFiberWatchers(int $fiberId): void
+    {
+        foreach ($this->fiberWatchers[$fiberId] as $w) {
+            unset($this->fds[(int)$w->getHandle()->getStream()]);
+            $w->remove();
+        }
+        unset($this->fiberWatchers[$fiberId]);
+    }
+
+    public function poll(PollInfo $info): PollResult
     {
         $fiber = Fiber::getCurrent();
         $fiberId = spl_object_id($fiber);
-        $this->fiberWatchers[$fiberId] = [];
 
-        foreach ($infos as $info) {
-            $id = (int)$info->handle->getStream();
-            if (isset($this->fds[$id])) {
-                throw new Exception();
-            }
-            $this->fds[$id] = $id;
-            $this->fiberWatchers[$fiberId][] = $this->pollContext->add($info->handle, $info->events, [$fiber]);
+        if ($info->timeout_ms >= 0) {
+            $deadline = hrtime(true) + $info->timeout_ms * 1_000_000;
+            $this->fiberDeadlines[$fiberId] = [$deadline, $fiber, $info];
         }
 
-        [$readyHandle, $readyEvents] = Fiber::suspend();
+        $id = (int)$info->handle->getStream();
+        if (isset($this->fds[$id])) {
+            throw new \Exception("Handle already registered");
+        }
+        $this->fds[$id] = $id;
+        $this->fiberWatchers[$fiberId] = [$this->pollContext->add($info->handle, $info->events, [$fiber])];
 
-        $result = new PollResult();
-        $result->handle = $readyHandle;
-        $result->events = $readyEvents;
-        $result->timeout = false;
+        /** @var PollResult $result */
+        $result = Fiber::suspend();
         return $result;
+    }
+
+    public function poll_multi(?int $timeout_ms, PollInfo ...$infos): array
+    {
+        throw new \Exception("poll_multi not implemented");
     }
 
     public function go(callable $fn): void
