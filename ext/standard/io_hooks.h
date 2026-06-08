@@ -19,6 +19,7 @@
 #include "Zend/zend_types.h"
 #include "ext/standard/file.h"
 
+PHPAPI extern zend_class_entry *php_io_hooks_poll_info_ce;
 PHPAPI extern zend_class_entry *php_io_hooks_poll_result_ce;
 
 #define PHP_HAS_IO_POLL_HOOK() ZEND_FCC_INITIALIZED(FG(io_hooks_poll_fcc))

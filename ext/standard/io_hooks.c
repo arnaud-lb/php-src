@@ -25,7 +25,7 @@
 #include <sys/poll.h>
 #endif
 
-static zend_class_entry *php_io_hooks_poll_info_ce;
+PHPAPI zend_class_entry *php_io_hooks_poll_info_ce;
 PHPAPI zend_class_entry *php_io_hooks_poll_result_ce;
 static zend_class_entry *php_io_hooks_hooks_ce;
 
@@ -135,14 +135,27 @@ PHP_FUNCTION(Io_Hooks_set_hooks)
 
 	ZVAL_COPY(&FG(io_hooks), hooks_obj);
 
-	zend_string *method_name = zend_string_init("poll", sizeof("poll") - 1, false);
 	zend_object *obj = Z_OBJ_P(hooks_obj);
-	zend_function *fn = obj->handlers->get_method(&obj, method_name, NULL);
-	zend_string_release(method_name);
-	ZEND_ASSERT(fn != NULL);
+
+	zend_string *poll_name = zend_string_init("poll", sizeof("poll") - 1, false);
+	zend_function *poll_fn = obj->handlers->get_method(&obj, poll_name, NULL);
+	zend_string_release(poll_name);
+	ZEND_ASSERT(poll_fn != NULL);
 
 	FG(io_hooks_poll_fcc) = (zend_fcall_info_cache){
-		.function_handler = fn,
+		.function_handler = poll_fn,
+		.object = obj,
+		.called_scope = obj->ce,
+	};
+	GC_ADDREF(obj);
+
+	zend_string *poll_multi_name = zend_string_init("poll_multi", sizeof("poll_multi") - 1, false);
+	zend_function *poll_multi_fn = obj->handlers->get_method(&obj, poll_multi_name, NULL);
+	zend_string_release(poll_multi_name);
+	ZEND_ASSERT(poll_multi_fn != NULL);
+
+	FG(io_hooks_poll_multi_fcc) = (zend_fcall_info_cache){
+		.function_handler = poll_multi_fn,
 		.object = obj,
 		.called_scope = obj->ce,
 	};

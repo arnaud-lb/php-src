@@ -25,7 +25,7 @@ static zend_class_entry *php_io_poll_backend_class_entry;
 zend_class_entry *php_io_poll_event_class_entry;
 static zend_class_entry *php_io_poll_context_class_entry;
 static zend_class_entry *php_io_poll_watcher_class_entry;
-static zend_class_entry *php_io_poll_handle_class_entry;
+PHPAPI zend_class_entry *php_io_poll_handle_class_entry;
 static zend_class_entry *php_io_exception_class_entry;
 static zend_class_entry *php_io_poll_exception_class_entry;
 static zend_class_entry *php_io_poll_failed_backend_unavailable_class_entry;

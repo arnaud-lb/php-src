@@ -427,6 +427,7 @@ PHP_RINIT_FUNCTION(basic) /* {{{ */
 
 	ZVAL_UNDEF(&FG(io_hooks));
 	FG(io_hooks_poll_fcc) = empty_fcall_info_cache;
+	FG(io_hooks_poll_multi_fcc) = empty_fcall_info_cache;
 
 	return SUCCESS;
 }
@@ -493,6 +494,7 @@ PHP_RSHUTDOWN_FUNCTION(basic) /* {{{ */
 		zval_ptr_dtor(&FG(io_hooks));
 		ZVAL_UNDEF(&FG(io_hooks));
 		zend_fcc_dtor(&FG(io_hooks_poll_fcc));
+		zend_fcc_dtor(&FG(io_hooks_poll_multi_fcc));
 	}
 
 	return SUCCESS;
