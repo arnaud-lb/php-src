@@ -53,9 +53,6 @@ static void php_pollfd_events_to_io_poll_events(zend_array *dest, int events)
 
 PHPAPI zend_object *php_io_hooks_poll_stream(php_stream *stream, int events, const struct timeval *timeout)
 {
-	uint32_t orig_no_fclose = stream->flags & PHP_STREAM_FLAG_NO_FCLOSE;
-	stream->flags |= PHP_STREAM_FLAG_NO_FCLOSE;
-
 	// TODO: optimize poll_info object creation+init. Maybe reuse it too (e.g. if RC=1)
 	zval poll_info;
 	object_init_ex(&poll_info, php_io_hooks_poll_info_ce);
@@ -84,7 +81,10 @@ PHPAPI zend_object *php_io_hooks_poll_stream(php_stream *stream, int events, con
 
 	zval retval;
 	ZVAL_UNDEF(&retval);
+	ZEND_ASSERT(!(stream->flags & PHP_STREAM_FLAG_BEING_POLLED));
+	stream->flags |= PHP_STREAM_FLAG_BEING_POLLED;
 	zend_call_known_fcc(&FG(io_hooks_poll_fcc), &retval, 1, &poll_info, NULL);
+	stream->flags &= ~PHP_STREAM_FLAG_BEING_POLLED;
 	zval_ptr_dtor(&poll_info);
 
 	if (EG(exception)) {
@@ -99,17 +99,11 @@ PHPAPI zend_object *php_io_hooks_poll_stream(php_stream *stream, int events, con
 		goto return_error;
 	}
 
-	stream->flags &= ~PHP_STREAM_FLAG_NO_FCLOSE;
-	stream->flags |= orig_no_fclose;
-
 	return Z_OBJ(retval);
 
 return_error:
 	ZEND_ASSERT(EG(exception));
 	zval_ptr_dtor(&retval);
-
-	stream->flags &= ~PHP_STREAM_FLAG_NO_FCLOSE;
-	stream->flags |= orig_no_fclose;
 
 	return NULL;
 }
