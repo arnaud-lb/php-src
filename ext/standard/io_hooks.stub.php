@@ -4,8 +4,6 @@
 
 namespace Io\Hooks {
 
-    use Io\Poll\Handle;
-
     final class PollInfo {
         public Handle $handle;
         /* @var Io\Poll\Event[] */

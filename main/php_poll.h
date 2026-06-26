@@ -132,21 +132,18 @@ typedef struct php_poll_handle_object php_poll_handle_object;
 struct php_poll_handle_ops {
 	/**
 	 * Get file descriptor for this handle
-	 * @param handle The handle object
 	 * @return File descriptor or SOCK_ERR if invalid/not applicable
 	 */
 	php_socket_t (*get_fd)(php_poll_handle_object *handle);
 
 	/**
 	 * Check if handle is still valid
-	 * @param handle The handle object
 	 * @return true if valid, false if invalid
 	 */
 	int (*is_valid)(php_poll_handle_object *handle);
 
 	/**
 	 * Cleanup handle-specific data
-	 * @param handle The handle object
 	 */
 	void (*cleanup)(php_poll_handle_object *handle);
 };
@@ -155,6 +152,7 @@ struct php_poll_handle_ops {
 struct php_poll_handle_object {
 	php_poll_handle_ops *ops;
 	void *handle_data;
+	HashTable *watching; /* context_ptr_key -> php_io_poll_watcher_object* (IS_PTR, no refcount) */
 	zend_object std;
 };
 

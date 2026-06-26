@@ -42,7 +42,6 @@ $scheduler->run(function () {
             fwrite($client, "HTTP/1.0 200 OK\r\n");
             fwrite($client, "\r\n");
             fwrite($client, "Hello world!\n");
-            fclose($client);
         });
     });
 

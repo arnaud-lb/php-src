@@ -58,7 +58,7 @@ PHPAPI zend_object *php_io_hooks_poll_stream(php_stream *stream, int events, con
 	object_init_ex(&poll_info, php_io_hooks_poll_info_ce);
 
 	zval handle;
-	php_stream_poll_handle_from_stream(&handle, stream);
+	php_stream_poll_weak_handle_from_stream(&handle, stream);
 	zend_update_property(php_io_hooks_poll_info_ce, Z_OBJ(poll_info),
 			"handle", sizeof("handle") - 1, &handle);
 	zval_ptr_dtor(&handle);
@@ -154,6 +154,7 @@ PHP_FUNCTION(Io_Hooks_set_hooks)
 		.called_scope = obj->ce,
 	};
 	GC_ADDREF(obj);
+
 }
 
 PHP_MINIT_FUNCTION(io_hooks)

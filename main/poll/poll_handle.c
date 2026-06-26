@@ -70,6 +70,7 @@ PHPAPI php_poll_handle_object *php_poll_handle_object_create(
 
 	intern->ops = ops ? ops : &php_poll_handle_default_ops;
 	intern->handle_data = NULL;
+	intern->watching = NULL;
 
 	return intern;
 }
@@ -81,6 +82,11 @@ PHPAPI void php_poll_handle_object_free(zend_object *obj)
 
 	if (intern->ops && intern->ops->cleanup) {
 		intern->ops->cleanup(intern);
+	}
+
+	if (intern->watching) {
+		zend_hash_destroy(intern->watching);
+		efree(intern->watching);
 	}
 
 	zend_object_std_dtor(&intern->std);

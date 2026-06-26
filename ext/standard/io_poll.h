@@ -25,5 +25,8 @@ PHPAPI extern zend_class_entry *php_stream_poll_handle_class_entry;
 PHPAPI zend_result php_io_poll_events_to_event_enums(uint32_t events, zval *event_enums);
 
 PHPAPI void php_stream_poll_handle_from_stream(zval *dest, php_stream *stream);
+PHPAPI void php_stream_poll_weak_handle_from_stream(zval *dest, php_stream *stream);
+PHPAPI void php_stream_poll_weak_handle_notify(zend_object *handle_obj);
+PHPAPI void php_io_poll_handle_remove_from_all_contexts(zend_object *handle_obj);
 
 #endif /* PHP_IO_POLL_H */

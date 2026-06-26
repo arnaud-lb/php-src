@@ -10,5 +10,5 @@ namespace Io\Curl {
      * @strict-properties
      * @not-serializable
      */
-    final class SocketHandle implements Handle {}
+    final class SocketWeakHandle implements Handle {}
 }

@@ -252,6 +252,11 @@ struct _php_stream  {
 
 	struct _php_stream *enclosing_stream; /* this is a private stream owned by enclosing_stream */
 
+	/* StreamPollWeakHandle singleton for this stream. Not refcounted; zeroed when the
+	 * WeakHandle is freed. streams.c calls weak_ops->notify() through this pointer
+	 * when the stream is freed (see php_poll_weak_handle_ops in php_poll.h). */
+	zend_object *weak_poll_handle;
+
 	zend_llist *error_list;
 }; /* php_stream */
 

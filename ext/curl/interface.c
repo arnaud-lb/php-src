@@ -43,7 +43,6 @@
 #include "ext/standard/file.h"
 #include "ext/standard/url.h"
 #include "ext/standard/io_poll.h"
-#include "ext/standard/io_hooks.h"
 #include "main/php_poll.h"
 #include "curl_private.h"
 #include "curl_socket_handle_arginfo.h"
@@ -221,7 +220,7 @@ zend_class_entry *curl_ce;
 zend_class_entry *curl_share_ce;
 zend_class_entry *curl_share_persistent_ce;
 static zend_object_handlers curl_object_handlers;
-static zend_class_entry *php_curl_socket_handle_ce;
+static zend_class_entry *php_curl_socket_weak_handle_ce;
 static zend_object_handlers php_curl_socket_handle_object_handlers;
 static zend_object *php_curl_socket_handle_create_object(zend_class_entry *ce);
 
@@ -390,13 +389,13 @@ PHP_MINIT_FUNCTION(curl)
 
 	curlfile_register_class();
 
-	php_curl_socket_handle_ce = register_class_Io_Curl_SocketHandle(php_io_poll_handle_class_entry);
-	php_curl_socket_handle_ce->create_object = php_curl_socket_handle_create_object;
+	php_curl_socket_weak_handle_ce = register_class_Io_Curl_SocketWeakHandle(php_io_poll_handle_class_entry);
+	php_curl_socket_weak_handle_ce->create_object = php_curl_socket_handle_create_object;
 	memcpy(&php_curl_socket_handle_object_handlers, &std_object_handlers,
 		sizeof(zend_object_handlers));
-	php_curl_socket_handle_object_handlers.offset = XtOffsetOf(php_poll_handle_object, std);
+	php_curl_socket_handle_object_handlers.offset = offsetof(php_poll_handle_object, std);
 	php_curl_socket_handle_object_handlers.free_obj = php_poll_handle_object_free;
-	php_curl_socket_handle_ce->default_object_handlers = &php_curl_socket_handle_object_handlers;
+	php_curl_socket_weak_handle_ce->default_object_handlers = &php_curl_socket_handle_object_handlers;
 
 	return SUCCESS;
 }
@@ -1081,6 +1080,7 @@ void init_curl_handle(php_curl *ch)
 	zend_hash_init(&ch->to_free->slist, 4, NULL, curl_free_slist, 0);
 	ZVAL_UNDEF(&ch->postfields);
 	ch->io_sockets = NULL;
+	ch->io_socket_handles = NULL;
 	ch->io_timer_ms = -1;
 }
 
@@ -2333,27 +2333,46 @@ PHP_FUNCTION(curl_setopt_array)
 }
 /* }}} */
 
-/* Io\Curl\SocketHandle: wraps a curl_socket_t as an Io\Poll\Handle */
+/* Io\Curl\SocketWeakHandle: wraps a curl_socket_t as an Io\Poll\Handle without owning it.
+ * When curl closes the socket, the socket field is zeroed via CURLOPT_CLOSESOCKETFUNCTION. */
 
 typedef struct {
-	curl_socket_t socket;
+	curl_socket_t socket;           /* CURL_SOCKET_BAD when closed; no fd ownership */
+	HashTable *io_socket_handles;   /* points to ch->io_socket_handles; NULL when socket is closed */
 } php_curl_socket_handle_data;
 
 static php_socket_t php_curl_socket_handle_get_fd(php_poll_handle_object *handle)
 {
-	return (php_socket_t)((php_curl_socket_handle_data *)handle->handle_data)->socket;
+	php_curl_socket_handle_data *data = handle->handle_data;
+	return data ? (php_socket_t)data->socket : (php_socket_t)CURL_SOCKET_BAD;
 }
 
 static int php_curl_socket_handle_is_valid(php_poll_handle_object *handle)
 {
-	return handle->handle_data != NULL &&
-	       ((php_curl_socket_handle_data *)handle->handle_data)->socket != CURL_SOCKET_BAD;
+	php_curl_socket_handle_data *data = handle->handle_data;
+	return data && data->socket != CURL_SOCKET_BAD;
 }
 
 static void php_curl_socket_handle_cleanup(php_poll_handle_object *handle)
 {
-	efree(handle->handle_data);
-	handle->handle_data = NULL;
+	php_curl_socket_handle_data *data = handle->handle_data;
+	if (data) {
+		if (data->socket != CURL_SOCKET_BAD && data->io_socket_handles) {
+			zend_hash_index_del(data->io_socket_handles, (zend_ulong)data->socket);
+		}
+		efree(data);
+		handle->handle_data = NULL;
+	}
+}
+
+static void php_curl_socket_handle_notify(php_poll_handle_object *handle)
+{
+	php_curl_socket_handle_data *data = handle->handle_data;
+	data->socket = CURL_SOCKET_BAD;
+	data->io_socket_handles = NULL;
+	if (handle->watching) {
+		php_io_poll_handle_remove_from_all_contexts(&handle->std);
+	}
 }
 
 static php_poll_handle_ops php_curl_socket_handle_ops = {
@@ -2370,13 +2389,45 @@ static zend_object *php_curl_socket_handle_create_object(zend_class_entry *ce)
 	return &intern->std;
 }
 
-static void php_curl_socket_handle_from_fd(zval *dest, curl_socket_t s)
+/* CURLOPT_CLOSESOCKETFUNCTION: zero the SocketWeakHandle for this socket, then close it */
+static int php_curl_close_socket_callback(void *clientp, curl_socket_t item)
 {
-	object_init_ex(dest, php_curl_socket_handle_ce);
+	php_curl *ch = clientp;
+	if (ch->io_socket_handles) {
+		zval *hzv = zend_hash_index_find(ch->io_socket_handles, (zend_ulong)item);
+		if (hzv) {
+			php_poll_handle_object *h = PHP_POLL_HANDLE_OBJ_FROM_ZOBJ((zend_object *)Z_PTR_P(hzv));
+			php_curl_socket_handle_notify(h);
+			zend_hash_index_del(ch->io_socket_handles, (zend_ulong)item);
+		}
+	}
+	return closesocket(item);
+}
+
+/* Singleton factory: returns existing SocketWeakHandle for this socket, or creates one */
+static void php_curl_socket_handle_from_fd(php_curl *ch, zval *dest, curl_socket_t s)
+{
+	if (ch->io_socket_handles) {
+		zval *existing = zend_hash_index_find(ch->io_socket_handles, (zend_ulong)s);
+		if (existing) {
+			ZVAL_OBJ_COPY(dest, (zend_object *)Z_PTR_P(existing));
+			return;
+		}
+	} else {
+		ch->io_socket_handles = emalloc(sizeof(HashTable));
+		zend_hash_init(ch->io_socket_handles, 4, NULL, NULL, 0);
+	}
+
+	object_init_ex(dest, php_curl_socket_weak_handle_ce);
 	php_poll_handle_object *h = PHP_POLL_HANDLE_OBJ_FROM_ZV(dest);
 	php_curl_socket_handle_data *data = emalloc(sizeof(php_curl_socket_handle_data));
 	data->socket = s;
+	data->io_socket_handles = ch->io_socket_handles;
 	h->handle_data = data;
+
+	zval ptr_zv;
+	ZVAL_PTR(&ptr_zv, Z_OBJ_P(dest));
+	zend_hash_index_update(ch->io_socket_handles, (zend_ulong)s, &ptr_zv);
 }
 
 /* CURLMOPT_SOCKETFUNCTION: log socket+events in ch->io_sockets */
@@ -2446,6 +2497,8 @@ static CURLcode php_curl_exec_multi(php_curl *ch)
 	CURLM *multi = curl_multi_init();
 	curl_multi_setopt(multi, CURLMOPT_SOCKETFUNCTION, php_curl_socket_callback);
 	curl_multi_setopt(multi, CURLMOPT_SOCKETDATA,     ch);
+	curl_easy_setopt(ch->cp, CURLOPT_CLOSESOCKETFUNCTION, php_curl_close_socket_callback);
+	curl_easy_setopt(ch->cp, CURLOPT_CLOSESOCKETDATA,     ch);
 	curl_multi_setopt(multi, CURLMOPT_TIMERFUNCTION,  php_curl_timer_callback);
 	curl_multi_setopt(multi, CURLMOPT_TIMERDATA,      ch);
 
@@ -2483,7 +2536,7 @@ static CURLcode php_curl_exec_multi(php_curl *ch)
 					object_init_ex(poll_info, php_io_hooks_poll_info_ce);
 
 					zval handle;
-					php_curl_socket_handle_from_fd(&handle, (curl_socket_t)sock_ulong);
+					php_curl_socket_handle_from_fd(ch, &handle, (curl_socket_t)sock_ulong);
 					zend_update_property(php_io_hooks_poll_info_ce, Z_OBJ_P(poll_info),
 						"handle", sizeof("handle") - 1, &handle);
 					zval_ptr_dtor(&handle);
@@ -2577,8 +2630,7 @@ static CURLcode php_curl_exec_multi(php_curl *ch)
 				int ready_ev[16];
 				int ready_n = 0;
 				zend_ulong sock_ulong;
-				zval *ev;
-				ZEND_HASH_FOREACH_NUM_KEY_VAL(ch->io_sockets, sock_ulong, ev) {
+				ZEND_HASH_FOREACH_NUM_KEY(ch->io_sockets, sock_ulong) {
 					curl_socket_t s = (curl_socket_t)sock_ulong;
 					int ce = 0;
 					if (FD_ISSET(s, &rfds)) ce |= CURL_CSELECT_IN;
@@ -2612,6 +2664,11 @@ static CURLcode php_curl_exec_multi(php_curl *ch)
 		zend_hash_destroy(ch->io_sockets);
 		efree(ch->io_sockets);
 		ch->io_sockets = NULL;
+	}
+	if (ch->io_socket_handles) {
+		zend_hash_destroy(ch->io_socket_handles);
+		efree(ch->io_socket_handles);
+		ch->io_socket_handles = NULL;
 	}
 	ch->io_timer_ms = -1;
 
