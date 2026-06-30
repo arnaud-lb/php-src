@@ -106,7 +106,7 @@ typedef struct {
 	int pclose_wait;
 	zval io_hooks;
 	zend_fcall_info_cache io_hooks_poll_fcc;
-	zend_fcall_info_cache io_hooks_poll_multi_fcc;
+	zend_fcall_info_cache io_hooks_pollMulti_fcc;
 #ifdef HAVE_GETHOSTBYNAME_R
 	struct hostent tmp_host_info;
 	char *tmp_host_buf;

@@ -9,7 +9,7 @@ ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_class_Io_Hooks_Hooks_poll, 0, 1, 
 	ZEND_ARG_OBJ_INFO(0, info, Io\\Hooks\\PollInfo, 0)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_Io_Hooks_Hooks_poll_multi, 0, 1, IS_ARRAY, 0)
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_Io_Hooks_Hooks_pollMulti, 0, 1, IS_ARRAY, 0)
 	ZEND_ARG_TYPE_INFO(0, timeout_ms, IS_LONG, 1)
 	ZEND_ARG_VARIADIC_OBJ_INFO(0, info, Io\\Hooks\\PollInfo, 0)
 ZEND_END_ARG_INFO()
@@ -24,7 +24,7 @@ static const zend_function_entry ext_functions[] = {
 
 static const zend_function_entry class_Io_Hooks_Hooks_methods[] = {
 	ZEND_RAW_FENTRY("poll", NULL, arginfo_class_Io_Hooks_Hooks_poll, ZEND_ACC_PUBLIC|ZEND_ACC_ABSTRACT, NULL, NULL)
-	ZEND_RAW_FENTRY("poll_multi", NULL, arginfo_class_Io_Hooks_Hooks_poll_multi, ZEND_ACC_PUBLIC|ZEND_ACC_ABSTRACT, NULL, NULL)
+	ZEND_RAW_FENTRY("pollMulti", NULL, arginfo_class_Io_Hooks_Hooks_pollMulti, ZEND_ACC_PUBLIC|ZEND_ACC_ABSTRACT, NULL, NULL)
 	ZEND_FE_END
 };
 

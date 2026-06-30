@@ -144,12 +144,12 @@ PHP_FUNCTION(Io_Hooks_set_hooks)
 	};
 	GC_ADDREF(obj);
 
-	zend_string *poll_multi_name = zend_string_init("poll_multi", sizeof("poll_multi") - 1, false);
+	zend_string *poll_multi_name = zend_string_init("pollMulti", sizeof("pollMulti") - 1, false);
 	zend_function *poll_multi_fn = obj->handlers->get_method(&obj, poll_multi_name, NULL);
 	zend_string_release(poll_multi_name);
 	ZEND_ASSERT(poll_multi_fn != NULL);
 
-	FG(io_hooks_poll_multi_fcc) = (zend_fcall_info_cache){
+	FG(io_hooks_pollMulti_fcc) = (zend_fcall_info_cache){
 		.function_handler = poll_multi_fn,
 		.object = obj,
 		.called_scope = obj->ce,

@@ -18,7 +18,7 @@ class CloseOnceHooks implements Hooks {
         $result->timeout = false;
         return $result;
     }
-    public function poll_multi(?int $timeout_ms, PollInfo ...$info): array { throw new \Exception("poll_multi not implemented"); }
+    public function pollMulti(?int $timeout_ms, PollInfo ...$info): array { throw new \Exception("pollMulti not implemented"); }
 }
 
 Io\Hooks\set_hooks(new CloseOnceHooks());

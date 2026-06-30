@@ -2569,7 +2569,7 @@ static CURLcode php_curl_exec_multi(php_curl *ch)
 
 			zval retval;
 			ZVAL_UNDEF(&retval);
-			zend_call_known_fcc(&FG(io_hooks_poll_multi_fcc), &retval, 1 + n, params, NULL);
+			zend_call_known_fcc(&FG(io_hooks_pollMulti_fcc), &retval, 1 + n, params, NULL);
 
 			for (uint32_t j = 0; j < 1 + n; j++) {
 				zval_ptr_dtor(&params[j]);

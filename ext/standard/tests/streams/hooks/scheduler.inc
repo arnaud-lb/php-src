@@ -244,7 +244,7 @@ class Scheduler implements Hooks
         return $result;
     }
 
-    public function poll_multi(?int $timeout_ms, PollInfo ...$infos): array
+    public function pollMulti(?int $timeout_ms, PollInfo ...$infos): array
     {
         $fiber = Fiber::getCurrent();
         $fiberId = spl_object_id($fiber);
