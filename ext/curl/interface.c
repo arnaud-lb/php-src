@@ -43,6 +43,7 @@
 #include "ext/standard/file.h"
 #include "ext/standard/url.h"
 #include "ext/standard/io_poll.h"
+#include "ext/standard/io_poll_decl.h"
 #include "main/php_poll.h"
 #include "curl_private.h"
 #include "curl_socket_handle_arginfo.h"
@@ -2465,12 +2466,12 @@ static void php_curl_poll_events_to_zval(int what, zval *dest)
 	array_init(dest);
 	if (what & CURL_POLL_IN) {
 		zval zv;
-		ZVAL_OBJ_COPY(&zv, zend_enum_get_case_cstr(php_io_poll_event_class_entry, "Read"));
+		ZVAL_OBJ_COPY(&zv, zend_enum_get_case_by_id(php_io_poll_event_class_entry, ZEND_ENUM_Io_Poll_Event_Read));
 		zend_hash_next_index_insert(Z_ARRVAL_P(dest), &zv);
 	}
 	if (what & CURL_POLL_OUT) {
 		zval zv;
-		ZVAL_OBJ_COPY(&zv, zend_enum_get_case_cstr(php_io_poll_event_class_entry, "Write"));
+		ZVAL_OBJ_COPY(&zv, zend_enum_get_case_by_id(php_io_poll_event_class_entry, ZEND_ENUM_Io_Poll_Event_Write));
 		zend_hash_next_index_insert(Z_ARRVAL_P(dest), &zv);
 	}
 }
@@ -2482,10 +2483,23 @@ static int php_curl_poll_result_to_curl_events(zval *events_arr)
 	zval *event;
 	ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(events_arr), event) {
 		if (Z_TYPE_P(event) != IS_OBJECT) continue;
-		zend_string *name = Z_STR_P(zend_enum_fetch_case_name(Z_OBJ_P(event)));
-		if (zend_string_equals_literal(name, "Read"))  curl_events |= CURL_CSELECT_IN;
-		if (zend_string_equals_literal(name, "Write")) curl_events |= CURL_CSELECT_OUT;
-		if (zend_string_equals_literal(name, "Error")) curl_events |= CURL_CSELECT_ERR;
+		zend_enum_Io_Poll_Event ev = (zend_enum_Io_Poll_Event) zend_enum_fetch_case_id(Z_OBJ_P(event));
+		switch (ev) {
+			case ZEND_ENUM_Io_Poll_Event_Read:
+				curl_events |= CURL_CSELECT_IN;
+				break;
+			case ZEND_ENUM_Io_Poll_Event_Write:
+				curl_events |= CURL_CSELECT_OUT;
+				break;
+			case ZEND_ENUM_Io_Poll_Event_Error:
+				curl_events |= CURL_CSELECT_ERR;
+				break;
+			case ZEND_ENUM_Io_Poll_Event_HangUp:
+			case ZEND_ENUM_Io_Poll_Event_ReadHangUp:
+			case ZEND_ENUM_Io_Poll_Event_OneShot:
+			case ZEND_ENUM_Io_Poll_Event_EdgeTriggered:
+				break;
+		}
 	} ZEND_HASH_FOREACH_END();
 	return curl_events;
 }

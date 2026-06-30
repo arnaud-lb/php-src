@@ -16,6 +16,7 @@
 #include "zend_enum.h"
 #include "ext/standard/file.h"
 #include "ext/standard/io_poll.h"
+#include "io_poll_decl.h"
 #include "ext/standard/io_hooks.h"
 #include "io_hooks_arginfo.h"
 
@@ -34,19 +35,19 @@ static void php_pollfd_events_to_io_poll_events(zend_array *dest, int events)
 	zval zv;
 
 	if (events & POLLIN) {
-		ZVAL_OBJ_COPY(&zv, zend_enum_get_case_cstr(php_io_poll_event_class_entry, "Read"));
+		ZVAL_OBJ_COPY(&zv, zend_enum_get_case_by_id(php_io_poll_event_class_entry, ZEND_ENUM_Io_Poll_Event_Read));
 		zend_hash_next_index_insert(dest, &zv);
 	}
 	if (events & POLLOUT) {
-		ZVAL_OBJ_COPY(&zv, zend_enum_get_case_cstr(php_io_poll_event_class_entry, "Write"));
+		ZVAL_OBJ_COPY(&zv, zend_enum_get_case_by_id(php_io_poll_event_class_entry, ZEND_ENUM_Io_Poll_Event_Write));
 		zend_hash_next_index_insert(dest, &zv);
 	}
 	if (events & POLLERR) {
-		ZVAL_OBJ_COPY(&zv, zend_enum_get_case_cstr(php_io_poll_event_class_entry, "Error"));
+		ZVAL_OBJ_COPY(&zv, zend_enum_get_case_by_id(php_io_poll_event_class_entry, ZEND_ENUM_Io_Poll_Event_Error));
 		zend_hash_next_index_insert(dest, &zv);
 	}
 	if (events & POLLHUP) {
-		ZVAL_OBJ_COPY(&zv, zend_enum_get_case_cstr(php_io_poll_event_class_entry, "HangUp"));
+		ZVAL_OBJ_COPY(&zv, zend_enum_get_case_by_id(php_io_poll_event_class_entry, ZEND_ENUM_Io_Poll_Event_HangUp));
 		zend_hash_next_index_insert(dest, &zv);
 	}
 }
