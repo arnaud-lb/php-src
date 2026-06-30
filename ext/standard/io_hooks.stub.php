@@ -4,6 +4,8 @@
 
 namespace Io\Hooks {
 
+    use Io\Poll\Handle;
+
     final class PollInfo {
         public Handle $handle;
         /* @var Io\Poll\Event[] */
@@ -22,6 +24,7 @@ namespace Io\Hooks {
         public function poll(PollInfo $info): PollResult;
         /* @return PollResult[] Empty when $timeout_ms is exceeded */
         public function pollMulti(?int $timeout_ms, PollInfo ...$info): array;
+        public function sleep(int $seconds, int $nanoseconds): void;
     }
 
     function set_hooks(?Hooks $hooks): ?Hooks {}

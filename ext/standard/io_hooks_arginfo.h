@@ -1,5 +1,5 @@
 /* This is a generated file, edit io_hooks.stub.php instead.
- * Stub hash: b741447fd9d275264617736e8130562298da3d45 */
+ * Stub hash: 364d7e209716e763806acd085421c11a404683d3 */
 
 ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_Io_Hooks_set_hooks, 0, 1, Io\\Hooks\\Hooks, 1)
 	ZEND_ARG_OBJ_INFO(0, hooks, Io\\Hooks\\Hooks, 1)
@@ -14,6 +14,10 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_Io_Hooks_Hooks_pollMulti, 
 	ZEND_ARG_VARIADIC_OBJ_INFO(0, info, Io\\Hooks\\PollInfo, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_Io_Hooks_Hooks_sleep, 0, 2, IS_VOID, 0)
+	ZEND_ARG_TYPE_INFO(0, seconds, IS_LONG, 0)
+	ZEND_ARG_TYPE_INFO(0, nanoseconds, IS_LONG, 0)
+ZEND_END_ARG_INFO()
 
 ZEND_FUNCTION(Io_Hooks_set_hooks);
 
@@ -25,6 +29,7 @@ static const zend_function_entry ext_functions[] = {
 static const zend_function_entry class_Io_Hooks_Hooks_methods[] = {
 	ZEND_RAW_FENTRY("poll", NULL, arginfo_class_Io_Hooks_Hooks_poll, ZEND_ACC_PUBLIC|ZEND_ACC_ABSTRACT, NULL, NULL)
 	ZEND_RAW_FENTRY("pollMulti", NULL, arginfo_class_Io_Hooks_Hooks_pollMulti, ZEND_ACC_PUBLIC|ZEND_ACC_ABSTRACT, NULL, NULL)
+	ZEND_RAW_FENTRY("sleep", NULL, arginfo_class_Io_Hooks_Hooks_sleep, ZEND_ACC_PUBLIC|ZEND_ACC_ABSTRACT, NULL, NULL)
 	ZEND_FE_END
 };
 

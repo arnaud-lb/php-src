@@ -25,6 +25,7 @@ class ConcurrentHook implements Hooks {
     public function pollMulti(?int $timeout_ms, PollInfo ...$info): array {
         throw new \Exception("pollMulti not implemented");
     }
+    public function sleep(int $seconds, int $nanoseconds): void { throw new \Exception("sleep not implemented"); }
 }
 
 Io\Hooks\set_hooks(new ConcurrentHook());

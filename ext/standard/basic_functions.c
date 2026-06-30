@@ -113,6 +113,7 @@ PHPAPI php_basic_globals basic_globals;
 #include "streamsfuncs.h"
 #include "zend_frameless_function.h"
 #include "basic_functions_arginfo.h"
+#include "io_hooks.h"
 
 #if __has_feature(memory_sanitizer)
 # include <sanitizer/msan_interface.h>
@@ -428,6 +429,7 @@ PHP_RINIT_FUNCTION(basic) /* {{{ */
 	ZVAL_UNDEF(&FG(io_hooks));
 	FG(io_hooks_poll_fcc) = empty_fcall_info_cache;
 	FG(io_hooks_pollMulti_fcc) = empty_fcall_info_cache;
+	FG(io_hooks_sleep_fcc) = empty_fcall_info_cache;
 
 	return SUCCESS;
 }
@@ -495,6 +497,7 @@ PHP_RSHUTDOWN_FUNCTION(basic) /* {{{ */
 		ZVAL_UNDEF(&FG(io_hooks));
 		zend_fcc_dtor(&FG(io_hooks_poll_fcc));
 		zend_fcc_dtor(&FG(io_hooks_pollMulti_fcc));
+		zend_fcc_dtor(&FG(io_hooks_sleep_fcc));
 	}
 
 	return SUCCESS;
@@ -1146,6 +1149,11 @@ PHP_FUNCTION(sleep)
 		RETURN_THROWS();
 	}
 
+	if (PHP_HAS_IO_SLEEP_HOOK()) {
+		php_io_hooks_sleep(num, 0);
+		RETURN_LONG(0);
+	}
+
 	RETURN_LONG(php_sleep((unsigned int)num));
 }
 /* }}} */
@@ -1165,6 +1173,10 @@ PHP_FUNCTION(usleep)
 	}
 
 #ifdef HAVE_USLEEP
+	if (PHP_HAS_IO_SLEEP_HOOK()) {
+		php_io_hooks_sleep(num / 1000000LL, (num % 1000000LL) * 1000LL);
+		return;
+	}
 	usleep((unsigned int)num);
 #endif
 }
@@ -1189,6 +1201,11 @@ PHP_FUNCTION(time_nanosleep)
 	if (tv_nsec < 0) {
 		zend_argument_value_error(2, "must be greater than or equal to 0");
 		RETURN_THROWS();
+	}
+
+	if (PHP_HAS_IO_SLEEP_HOOK()) {
+		php_io_hooks_sleep(tv_sec, tv_nsec);
+		RETURN_TRUE;
 	}
 
 	php_req.tv_sec = (time_t) tv_sec;
@@ -1241,6 +1258,12 @@ PHP_FUNCTION(time_sleep_until)
 	}
 
 	diff_ns = target_ns - current_ns;
+
+	if (PHP_HAS_IO_SLEEP_HOOK()) {
+		php_io_hooks_sleep((zend_long)(diff_ns / ns_per_sec), (zend_long)(diff_ns % ns_per_sec));
+		RETURN_TRUE;
+	}
+
 	php_req.tv_sec = (time_t) (diff_ns / ns_per_sec);
 	php_req.tv_nsec = (long) (diff_ns % ns_per_sec);
 

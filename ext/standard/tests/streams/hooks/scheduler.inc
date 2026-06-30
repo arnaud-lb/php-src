@@ -138,6 +138,9 @@ class Scheduler implements Hooks
             if ($this->fiberIsMulti[$fiberId] ?? false) {
                 unset($this->fiberIsMulti[$fiberId]);
                 $this->ready[] = [$fiber, []];
+            } elseif ($info === null) {
+                // sleep deadline: resume with no value
+                $this->ready[] = [$fiber, null];
             } else {
                 $result = new PollResult();
                 $result->handle = $info->handle;
@@ -277,6 +280,15 @@ class Scheduler implements Hooks
         /** @var PollResult[] $results */
         $results = Fiber::suspend();
         return $results ?? [];
+    }
+
+    public function sleep(int $seconds, int $nanoseconds): void
+    {
+        $fiber = Fiber::getCurrent();
+        $fiberId = spl_object_id($fiber);
+        $deadline = hrtime(true) + $seconds * 1_000_000_000 + $nanoseconds;
+        $this->fiberDeadlines[$fiberId] = [$deadline, $fiber, null];
+        Fiber::suspend();
     }
 
     public function go(callable $fn): void

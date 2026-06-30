@@ -121,6 +121,8 @@ PHP_FUNCTION(Io_Hooks_set_hooks)
 		ZVAL_COPY(return_value, &FG(io_hooks));
 		zval_ptr_dtor(&FG(io_hooks));
 		zend_fcc_dtor(&FG(io_hooks_poll_fcc));
+		zend_fcc_dtor(&FG(io_hooks_pollMulti_fcc));
+		zend_fcc_dtor(&FG(io_hooks_sleep_fcc));
 	}
 
 	if (hooks_obj == NULL || Z_TYPE_P(hooks_obj) == IS_NULL) {
@@ -156,6 +158,25 @@ PHP_FUNCTION(Io_Hooks_set_hooks)
 	};
 	GC_ADDREF(obj);
 
+	zend_string *sleep_name = zend_string_init("sleep", sizeof("sleep") - 1, false);
+	zend_function *sleep_fn = obj->handlers->get_method(&obj, sleep_name, NULL);
+	zend_string_release(sleep_name);
+	ZEND_ASSERT(sleep_fn != NULL);
+
+	FG(io_hooks_sleep_fcc) = (zend_fcall_info_cache){
+		.function_handler = sleep_fn,
+		.object = obj,
+		.called_scope = obj->ce,
+	};
+	GC_ADDREF(obj);
+}
+
+PHPAPI void php_io_hooks_sleep(zend_long seconds, zend_long nanoseconds)
+{
+	zval params[2];
+	ZVAL_LONG(&params[0], seconds);
+	ZVAL_LONG(&params[1], nanoseconds);
+	zend_call_known_fcc(&FG(io_hooks_sleep_fcc), NULL, 2, params, NULL);
 }
 
 PHP_MINIT_FUNCTION(io_hooks)
