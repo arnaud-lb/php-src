@@ -1,27 +1,43 @@
 <?php
 
 use Io\Hooks\{Hooks, PollInfo, PollResult};
-use Io\Poll\{Context, Event};
+use Io\Poll\{Context, Event, Watcher};
 
 class Scheduler implements Hooks
 {
     private Context $pollContext;
     private array $ready = [];
-    private array $handles = [];         // spl_object_id(Handle) -> spl_object_id(Handle) (for poll() handles only)
-    private array $fiberWatchers = [];   // fiberId -> [[Watcher, fdKey|null], ...]
-    private array $fiberDeadlines = [];  // fiberId -> [deadline_ns, fiber, PollInfo|null]
-    private array $fiberIsMulti = [];    // fiberId -> true (for poll_multi fibers)
+    private array $watcherByHandle = [];      // handleId -> Watcher (persistent ET)
+    private array $fiberByHandleEvent = [];   // handleId -> [eventName -> fiber]
+    private array $pendingByHandle = [];      // handleId -> [Event, ...] (fired, not yet consumed)
+    private array $registrationsByFiber = []; // fiberId -> [handleId -> [eventName, ...]]
+    private array $fiberDeadlines = [];       // fiberId -> [deadline_ns, fiber, PollInfo|null]
+    private array $fiberIsMulti = [];         // fiberId -> true
 
     public function __construct()
     {
         $this->pollContext = new Context();
+        $this->pollContext->onWatcherRemoved($this->onWatcherRemoved(...));
+    }
+
+    private function onWatcherRemoved(Watcher $watcher): void
+    {
+        $handle = $watcher->getHandle();
+        $handleId = spl_object_id($handle);
+
+        // Handles can not be closed during polling, therefore no fiber is waiting for it
+        assert(($this->fiberByHandleEvent[$handleId] ?? []) === []);
+
+        unset($this->watcherByHandle[$handleId]);
+        unset($this->fiberByHandleEvent[$handleId]);
+        unset($this->pendingByHandle[$handleId]);
     }
 
     public function run(callable $main): void
     {
         $this->ready[] = [new Fiber($main), null];
 
-        while ($this->ready !== [] || $this->fiberWatchers !== [] || $this->fiberDeadlines !== []) {
+        while ($this->ready !== [] || $this->registrationsByFiber !== [] || $this->fiberDeadlines !== []) {
             $this->runReadyFibers();
             $this->pollFds();
         }
@@ -37,7 +53,7 @@ class Scheduler implements Hooks
 
     public function pollFds(): void
     {
-        if ($this->fiberWatchers === [] && $this->fiberDeadlines === []) {
+        if ($this->registrationsByFiber === [] && $this->fiberDeadlines === []) {
             return;
         }
 
@@ -61,34 +77,52 @@ class Scheduler implements Hooks
 
         $watchers = $this->pollContext->wait($timeoutSec, $timeoutUsec);
 
-        // Group ready PollResults by fiber before resuming anyone
-        $fiberResults = [];
+        // Group triggered events by fiber; a fiber gets at most one result handle
+        // (the first one that fires). Events from a second handle for the same fiber
+        // go to pending for later consumption.
+        $fiberResults = []; // fiberId -> [$fiber, PollResult]
         foreach ($watchers as $watcher) {
-            [$fiber] = $watcher->getData();
-            $fiberId = spl_object_id($fiber);
-            if (!isset($this->fiberWatchers[$fiberId])) {
-                continue;
+            $handle = $watcher->getHandle();
+            $handleId = spl_object_id($handle);
+
+            foreach ($watcher->getTriggeredEvents() as $event) {
+                $fiber = $this->fiberByHandleEvent[$handleId][$event->name] ?? null;
+                if ($fiber !== null) {
+                    $fiberId = spl_object_id($fiber);
+                    $existing = $fiberResults[$fiberId][1] ?? null;
+
+                    if ($existing !== null && spl_object_id($existing->handle) !== $handleId) {
+                        // Fiber already has a result from a different handle: defer to pending
+                        $this->addPendingEvent($handleId, $event);
+                    } else {
+                        if ($existing === null) {
+                            $result = new PollResult();
+                            $result->handle = $handle;
+                            $result->events = [];
+                            $result->timeout = false;
+                            $fiberResults[$fiberId] = [$fiber, $result];
+                        }
+                        $fiberResults[$fiberId][1]->events[] = $event;
+                        // Terminal events persist in pending even when delivered to a fiber
+                        if (self::isTerminalEvent($event)) {
+                            $this->addPendingEvent($handleId, $event);
+                        }
+                    }
+                } else {
+                    $this->addPendingEvent($handleId, $event);
+                }
             }
-            $result = new PollResult();
-            $result->handle = $watcher->getHandle();
-            $result->events = $watcher->getTriggeredEvents();
-            $result->timeout = false;
-            $fiberResults[$fiberId] ??= [$fiber, []];
-            $fiberResults[$fiberId][1][] = $result;
         }
 
-        foreach ($fiberResults as $fiberId => [$fiber, $results]) {
-            if (!isset($this->fiberWatchers[$fiberId])) {
-                continue;
-            }
-            $this->removeAllFiberWatchers($fiberId);
+        foreach ($fiberResults as $fiberId => [$fiber, $result]) {
+            $this->clearFiberRegistrations($fiberId);
             unset($this->fiberDeadlines[$fiberId]);
 
             if ($this->fiberIsMulti[$fiberId] ?? false) {
                 unset($this->fiberIsMulti[$fiberId]);
-                $this->ready[] = [$fiber, $results];      // array of PollResult
+                $this->ready[] = [$fiber, [$result]];
             } else {
-                $this->ready[] = [$fiber, $results[0]];   // single PollResult
+                $this->ready[] = [$fiber, $result];
             }
         }
 
@@ -98,12 +132,12 @@ class Scheduler implements Hooks
             if ($deadline > $now) {
                 continue;
             }
-            $this->removeAllFiberWatchers($fiberId);
+            $this->clearFiberRegistrations($fiberId);
             unset($this->fiberDeadlines[$fiberId]);
 
             if ($this->fiberIsMulti[$fiberId] ?? false) {
                 unset($this->fiberIsMulti[$fiberId]);
-                $this->ready[] = [$fiber, []];            // empty array = timeout for poll_multi
+                $this->ready[] = [$fiber, []];
             } else {
                 $result = new PollResult();
                 $result->handle = $info->handle;
@@ -114,35 +148,96 @@ class Scheduler implements Hooks
         }
     }
 
-    private function removeAllFiberWatchers(int $fiberId): void
+    private function clearFiberRegistrations(int $fiberId): void
     {
-        foreach ($this->fiberWatchers[$fiberId] as [$w, $fdKey]) {
-            if ($fdKey !== null) {
-                unset($this->handles[$fdKey]);
+        foreach ($this->registrationsByFiber[$fiberId] ?? [] as $handleId => $eventNames) {
+            foreach ($eventNames as $eventName) {
+                unset($this->fiberByHandleEvent[$handleId][$eventName]);
             }
-            $w->remove();
+            if (empty($this->fiberByHandleEvent[$handleId])) {
+                unset($this->fiberByHandleEvent[$handleId]);
+            }
         }
-        unset($this->fiberWatchers[$fiberId]);
+        unset($this->registrationsByFiber[$fiberId]);
+    }
+
+    private function addOrModifyWatcher(int $handleId, object $handle, array $events): void
+    {
+        $eventsWithET = [...$events, Event::EdgeTriggered];
+
+        if (isset($this->watcherByHandle[$handleId]) && $this->watcherByHandle[$handleId]->isActive()) {
+            $watcher = $this->watcherByHandle[$handleId];
+            $merged = array_values(array_unique([...$watcher->getWatchedEvents(), ...$eventsWithET], SORT_REGULAR));
+            $watcher->modifyEvents($merged);
+        } else {
+            $this->watcherByHandle[$handleId] = $this->pollContext->add($handle, $eventsWithET);
+        }
+    }
+
+    private static function isTerminalEvent(Event $event): bool
+    {
+        return $event === Event::Error || $event === Event::HangUp || $event === Event::ReadHangUp;
+    }
+
+    private function addPendingEvent(int $handleId, Event $event): void
+    {
+        if (!in_array($event, $this->pendingByHandle[$handleId] ?? [], true)) {
+            $this->pendingByHandle[$handleId][] = $event;
+        }
+    }
+
+    private function consumePending(int $handleId, object $handle, array $requestedEvents): ?PollResult
+    {
+        if (empty($this->pendingByHandle[$handleId])) {
+            return null;
+        }
+        $matching = [];
+        $remaining = [];
+        foreach ($this->pendingByHandle[$handleId] as $pending) {
+            if (in_array($pending, $requestedEvents, true)) {
+                $matching[] = $pending;
+                // Terminal events persist - every future poll sees them too
+                if (self::isTerminalEvent($pending)) {
+                    $remaining[] = $pending;
+                }
+            } else {
+                $remaining[] = $pending;
+            }
+        }
+        if (!$matching) {
+            return null;
+        }
+        $this->pendingByHandle[$handleId] = $remaining;
+        $result = new PollResult();
+        $result->handle = $handle;
+        $result->events = $matching;
+        $result->timeout = false;
+        return $result;
     }
 
     public function poll(PollInfo $info): PollResult
     {
         $fiber = Fiber::getCurrent();
         $fiberId = spl_object_id($fiber);
+        $id = spl_object_id($info->handle);
+
+        $result = $this->consumePending($id, $info->handle, $info->events);
+        if ($result !== null) {
+            return $result;
+        }
 
         if ($info->timeout_ms >= 0) {
             $deadline = hrtime(true) + $info->timeout_ms * 1_000_000;
             $this->fiberDeadlines[$fiberId] = [$deadline, $fiber, $info];
         }
 
-        $id = spl_object_id($info->handle);
-        if (isset($this->handles[$id])) {
-            throw new \Exception("Handle already registered");
+        $this->registrationsByFiber[$fiberId] = [];
+        foreach ($info->events as $event) {
+            $this->fiberByHandleEvent[$id][$event->name] = $fiber;
+            $this->registrationsByFiber[$fiberId][$id][] = $event->name;
         }
-        $this->handles[$id] = $id;
-        $this->fiberWatchers[$fiberId] = [
-            [$this->pollContext->add($info->handle, $info->events, [$fiber]), $id],
-        ];
+
+        $this->addOrModifyWatcher($id, $info->handle, $info->events);
 
         /** @var PollResult $result */
         $result = Fiber::suspend();
@@ -153,19 +248,30 @@ class Scheduler implements Hooks
     {
         $fiber = Fiber::getCurrent();
         $fiberId = spl_object_id($fiber);
-        $this->fiberWatchers[$fiberId] = [];
         $this->fiberIsMulti[$fiberId] = true;
+
+        foreach ($infos as $info) {
+            $id = spl_object_id($info->handle);
+            $result = $this->consumePending($id, $info->handle, $info->events);
+            if ($result !== null) {
+                unset($this->fiberIsMulti[$fiberId]);
+                return [$result];
+            }
+        }
 
         if ($timeout_ms !== null && $timeout_ms >= 0) {
             $deadline = hrtime(true) + $timeout_ms * 1_000_000;
             $this->fiberDeadlines[$fiberId] = [$deadline, $fiber, null];
         }
 
+        $this->registrationsByFiber[$fiberId] = [];
         foreach ($infos as $info) {
-            $this->fiberWatchers[$fiberId][] = [
-                $this->pollContext->add($info->handle, $info->events, [$fiber]),
-                null,
-            ];
+            $id = spl_object_id($info->handle);
+            foreach ($info->events as $event) {
+                $this->fiberByHandleEvent[$id][$event->name] = $fiber;
+                $this->registrationsByFiber[$fiberId][$id][] = $event->name;
+            }
+            $this->addOrModifyWatcher($id, $info->handle, $info->events);
         }
 
         /** @var PollResult[] $results */
