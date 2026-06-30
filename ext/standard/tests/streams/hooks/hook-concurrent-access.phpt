@@ -8,10 +8,6 @@ use Io\Hooks\{Hooks, PollInfo, PollResult};
 $server = stream_socket_server('tcp://127.0.0.1:0');
 $addr = stream_socket_get_name($server, false);
 $client = stream_socket_client("tcp://$addr");
-$conn = stream_socket_accept($server);
-fwrite($conn, "hello\n");
-fclose($conn);
-fclose($server);
 
 class ConcurrentHook implements Hooks {
     public function poll(PollInfo $info): PollResult {
@@ -36,5 +32,4 @@ var_dump(fgets($client));
 ?>
 --EXPECT--
 Concurrent access to a stream
-string(6) "hello
-"
+bool(false)

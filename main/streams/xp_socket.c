@@ -78,7 +78,7 @@ static ssize_t php_sockop_write(php_stream *stream, const char *buf, size_t coun
 		ptimeout = &sock->timeout;
 
 retry:
-	didwrite = send(sock->socket, buf, XP_SOCK_BUF_SIZE(count), (sock->is_blocked && ptimeout) ? MSG_DONTWAIT : 0);
+	didwrite = send(sock->socket, buf, XP_SOCK_BUF_SIZE(count), 0);
 
 	if (didwrite <= 0) {
 		char *estr;
@@ -86,21 +86,18 @@ retry:
 
 		if (PHP_IS_TRANSIENT_ERROR(err)) {
 			if (sock->is_blocked) {
-				int retval;
-
 				sock->timeout_event = false;
 
 				do {
-					retval = php_pollstream_for(stream, sock->socket, POLLOUT, ptimeout);
+					int retval = php_pollstream_for(stream, sock->socket, POLLOUT, ptimeout);
+
+					if (retval == PHP_POLLSTREAM_READY) {
+						goto retry;
+					}
 
 					if (retval == PHP_POLLSTREAM_TIMEOUT) {
 						sock->timeout_event = true;
 						break;
-					}
-
-					if (retval == PHP_POLLSTREAM_READY) {
-						/* writable now; retry */
-						goto retry;
 					}
 
 					err = php_socket_errno();
@@ -127,42 +124,6 @@ retry:
 	return didwrite;
 }
 
-static void php_sock_stream_wait_for_data(php_stream *stream, php_netstream_data_t *sock, bool has_buffered_data)
-{
-	int retval;
-	struct timeval *ptimeout, zero_timeout;
-
-	if (!sock || sock->socket == -1) {
-		return;
-	}
-
-	sock->timeout_event = false;
-
-	if (has_buffered_data) {
-		/* If there is already buffered data, use no timeout. */
-		zero_timeout.tv_sec = 0;
-		zero_timeout.tv_usec = 0;
-		ptimeout = &zero_timeout;
-	} else if (sock->timeout.tv_sec == -1) {
-		ptimeout = NULL;
-	} else {
-		ptimeout = &sock->timeout;
-	}
-
-	while(1) {
-		retval = php_pollstream_for(stream, sock->socket, PHP_POLLREADABLE, ptimeout);
-
-		if (retval == PHP_POLLSTREAM_TIMEOUT)
-			sock->timeout_event = true;
-
-		if (retval == PHP_POLLSTREAM_READY)
-			break;
-
-		if (php_socket_errno() != EINTR)
-			break;
-	}
-}
-
 static ssize_t php_sockop_read(php_stream *stream, char *buf, size_t count)
 {
 	php_netstream_data_t *sock = (php_netstream_data_t*)stream->abstract;
@@ -171,32 +132,47 @@ static ssize_t php_sockop_read(php_stream *stream, char *buf, size_t count)
 		return -1;
 	}
 
-	int recv_flags = 0;
-	/* Special handling for blocking read. */
-	if (sock->is_blocked) {
-		/* Find out if there is any data buffered from the previous read. */
+	ssize_t nr_bytes = recv(sock->socket, buf, XP_SOCK_BUF_SIZE(count), 0);
+	int err = php_socket_errno();
+
+	sock->timeout_event = false;
+
+	if (nr_bytes < 0 && PHP_IS_TRANSIENT_ERROR(err) && sock->is_blocked) {
 		bool has_buffered_data = stream->has_buffered_data;
-		/* No need to wait if there is any data buffered or no timeout. */
-		bool dont_wait = has_buffered_data ||
-				(sock->timeout.tv_sec == 0 && sock->timeout.tv_usec == 0);
-		/* Set MSG_DONTWAIT if no wait is needed or there is unlimited timeout which was
-		 * added by fix for #41984 committed in 9343c5404. */
-		if (dont_wait || sock->timeout.tv_sec != -1) {
-			recv_flags = MSG_DONTWAIT;
+
+		struct timeval zero_timeout = {0, 0};
+		struct timeval *ptimeout;
+		if (has_buffered_data) {
+			ptimeout = &zero_timeout;
+		} else if (sock->timeout.tv_sec == -1) {
+			ptimeout = NULL;
+		} else {
+			ptimeout = &sock->timeout;
 		}
-		/* If the wait is needed or it is a platform without MSG_DONTWAIT support (e.g. Windows),
-		 * then poll for data. */
-		if (!dont_wait || MSG_DONTWAIT == 0) {
-			php_sock_stream_wait_for_data(stream, sock, has_buffered_data);
-			if (sock->timeout_event) {
-				/* It is ok to timeout if there is any data buffered so return 0, otherwise -1. */
-				return has_buffered_data ? 0 : -1;
+
+		int retval;
+		do {
+			retval = php_pollstream_for(stream, sock->socket, PHP_POLLREADABLE, ptimeout);
+
+			if (retval == PHP_POLLSTREAM_TIMEOUT) {
+				sock->timeout_event = true;
+				break;
 			}
+
+			if (retval == PHP_POLLSTREAM_READY) {
+				break;
+			}
+		} while (php_socket_errno() == EINTR);
+
+		if (sock->timeout_event) {
+			return has_buffered_data ? 0 : -1;
+		}
+
+		if (retval == PHP_POLLSTREAM_READY) {
+			nr_bytes = recv(sock->socket, buf, XP_SOCK_BUF_SIZE(count), 0);
+			err = php_socket_errno();
 		}
 	}
-
-	ssize_t nr_bytes = recv(sock->socket, buf, XP_SOCK_BUF_SIZE(count), recv_flags);
-	int err = php_socket_errno();
 
 	if (nr_bytes < 0) {
 		if (PHP_IS_TRANSIENT_ERROR(err)) {
@@ -398,11 +374,8 @@ static int php_sockop_set_option(php_stream *stream, int option, int value, void
 
 		case PHP_STREAM_OPTION_BLOCKING:
 			oldmode = sock->is_blocked;
-			if (SUCCESS == php_set_sock_blocking(sock->socket, value)) {
-				sock->is_blocked = value;
-				return oldmode;
-			}
-			return PHP_STREAM_OPTION_RETURN_ERR;
+			sock->is_blocked = value;
+			return oldmode;
 
 		case PHP_STREAM_OPTION_READ_TIMEOUT:
 			sock->timeout = *(struct timeval*)ptrparam;
@@ -992,10 +965,8 @@ static inline int php_tcp_sockop_accept(php_stream *stream, php_netstream_data_t
 
 		memcpy(clisockdata, sock, sizeof(*clisockdata));
 		clisockdata->socket = clisock;
-#ifdef __linux__
-		/* O_NONBLOCK is not inherited on Linux */
 		clisockdata->is_blocked = true;
-#endif
+		php_set_sock_blocking(clisock, false);
 
 		xparam->outputs.client = php_stream_alloc_rel(stream->ops, clisockdata, NULL, "r+");
 		if (xparam->outputs.client) {
@@ -1022,10 +993,16 @@ static int php_tcp_sockop_set_option(php_stream *stream, int option, int value, 
 				case STREAM_XPORT_OP_CONNECT:
 				case STREAM_XPORT_OP_CONNECT_ASYNC:
 					xparam->outputs.returncode = php_tcp_sockop_connect(stream, sock, xparam);
+					if (xparam->outputs.returncode == 0 && sock->socket != SOCK_ERR) {
+						php_set_sock_blocking(sock->socket, false);
+					}
 					return PHP_STREAM_OPTION_RETURN_OK;
 
 				case STREAM_XPORT_OP_BIND:
 					xparam->outputs.returncode = php_tcp_sockop_bind(stream, sock, xparam);
+					if (xparam->outputs.returncode == 0 && sock->socket != SOCK_ERR) {
+						php_set_sock_blocking(sock->socket, false);
+					}
 					return PHP_STREAM_OPTION_RETURN_OK;
 
 

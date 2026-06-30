@@ -820,42 +820,53 @@ PHPAPI php_socket_t php_network_accept_incoming_ex(php_stream *stream,
 {
 	php_socket_t clisock = -1;
 	int error = 0;
-	php_pollstream_result result;
 	php_sockaddr_storage sa;
 	socklen_t sl;
 
-	result = php_pollstream_for(stream, srvsock, PHP_POLLREADABLE, timeout);
+	sl = sizeof(sa);
+	clisock = accept(srvsock, (struct sockaddr*)&sa, &sl);
 
-	if (result == PHP_POLLSTREAM_TIMEOUT) {
-		error = PHP_TIMEOUT_ERROR_VALUE;
-	} else if (result == PHP_POLLSTREAM_ERROR) {
-		error = php_socket_errno(); // TODO
-	} else {
-		sl = sizeof(sa);
+	if (clisock == SOCK_ERR) {
+		error = php_socket_errno();
+		if (PHP_IS_TRANSIENT_ERROR(error)) {
+			php_pollstream_result result;
+			do {
+				result = php_pollstream_for(stream, srvsock, PHP_POLLREADABLE, timeout);
+				if (result == PHP_POLLSTREAM_TIMEOUT) {
+					error = PHP_TIMEOUT_ERROR_VALUE;
+					break;
+				}
+				if (result == PHP_POLLSTREAM_READY) {
+					sl = sizeof(sa);
+					clisock = accept(srvsock, (struct sockaddr*)&sa, &sl);
+					if (clisock == SOCK_ERR) {
+						error = php_socket_errno();
+					}
+					break;
+				}
+				error = php_socket_errno();
+			} while (error == EINTR);
+		}
+	}
 
-		clisock = accept(srvsock, (struct sockaddr*)&sa, &sl);
-
-		if (clisock != SOCK_ERR) {
-			php_network_populate_name_from_sockaddr((struct sockaddr*)&sa, sl,
-					textaddr,
-					addr, addrlen
-					);
+	if (clisock != SOCK_ERR) {
+		php_network_populate_name_from_sockaddr((struct sockaddr*)&sa, sl,
+				textaddr,
+				addr, addrlen
+				);
 #ifdef TCP_NODELAY
-			if (PHP_SOCKVAL_IS_SET(sockvals, PHP_SOCKVAL_TCP_NODELAY)) {
-				int tcp_nodelay = 1;
-				setsockopt(clisock, IPPROTO_TCP, TCP_NODELAY, (char*)&tcp_nodelay, sizeof(tcp_nodelay));
-			}
+		if (PHP_SOCKVAL_IS_SET(sockvals, PHP_SOCKVAL_TCP_NODELAY)) {
+			int tcp_nodelay = 1;
+			setsockopt(clisock, IPPROTO_TCP, TCP_NODELAY, (char*)&tcp_nodelay, sizeof(tcp_nodelay));
+		}
 #endif
 #ifdef TCP_KEEPALIVE
-			/* MacOS does not inherit TCP_KEEPALIVE so it needs to be set */
-			if (PHP_SOCKVAL_IS_SET(sockvals, PHP_SOCKVAL_TCP_KEEPIDLE)) {
-				setsockopt(clisock, IPPROTO_TCP, TCP_KEEPALIVE,
-						(char*)&sockvals->keepalive.keepidle, sizeof(sockvals->keepalive.keepidle));
-			}
-#endif
-		} else {
-			error = php_socket_errno();
+		/* MacOS does not inherit TCP_KEEPALIVE so it needs to be set */
+		if (PHP_SOCKVAL_IS_SET(sockvals, PHP_SOCKVAL_TCP_KEEPIDLE)) {
+			setsockopt(clisock, IPPROTO_TCP, TCP_KEEPALIVE,
+					(char*)&sockvals->keepalive.keepidle, sizeof(sockvals->keepalive.keepidle));
 		}
+#endif
 	}
 
 	if (error_code) {
@@ -1290,6 +1301,7 @@ PHPAPI php_stream *_php_stream_sock_open_from_socket(php_socket_t socket, const 
 	sock->timeout.tv_sec = FG(default_socket_timeout);
 	sock->timeout.tv_usec = 0;
 	sock->socket = socket;
+	php_set_sock_blocking(socket, false);
 
 	stream = php_stream_alloc_rel(&php_stream_generic_socket_ops, sock, persistent_id, "r+");
 

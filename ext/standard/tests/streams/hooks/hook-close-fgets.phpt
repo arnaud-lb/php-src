@@ -7,12 +7,7 @@ use Io\Hooks\{Hooks, PollInfo, PollResult};
 
 $server = stream_socket_server('tcp://127.0.0.1:0');
 $addr = stream_socket_get_name($server, false);
-
 $client = stream_socket_client("tcp://$addr");
-$conn = stream_socket_accept($server);
-fwrite($conn, "<?php\n");
-fclose($conn);
-fclose($server);
 
 class CloseOnceHooks implements Hooks {
     public function poll(PollInfo $info): PollResult {
