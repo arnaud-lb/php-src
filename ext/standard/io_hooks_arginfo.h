@@ -1,5 +1,5 @@
 /* This is a generated file, edit io_hooks.stub.php instead.
- * Stub hash: 364d7e209716e763806acd085421c11a404683d3 */
+ * Stub hash: a6d4bd83077f52bcb197cd2934450a8490a74c80 */
 
 ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_Io_Hooks_set_hooks, 0, 1, Io\\Hooks\\Hooks, 1)
 	ZEND_ARG_OBJ_INFO(0, hooks, Io\\Hooks\\Hooks, 1)
@@ -9,7 +9,7 @@ ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_class_Io_Hooks_Hooks_poll, 0, 1, 
 	ZEND_ARG_OBJ_INFO(0, info, Io\\Hooks\\PollInfo, 0)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_Io_Hooks_Hooks_pollMulti, 0, 1, IS_ARRAY, 0)
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_class_Io_Hooks_Hooks_pollMulti, 0, 1, Io\\Hooks\\PollResult, 1)
 	ZEND_ARG_TYPE_INFO(0, timeout_ms, IS_LONG, 1)
 	ZEND_ARG_VARIADIC_OBJ_INFO(0, info, Io\\Hooks\\PollInfo, 0)
 ZEND_END_ARG_INFO()

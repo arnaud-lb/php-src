@@ -18,7 +18,7 @@ class CloseOnceHooks implements Hooks {
         $result->timeout = false;
         return $result;
     }
-    public function pollMulti(?int $timeout_ms, PollInfo ...$info): array { throw new \Exception("pollMulti not implemented"); }
+    public function pollMulti(?int $timeout_ms, PollInfo ...$info): ?PollResult { throw new \Exception("pollMulti not implemented"); }
     public function sleep(int $seconds, int $nanoseconds): void { throw new \Exception("sleep not implemented"); }
 }
 

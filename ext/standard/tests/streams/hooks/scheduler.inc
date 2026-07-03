@@ -12,7 +12,6 @@ class Scheduler implements Hooks
     private array $pendingByHandle = [];      // handleId -> [Event, ...] (fired, not yet consumed)
     private array $registrationsByFiber = []; // fiberId -> [handleId -> [eventName, ...]]
     private array $fiberDeadlines = [];       // fiberId -> [deadline_ns, fiber, PollInfo|null]
-    private array $fiberIsMulti = [];         // fiberId -> true
 
     public function __construct()
     {
@@ -118,12 +117,7 @@ class Scheduler implements Hooks
             $this->clearFiberRegistrations($fiberId);
             unset($this->fiberDeadlines[$fiberId]);
 
-            if ($this->fiberIsMulti[$fiberId] ?? false) {
-                unset($this->fiberIsMulti[$fiberId]);
-                $this->ready[] = [$fiber, [$result]];
-            } else {
-                $this->ready[] = [$fiber, $result];
-            }
+            $this->ready[] = [$fiber, $result];
         }
 
         // Handle expired deadlines
@@ -135,11 +129,8 @@ class Scheduler implements Hooks
             $this->clearFiberRegistrations($fiberId);
             unset($this->fiberDeadlines[$fiberId]);
 
-            if ($this->fiberIsMulti[$fiberId] ?? false) {
-                unset($this->fiberIsMulti[$fiberId]);
-                $this->ready[] = [$fiber, []];
-            } elseif ($info === null) {
-                // sleep deadline: resume with no value
+            if ($info === null) {
+                // sleep or pollMulti deadline: resume with no value
                 $this->ready[] = [$fiber, null];
             } else {
                 $result = new PollResult();
@@ -247,18 +238,16 @@ class Scheduler implements Hooks
         return $result;
     }
 
-    public function pollMulti(?int $timeout_ms, PollInfo ...$infos): array
+    public function pollMulti(?int $timeout_ms, PollInfo ...$infos): ?PollResult
     {
         $fiber = Fiber::getCurrent();
         $fiberId = spl_object_id($fiber);
-        $this->fiberIsMulti[$fiberId] = true;
 
         foreach ($infos as $info) {
             $id = spl_object_id($info->handle);
             $result = $this->consumePending($id, $info->handle, $info->events);
             if ($result !== null) {
-                unset($this->fiberIsMulti[$fiberId]);
-                return [$result];
+                return $result;
             }
         }
 
@@ -277,9 +266,7 @@ class Scheduler implements Hooks
             $this->addOrModifyWatcher($id, $info->handle, $info->events);
         }
 
-        /** @var PollResult[] $results */
-        $results = Fiber::suspend();
-        return $results ?? [];
+        return Fiber::suspend();
     }
 
     public function sleep(int $seconds, int $nanoseconds): void

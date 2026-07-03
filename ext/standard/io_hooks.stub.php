@@ -22,8 +22,8 @@ namespace Io\Hooks {
 
     interface Hooks {
         public function poll(PollInfo $info): PollResult;
-        /* @return PollResult[] Empty when $timeout_ms is exceeded */
-        public function pollMulti(?int $timeout_ms, PollInfo ...$info): array;
+        /* @return ?PollResult[] NULL when $timeout_ms is exceeded */
+        public function pollMulti(?int $timeout_ms, PollInfo ...$info): ?PollResult;
         public function sleep(int $seconds, int $nanoseconds): void;
     }
 

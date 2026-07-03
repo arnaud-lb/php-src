@@ -101,15 +101,6 @@ static php_io_hooks_poll_result *php_io_hooks_php_poll(void *data, php_io_hooks_
 		return NULL;
 	}
 
-	if (UNEXPECTED(Z_TYPE(retval) != IS_OBJECT || Z_OBJCE(retval) != php_io_hooks_poll_result_ce)) {
-		zend_type_error("%s::poll() must return %s, %s returned",
-			ZSTR_VAL(php_io_hooks_hooks_ce->name),
-			ZSTR_VAL(php_io_hooks_poll_result_ce->name),
-			zend_zval_type_name(&retval));
-		zval_ptr_dtor(&retval);
-		return NULL;
-	}
-
 	php_io_hooks_poll_result *result = php_poll_result_from_zval(&retval);
 	zval_ptr_dtor(&retval);
 	return result;
@@ -146,15 +137,8 @@ static php_io_hooks_poll_result *php_io_hooks_php_poll_multi(void *data, zend_lo
 		return NULL;
 	}
 
-	if (Z_TYPE(retval) != IS_ARRAY || zend_hash_num_elements(Z_ARRVAL(retval)) == 0) {
-		zval_ptr_dtor(&retval);
+	if (Z_TYPE(retval) == IS_NULL) {
 		return NULL;
-	}
-
-	zval *first = zend_hash_index_find(Z_ARRVAL(retval), 0);
-	php_poll_result *result = NULL;
-	if (first && Z_TYPE_P(first) == IS_OBJECT && Z_OBJCE_P(first) == php_io_hooks_poll_result_ce) {
-		result = php_poll_result_from_zval(first);
 	}
 
 	php_io_hooks_poll_result *result = php_poll_result_from_zval(&retval);
