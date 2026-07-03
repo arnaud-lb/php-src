@@ -189,6 +189,11 @@ struct _php_stream_wrapper	{
 
 #define PHP_STREAM_FLAG_NO_IO						0x400
 
+/* Set while the stream is being polled via the io hook (poll/poll_multi).
+ * Any attempt to use the stream as a parameter during this window is a
+ * concurrent-access bug and will throw an Error. */
+#define PHP_STREAM_FLAG_BEING_POLLED				0x800
+
 #define PHP_STREAM_FLAG_WAS_WRITTEN					0x80000000
 
 struct _php_stream  {
@@ -246,6 +251,11 @@ struct _php_stream  {
 #endif
 
 	struct _php_stream *enclosing_stream; /* this is a private stream owned by enclosing_stream */
+
+	/* StreamPollWeakHandle singleton for this stream. Not refcounted; zeroed when the
+	 * WeakHandle is freed. streams.c calls weak_ops->notify() through this pointer
+	 * when the stream is freed (see php_poll_weak_handle_ops in php_poll.h). */
+	zend_object *weak_poll_handle;
 
 	zend_llist *error_list;
 }; /* php_stream */
@@ -306,6 +316,10 @@ static zend_always_inline bool php_stream_zend_parse_arg_into_stream(
 		 * as we want to be able to specify the argument number in the type error */
 		if (EXPECTED(res->type == php_file_le_stream() || res->type == php_file_le_pstream())) {
 			*destination_stream_ptr = (php_stream*)res->ptr;
+			if (UNEXPECTED((*destination_stream_ptr)->flags & PHP_STREAM_FLAG_BEING_POLLED)) {
+				zend_throw_error(NULL, "Concurrent access to a stream");
+				return false;
+			}
 			return true;
 		} else {
 			zend_argument_type_error(arg_num, "must be an open stream resource");
@@ -665,6 +679,7 @@ PHPAPI HashTable *_php_get_stream_filters_hash(void);
 #define php_get_stream_filters_hash()	_php_get_stream_filters_hash()
 PHPAPI HashTable *php_get_stream_filters_hash_global(void);
 extern const php_stream_wrapper_ops *php_stream_user_wrapper_ops;
+
 
 static inline bool php_is_stream_path(const char *filename)
 {

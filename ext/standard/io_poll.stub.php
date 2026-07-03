@@ -89,6 +89,8 @@ namespace Io\Poll {
         public function wait(?int $timeoutSeconds = null, int $timeoutMicroseconds = 0, ?int $maxEvents = null): array {}
 
         public function getBackend(): Backend {}
+
+        public function onWatcherRemoved(?callable $callback = null): void {}
     }
 
     class PollException extends \Io\IoException {}
@@ -150,6 +152,21 @@ namespace Io\Poll {
 }
 
 namespace {
+    /**
+     * @strict-properties
+     * @not-serializable
+     */
+    final class StreamPollWeakHandle implements Io\Poll\Handle
+    {
+        private function __construct() {}
+
+        /** @param resource $stream */
+        public static function create($stream): static {}
+
+        /** @return resource|null */
+        public function getStream(): mixed {}
+    }
+
     /**
      * @strict-properties
      * @not-serializable

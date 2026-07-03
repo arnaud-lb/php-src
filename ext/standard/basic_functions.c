@@ -113,6 +113,7 @@ PHPAPI php_basic_globals basic_globals;
 #include "streamsfuncs.h"
 #include "zend_frameless_function.h"
 #include "basic_functions_arginfo.h"
+#include "io_hooks.h"
 
 #if __has_feature(memory_sanitizer)
 # include <sanitizer/msan_interface.h>
@@ -338,6 +339,7 @@ PHP_MINIT_FUNCTION(basic) /* {{{ */
 
 	BASIC_MINIT_SUBMODULE(stream_errors)
 	BASIC_MINIT_SUBMODULE(user_streams)
+	BASIC_MINIT_SUBMODULE(io_hooks)
 
 	php_register_url_stream_wrapper("php", &php_stream_php_wrapper);
 	php_register_url_stream_wrapper("file", &php_plain_files_wrapper);
@@ -424,6 +426,9 @@ PHP_RINIT_FUNCTION(basic) /* {{{ */
 	/* Default to global filters only */
 	FG(stream_filters) = NULL;
 
+	memset(&FG(io_hooks), 0, sizeof(FG(io_hooks)));
+	FG(io_hooks_data) = NULL;
+
 	return SUCCESS;
 }
 /* }}} */
@@ -484,6 +489,9 @@ PHP_RSHUTDOWN_FUNCTION(basic) /* {{{ */
 
 	BG(page_uid) = -1;
 	BG(page_gid) = -1;
+
+	php_set_io_hooks(NULL, 0, NULL);
+
 	return SUCCESS;
 }
 /* }}} */
@@ -1133,6 +1141,11 @@ PHP_FUNCTION(sleep)
 		RETURN_THROWS();
 	}
 
+	if (FG(io_hooks).sleep) {
+		php_io_hooks_sleep(num, 0);
+		RETURN_LONG(0);
+	}
+
 	RETURN_LONG(php_sleep((unsigned int)num));
 }
 /* }}} */
@@ -1152,6 +1165,10 @@ PHP_FUNCTION(usleep)
 	}
 
 #ifdef HAVE_USLEEP
+	if (FG(io_hooks).sleep) {
+		php_io_hooks_sleep(num / 1000000LL, (num % 1000000LL) * 1000LL);
+		return;
+	}
 	usleep((unsigned int)num);
 #endif
 }
@@ -1176,6 +1193,11 @@ PHP_FUNCTION(time_nanosleep)
 	if (tv_nsec < 0) {
 		zend_argument_value_error(2, "must be greater than or equal to 0");
 		RETURN_THROWS();
+	}
+
+	if (FG(io_hooks).sleep) {
+		php_io_hooks_sleep(tv_sec, tv_nsec);
+		RETURN_TRUE;
 	}
 
 	php_req.tv_sec = (time_t) tv_sec;
@@ -1228,6 +1250,12 @@ PHP_FUNCTION(time_sleep_until)
 	}
 
 	diff_ns = target_ns - current_ns;
+
+	if (FG(io_hooks).sleep) {
+		php_io_hooks_sleep((zend_long)(diff_ns / ns_per_sec), (zend_long)(diff_ns % ns_per_sec));
+		RETURN_TRUE;
+	}
+
 	php_req.tv_sec = (time_t) (diff_ns / ns_per_sec);
 	php_req.tv_nsec = (long) (diff_ns % ns_per_sec);
 

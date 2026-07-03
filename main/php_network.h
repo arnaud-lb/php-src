@@ -16,6 +16,9 @@
 #define _PHP_NETWORK_H
 
 #include <php.h>
+#include "zend_enum.h"
+#include "main/hooks/io_hooks.h"
+#include "ext/standard/file.h"
 
 #ifndef PHP_WIN32
 # undef closesocket
@@ -212,6 +215,49 @@ static inline int php_pollfd_for_ms(php_socket_t fd, int events, int timeout)
 	return n;
 }
 
+typedef enum php_pollstream_result {
+	PHP_POLLSTREAM_ERROR = -1,
+	PHP_POLLSTREAM_TIMEOUT = 0,
+	PHP_POLLSTREAM_READY = 1,
+} php_pollstream_result;
+
+static inline php_pollstream_result php_pollstream_for(php_stream *stream, php_socket_t fd, int events, struct timeval *timeouttv)
+{
+	if (!FG(io_hooks).poll) {
+		int n = php_pollfd_for(fd, events, timeouttv);
+		if (n > 0) {
+			return PHP_POLLSTREAM_READY;
+		}
+		if (n == 0) {
+			return PHP_POLLSTREAM_TIMEOUT;
+		}
+		return PHP_POLLSTREAM_ERROR;
+	}
+
+	php_io_hooks_poll_result *result = php_io_hooks_poll_stream(stream, php_posix_poll_to_php_poll(events), timeouttv);
+	if (result == NULL) {
+		return PHP_POLLSTREAM_ERROR;
+	}
+
+	bool timed_out = result->timeout;
+	if (result->handle) {
+		OBJ_RELEASE(result->handle);
+	}
+	efree(result);
+
+	return timed_out ? PHP_POLLSTREAM_TIMEOUT : PHP_POLLSTREAM_READY;
+}
+
+static inline php_pollstream_result php_pollstream_for_ms(php_stream *stream, php_socket_t fd, int events, int timeout_ms)
+{
+	struct timeval timeouttv = {
+		.tv_sec = timeout_ms / 1000,
+		.tv_usec = (timeout_ms % 1000) * 1000,
+	};
+
+	return php_pollstream_for(stream, fd, events, &timeouttv);
+}
+
 /* emit warning and suggestion for unsafe select(2) usage */
 PHPAPI void _php_emit_fd_setsize_warning(int max_fd);
 
@@ -315,7 +361,8 @@ PHPAPI php_socket_t php_network_bind_socket_to_local_addr(const char *host, unsi
 		int socktype, long sockopts, zend_string **error_string, int *error_code
 		);
 
-PHPAPI php_socket_t php_network_accept_incoming_ex(php_socket_t srvsock,
+PHPAPI php_socket_t php_network_accept_incoming_ex(php_stream *stream,
+		php_socket_t srvsock,
 		zend_string **textaddr,
 		struct sockaddr **addr,
 		socklen_t *addrlen,
@@ -325,7 +372,8 @@ PHPAPI php_socket_t php_network_accept_incoming_ex(php_socket_t srvsock,
 		php_sockvals *sockvals
 		);
 
-PHPAPI php_socket_t php_network_accept_incoming(php_socket_t srvsock,
+PHPAPI php_socket_t php_network_accept_incoming(php_stream *stream,
+		php_socket_t srvsock,
 		zend_string **textaddr,
 		struct sockaddr **addr,
 		socklen_t *addrlen,
