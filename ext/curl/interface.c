@@ -2460,49 +2460,7 @@ static int php_curl_timer_callback(CURLM *multi, long timeout_ms, void *userp)
 	return 0;
 }
 
-/* Translate CURL_POLL_* to Io\Poll\Event[] array */
-static void php_curl_poll_events_to_zval(int what, zval *dest)
-{
-	array_init(dest);
-	if (what & CURL_POLL_IN) {
-		zval zv;
-		ZVAL_OBJ_COPY(&zv, zend_enum_get_case_by_id(php_io_poll_event_class_entry, ZEND_ENUM_Io_Poll_Event_Read));
-		zend_hash_next_index_insert(Z_ARRVAL_P(dest), &zv);
-	}
-	if (what & CURL_POLL_OUT) {
-		zval zv;
-		ZVAL_OBJ_COPY(&zv, zend_enum_get_case_by_id(php_io_poll_event_class_entry, ZEND_ENUM_Io_Poll_Event_Write));
-		zend_hash_next_index_insert(Z_ARRVAL_P(dest), &zv);
-	}
-}
 
-/* Translate PollResult::$events back to CURL_CSELECT_* flags */
-static int php_curl_poll_result_to_curl_events(zval *events_arr)
-{
-	int curl_events = 0;
-	zval *event;
-	ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(events_arr), event) {
-		if (Z_TYPE_P(event) != IS_OBJECT) continue;
-		zend_enum_Io_Poll_Event ev = (zend_enum_Io_Poll_Event) zend_enum_fetch_case_id(Z_OBJ_P(event));
-		switch (ev) {
-			case ZEND_ENUM_Io_Poll_Event_Read:
-				curl_events |= CURL_CSELECT_IN;
-				break;
-			case ZEND_ENUM_Io_Poll_Event_Write:
-				curl_events |= CURL_CSELECT_OUT;
-				break;
-			case ZEND_ENUM_Io_Poll_Event_Error:
-				curl_events |= CURL_CSELECT_ERR;
-				break;
-			case ZEND_ENUM_Io_Poll_Event_HangUp:
-			case ZEND_ENUM_Io_Poll_Event_ReadHangUp:
-			case ZEND_ENUM_Io_Poll_Event_OneShot:
-			case ZEND_ENUM_Io_Poll_Event_EdgeTriggered:
-				break;
-		}
-	} ZEND_HASH_FOREACH_END();
-	return curl_events;
-}
 
 /* Main multi-based exec loop */
 static CURLcode php_curl_exec_multi(php_curl *ch)
@@ -2528,87 +2486,59 @@ static CURLcode php_curl_exec_multi(php_curl *ch)
 			continue;
 		}
 
-		if (PHP_HAS_IO_POLL_HOOK()) {
-			/* Count active sockets */
+		if (FG(io_hooks).poll_multi) {
+			/* Build php_io_hooks_poll_info[] for all active sockets */
 			uint32_t n = ch->io_sockets ? zend_hash_num_elements(ch->io_sockets) : 0;
+			php_io_hooks_poll_info *infos = n > 0 ? safe_emalloc(n, sizeof(php_io_hooks_poll_info), 0) : NULL;
 
-			/* Build argv: [timeout_ms_or_null, PollInfo...] */
-			zval *params = safe_emalloc(n, sizeof(zval), sizeof(zval));
-
-			if (ch->io_timer_ms < 0) {
-				ZVAL_NULL(&params[0]);
-			} else {
-				ZVAL_LONG(&params[0], ch->io_timer_ms);
-			}
-
-			uint32_t i = 1;
 			if (n > 0) {
+				uint32_t i = 0;
 				zend_ulong sock_ulong;
 				zval *events_zv;
 				ZEND_HASH_FOREACH_NUM_KEY_VAL(ch->io_sockets, sock_ulong, events_zv) {
-					zval *poll_info = &params[i++];
-					object_init_ex(poll_info, php_io_hooks_poll_info_ce);
-
-					zval handle;
-					php_curl_socket_handle_from_fd(ch, &handle, (curl_socket_t)sock_ulong);
-					zend_update_property(php_io_hooks_poll_info_ce, Z_OBJ_P(poll_info),
-						"handle", sizeof("handle") - 1, &handle);
-					zval_ptr_dtor(&handle);
-
-					zval evts;
-					php_curl_poll_events_to_zval((int)Z_LVAL_P(events_zv), &evts);
-					zend_update_property(php_io_hooks_poll_info_ce, Z_OBJ_P(poll_info),
-						"events", sizeof("events") - 1, &evts);
-					zval_ptr_dtor(&evts);
-
-					/* timeout_ms per PollInfo: -1 (we use global timeout via params[0]) */
-					zend_update_property_long(php_io_hooks_poll_info_ce, Z_OBJ_P(poll_info),
-						"timeout_ms", sizeof("timeout_ms") - 1, -1);
+					zval handle_zv;
+					php_curl_socket_handle_from_fd(ch, &handle_zv, (curl_socket_t)sock_ulong);
+					infos[i].handle = Z_OBJ(handle_zv);
+					int curl_what = (int)Z_LVAL_P(events_zv);
+					infos[i].events = ((curl_what & CURL_POLL_IN)  ? PHP_POLL_READ  : 0)
+					                | ((curl_what & CURL_POLL_OUT) ? PHP_POLL_WRITE : 0);
+					infos[i].timeout_ms = -1;
+					i++;
 				} ZEND_HASH_FOREACH_END();
 			}
 
-			zval retval;
-			ZVAL_UNDEF(&retval);
-			zend_call_known_fcc(&FG(io_hooks_pollMulti_fcc), &retval, 1 + n, params, NULL);
+			php_io_hooks_poll_result *poll_result = FG(io_hooks).poll_multi(
+				FG(io_hooks_data), ch->io_timer_ms, n, infos);
 
-			for (uint32_t j = 0; j < 1 + n; j++) {
-				zval_ptr_dtor(&params[j]);
+			for (uint32_t i = 0; i < n; i++) {
+				OBJ_RELEASE(infos[i].handle);
 			}
-			efree(params);
+			if (infos) efree(infos);
 
 			if (EG(exception)) {
-				zval_ptr_dtor(&retval);
+				if (poll_result) {
+					if (poll_result->handle) OBJ_RELEASE(poll_result->handle);
+					efree(poll_result);
+				}
 				break;
 			}
 
-			if (zend_hash_num_elements(Z_ARRVAL(retval)) > 0) {
-				/* Drive ready sockets */
-				zval *result;
-				ZEND_HASH_FOREACH_VAL(Z_ARRVAL(retval), result) {
-					if (Z_TYPE_P(result) != IS_OBJECT ||
-					    Z_OBJCE_P(result) != php_io_hooks_poll_result_ce) continue;
-
-					zval rv;
-					zval *handle_prop = zend_read_property(php_io_hooks_poll_result_ce,
-						Z_OBJ_P(result), "handle", sizeof("handle") - 1, 1, &rv);
-					if (Z_TYPE_P(handle_prop) != IS_OBJECT) continue;
-
-					php_poll_handle_object *hobj =
-						PHP_POLL_HANDLE_OBJ_FROM_ZOBJ(Z_OBJ_P(handle_prop));
+			if (poll_result) {
+				/* Drive the ready socket */
+				if (poll_result->handle) {
+					php_poll_handle_object *hobj = PHP_POLL_HANDLE_OBJ_FROM_ZOBJ(poll_result->handle);
 					php_socket_t fd = php_poll_handle_get_fd(hobj);
-
-					zval *events_prop = zend_read_property(php_io_hooks_poll_result_ce,
-						Z_OBJ_P(result), "events", sizeof("events") - 1, 1, &rv);
-					int curl_events = (Z_TYPE_P(events_prop) == IS_ARRAY)
-						? php_curl_poll_result_to_curl_events(events_prop) : 0;
-
+					int curl_events = ((poll_result->events & PHP_POLL_READ)  ? CURL_CSELECT_IN  : 0)
+					                | ((poll_result->events & PHP_POLL_WRITE) ? CURL_CSELECT_OUT : 0)
+					                | ((poll_result->events & PHP_POLL_ERROR) ? CURL_CSELECT_ERR : 0);
 					curl_multi_socket_action(multi, (curl_socket_t)fd, curl_events, &still_running);
-				} ZEND_HASH_FOREACH_END();
+					OBJ_RELEASE(poll_result->handle);
+				}
+				efree(poll_result);
 			} else {
-				/* Empty array = timeout */
+				/* NULL = timeout */
 				curl_multi_socket_action(multi, CURL_SOCKET_TIMEOUT, 0, &still_running);
 			}
-			zval_ptr_dtor(&retval);
 		} else {
 			/* No hook: select() on the sockets logged by the socket callback */
 			fd_set rfds, wfds, efds;

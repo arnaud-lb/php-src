@@ -15,18 +15,10 @@
 #ifndef PHP_IO_HOOKS_H
 #define PHP_IO_HOOKS_H
 
-#include "main/php.h"
-#include "Zend/zend_types.h"
-#include "ext/standard/file.h"
+#include "main/hooks/io_hooks.h"
 
 PHPAPI extern zend_class_entry *php_io_hooks_poll_info_ce;
 PHPAPI extern zend_class_entry *php_io_hooks_poll_result_ce;
-
-#define PHP_HAS_IO_POLL_HOOK() ZEND_FCC_INITIALIZED(FG(io_hooks_poll_fcc))
-#define PHP_HAS_IO_SLEEP_HOOK() ZEND_FCC_INITIALIZED(FG(io_hooks_sleep_fcc))
-
-PHPAPI zend_object *php_io_hooks_poll_stream(php_stream *stream, int events, const struct timeval *timeout);
-PHPAPI void php_io_hooks_sleep(zend_long seconds, zend_long nanoseconds);
 
 PHP_MINIT_FUNCTION(io_hooks);
 

@@ -17,7 +17,8 @@
 
 #include <php.h>
 #include "zend_enum.h"
-#include "ext/standard/io_hooks.h"
+#include "main/hooks/io_hooks.h"
+#include "ext/standard/file.h"
 
 #ifndef PHP_WIN32
 # undef closesocket
@@ -214,7 +215,6 @@ static inline int php_pollfd_for_ms(php_socket_t fd, int events, int timeout)
 	return n;
 }
 
-// TODO: C23_ENUM()
 typedef enum php_pollstream_result {
 	PHP_POLLSTREAM_ERROR = -1,
 	PHP_POLLSTREAM_TIMEOUT = 0,
@@ -223,7 +223,7 @@ typedef enum php_pollstream_result {
 
 static inline php_pollstream_result php_pollstream_for(php_stream *stream, php_socket_t fd, int events, struct timeval *timeouttv)
 {
-	if (!PHP_HAS_IO_POLL_HOOK()) {
+	if (!FG(io_hooks).poll) {
 		int n = php_pollfd_for(fd, events, timeouttv);
 		if (n > 0) {
 			return PHP_POLLSTREAM_READY;
@@ -234,15 +234,16 @@ static inline php_pollstream_result php_pollstream_for(php_stream *stream, php_s
 		return PHP_POLLSTREAM_ERROR;
 	}
 
-	zend_object *result = php_io_hooks_poll_stream(stream, events, timeouttv);
+	php_io_hooks_poll_result *result = php_io_hooks_poll_stream(stream, php_posix_poll_to_php_poll(events), timeouttv);
 	if (result == NULL) {
 		return PHP_POLLSTREAM_ERROR;
 	}
 
-	zval rv;
-	zval *timeout_prop = zend_read_property(php_io_hooks_poll_result_ce, result, "timeout", sizeof("timeout") - 1, /* silent */ 1, &rv);
-	bool timed_out = zend_is_true(timeout_prop);
-	OBJ_RELEASE(result);
+	bool timed_out = result->timeout;
+	if (result->handle) {
+		OBJ_RELEASE(result->handle);
+	}
+	efree(result);
 
 	return timed_out ? PHP_POLLSTREAM_TIMEOUT : PHP_POLLSTREAM_READY;
 }

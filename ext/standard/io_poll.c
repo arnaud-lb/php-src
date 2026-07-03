@@ -94,7 +94,7 @@ static uint32_t php_io_poll_event_enum_to_bit(zend_object *event_enum)
 	return 1 << (zend_enum_fetch_case_id(event_enum) - 1);
 }
 
-static uint32_t php_io_poll_event_enums_to_events(zval *event_enums)
+PHPAPI uint32_t php_io_poll_event_enums_to_events(zval *event_enums)
 {
 	HashTable *ht;
 	uint32_t events = 0;

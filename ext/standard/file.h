@@ -19,6 +19,8 @@
 # include <netdb.h>
 #endif
 
+#include "main/hooks/io_hooks.h"
+
 PHP_MINIT_FUNCTION(file);
 PHP_MSHUTDOWN_FUNCTION(file);
 
@@ -104,10 +106,8 @@ typedef struct {
 	HashTable *wrapper_logged_errors;	/* key: wrapper address; value: linked list of error entries */
 	php_stream_error_state stream_error_state;
 	int pclose_wait;
-	zval io_hooks;
-	zend_fcall_info_cache io_hooks_poll_fcc;
-	zend_fcall_info_cache io_hooks_pollMulti_fcc;
-	zend_fcall_info_cache io_hooks_sleep_fcc;
+	php_io_hooks io_hooks;
+	void *io_hooks_data;
 #ifdef HAVE_GETHOSTBYNAME_R
 	struct hostent tmp_host_info;
 	char *tmp_host_buf;
