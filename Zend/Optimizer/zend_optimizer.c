@@ -777,6 +777,166 @@ void zend_optimizer_shift_jump(const zend_op_array *op_array, zend_op *opline, c
 	}
 }
 
+/* Insert "count" oplines before position "pos". The new oplines are
+ * initialized to NOP, and the caller is expected to overwrite them. Jump
+ * targets, try/catch boundaries and live-ranges referring to positions at or
+ * after "pos" are shifted. The opcodes buffer may be reallocated, so any
+ * pointer into it becomes invalid.
+ * Returns a pointer to the first inserted opline. */
+zend_op *zend_optimizer_insert_oplines(zend_op_array *op_array, uint32_t pos, uint32_t count)
+{
+	zend_op *opline, *end;
+	uint32_t i;
+
+	ZEND_ASSERT(pos <= op_array->last);
+	ZEND_ASSERT(count > 0);
+
+	/* Convert jump targets to absolute opline numbers: both the relative and
+	 * the absolute-address representations are invalidated by the move below. */
+	opline = op_array->opcodes;
+	end = opline + op_array->last;
+	for (; opline < end; opline++) {
+		switch (opline->opcode) {
+			case ZEND_JMP:
+			case ZEND_FAST_CALL:
+				opline->op1.opline_num = ZEND_OP1_JMP_ADDR(opline) - op_array->opcodes;
+				break;
+			case ZEND_JMPZ:
+			case ZEND_JMPNZ:
+			case ZEND_JMPZ_EX:
+			case ZEND_JMPNZ_EX:
+			case ZEND_FE_RESET_R:
+			case ZEND_FE_RESET_RW:
+			case ZEND_JMP_SET:
+			case ZEND_COALESCE:
+			case ZEND_ASSERT_CHECK:
+			case ZEND_JMP_NULL:
+			case ZEND_BIND_INIT_STATIC_OR_JMP:
+			case ZEND_JMP_FRAMELESS:
+				opline->op2.opline_num = ZEND_OP2_JMP_ADDR(opline) - op_array->opcodes;
+				break;
+			case ZEND_CATCH:
+				if (!(opline->extended_value & ZEND_LAST_CATCH)) {
+					opline->op2.opline_num = ZEND_OP2_JMP_ADDR(opline) - op_array->opcodes;
+				}
+				break;
+			case ZEND_FE_FETCH_R:
+			case ZEND_FE_FETCH_RW:
+				opline->extended_value = ZEND_OFFSET_TO_OPLINE_NUM(op_array, opline, opline->extended_value);
+				break;
+			case ZEND_SWITCH_LONG:
+			case ZEND_SWITCH_STRING:
+			case ZEND_MATCH:
+			{
+				HashTable *jumptable = Z_ARRVAL(ZEND_OP2_LITERAL(opline));
+				zval *zv;
+				ZEND_HASH_FOREACH_VAL(jumptable, zv) {
+					Z_LVAL_P(zv) = ZEND_OFFSET_TO_OPLINE_NUM(op_array, opline, Z_LVAL_P(zv));
+				} ZEND_HASH_FOREACH_END();
+				opline->extended_value = ZEND_OFFSET_TO_OPLINE_NUM(op_array, opline, opline->extended_value);
+				break;
+			}
+		}
+	}
+
+	op_array->opcodes = erealloc(op_array->opcodes, (op_array->last + count) * sizeof(zend_op));
+	memmove(op_array->opcodes + pos + count, op_array->opcodes + pos,
+		(op_array->last - pos) * sizeof(zend_op));
+	op_array->last += count;
+
+	for (i = pos; i < pos + count; i++) {
+		opline = &op_array->opcodes[i];
+		MAKE_NOP(opline);
+		opline->lineno = pos + count < op_array->last
+			? op_array->opcodes[pos + count].lineno
+			: op_array->opcodes[pos - 1].lineno;
+		opline->extended_value = 0;
+	}
+
+	/* Re-encode jump targets, shifting those at or after the gap. */
+	opline = op_array->opcodes;
+	end = opline + op_array->last;
+	for (; opline < end; opline++) {
+		uint32_t num;
+		switch (opline->opcode) {
+			case ZEND_JMP:
+			case ZEND_FAST_CALL:
+				num = opline->op1.opline_num;
+				ZEND_SET_OP_JMP_ADDR(opline, opline->op1, op_array->opcodes + (num >= pos ? num + count : num));
+				break;
+			case ZEND_JMPZ:
+			case ZEND_JMPNZ:
+			case ZEND_JMPZ_EX:
+			case ZEND_JMPNZ_EX:
+			case ZEND_FE_RESET_R:
+			case ZEND_FE_RESET_RW:
+			case ZEND_JMP_SET:
+			case ZEND_COALESCE:
+			case ZEND_ASSERT_CHECK:
+			case ZEND_JMP_NULL:
+			case ZEND_BIND_INIT_STATIC_OR_JMP:
+			case ZEND_JMP_FRAMELESS:
+				num = opline->op2.opline_num;
+				ZEND_SET_OP_JMP_ADDR(opline, opline->op2, op_array->opcodes + (num >= pos ? num + count : num));
+				break;
+			case ZEND_CATCH:
+				if (!(opline->extended_value & ZEND_LAST_CATCH)) {
+					num = opline->op2.opline_num;
+					ZEND_SET_OP_JMP_ADDR(opline, opline->op2, op_array->opcodes + (num >= pos ? num + count : num));
+				}
+				break;
+			case ZEND_FE_FETCH_R:
+			case ZEND_FE_FETCH_RW:
+				num = opline->extended_value;
+				opline->extended_value = ZEND_OPLINE_NUM_TO_OFFSET(op_array, opline, (num >= pos ? num + count : num));
+				break;
+			case ZEND_SWITCH_LONG:
+			case ZEND_SWITCH_STRING:
+			case ZEND_MATCH:
+			{
+				HashTable *jumptable = Z_ARRVAL(ZEND_OP2_LITERAL(opline));
+				zval *zv;
+				ZEND_HASH_FOREACH_VAL(jumptable, zv) {
+					num = Z_LVAL_P(zv);
+					Z_LVAL_P(zv) = ZEND_OPLINE_NUM_TO_OFFSET(op_array, opline, (num >= pos ? num + count : num));
+				} ZEND_HASH_FOREACH_END();
+				num = opline->extended_value;
+				opline->extended_value = ZEND_OPLINE_NUM_TO_OFFSET(op_array, opline, (num >= pos ? num + count : num));
+				break;
+			}
+		}
+	}
+
+	for (i = 0; i < op_array->last_try_catch; i++) {
+		zend_try_catch_element *tc = &op_array->try_catch_array[i];
+		if (tc->try_op >= pos) {
+			tc->try_op += count;
+		}
+		if (tc->catch_op && tc->catch_op >= pos) {
+			tc->catch_op += count;
+		}
+		if (tc->finally_op && tc->finally_op >= pos) {
+			tc->finally_op += count;
+		}
+		if (tc->finally_end && tc->finally_end >= pos) {
+			tc->finally_end += count;
+		}
+	}
+
+	/* Live ranges are recalculated after the optimizer runs, but keep them
+	 * consistent for intermediate passes and dumps. */
+	for (i = 0; i < op_array->last_live_range; i++) {
+		if (op_array->live_range[i].start >= pos) {
+			op_array->live_range[i].start += count;
+		}
+		if (op_array->live_range[i].end >= pos) {
+			op_array->live_range[i].end += count;
+		}
+	}
+
+	return op_array->opcodes + pos;
+}
+
 static bool zend_optimizer_ignore_class(zval *ce_zv, const zend_string *filename)
 {
 	const zend_class_entry *ce = Z_PTR_P(ce_zv);
@@ -1090,6 +1250,16 @@ static void zend_optimize(zend_op_array      *op_array,
 		if (ctx->debug_level & ZEND_DUMP_AFTER_PASS_3) {
 			zend_dump_op_array(op_array, 0, "after pass 3", NULL);
 		}
+	}
+
+	/* Inline array_map() calls with an FCC/PFA callback (part of pass 16).
+	 * This runs before pass 4 so that the emitted calls are specialized by
+	 * it. Pass 12 is required: this pass grows op_array->T, and the stack
+	 * size pre-computed in the INIT_FCALL oplines of callers of this
+	 * function must be adjusted accordingly. */
+	if ((ZEND_OPTIMIZER_PASS_16 & ctx->optimization_level)
+	 && (ZEND_OPTIMIZER_PASS_12 & ctx->optimization_level)) {
+		zend_optimize_array_map_calls(op_array, ctx);
 	}
 
 	/* pass 4:

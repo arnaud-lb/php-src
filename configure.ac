@@ -1740,6 +1740,7 @@ PHP_ADD_SOURCES([Zend], m4_normalize([
     Optimizer/dfa_pass.c
     Optimizer/escape_analysis.c
     Optimizer/nop_removal.c
+    Optimizer/optimize_array_map.c
     Optimizer/optimize_func_calls.c
     Optimizer/optimize_temp_vars_5.c
     Optimizer/pass1.c
