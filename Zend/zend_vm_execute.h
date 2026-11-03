@@ -5225,12 +5225,17 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_CATCH_SPEC_CO
 	exception = EG(exception);
 	EG(exception) = NULL;
 	if (RETURN_VALUE_USED(opline)) {
-		/* Always perform a strict assignment. There is a reasonable expectation that if you
-		 * write "catch (Exception $e)" then $e will actually be instanceof Exception. As such,
-		 * we should not permit coercion to string here. */
-		zval tmp;
-		ZVAL_OBJ(&tmp, exception);
-		zend_assign_to_variable(EX_VAR(opline->result.var), &tmp, IS_TMP_VAR, /* strict */ 1);
+		if (opline->result_type == IS_CV) {
+			/* Always perform a strict assignment. There is a reasonable expectation that if you
+			 * write "catch (Exception $e)" then $e will actually be instanceof Exception. As such,
+			 * we should not permit coercion to string here. */
+			zval tmp;
+			ZVAL_OBJ(&tmp, exception);
+			zend_assign_to_variable(EX_VAR(opline->result.var), &tmp, IS_TMP_VAR, /* strict */ 1);
+		} else {
+			ZEND_ASSERT(opline->result_type == IS_TMP_VAR);
+			ZVAL_OBJ(EX_VAR(opline->result.var), exception);
+		}
 	} else {
 		OBJ_RELEASE(exception);
 	}
@@ -58104,12 +58109,17 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_CATCH_SPEC_CONST_T
 	exception = EG(exception);
 	EG(exception) = NULL;
 	if (RETURN_VALUE_USED(opline)) {
-		/* Always perform a strict assignment. There is a reasonable expectation that if you
-		 * write "catch (Exception $e)" then $e will actually be instanceof Exception. As such,
-		 * we should not permit coercion to string here. */
-		zval tmp;
-		ZVAL_OBJ(&tmp, exception);
-		zend_assign_to_variable(EX_VAR(opline->result.var), &tmp, IS_TMP_VAR, /* strict */ 1);
+		if (opline->result_type == IS_CV) {
+			/* Always perform a strict assignment. There is a reasonable expectation that if you
+			 * write "catch (Exception $e)" then $e will actually be instanceof Exception. As such,
+			 * we should not permit coercion to string here. */
+			zval tmp;
+			ZVAL_OBJ(&tmp, exception);
+			zend_assign_to_variable(EX_VAR(opline->result.var), &tmp, IS_TMP_VAR, /* strict */ 1);
+		} else {
+			ZEND_ASSERT(opline->result_type == IS_TMP_VAR);
+			ZVAL_OBJ(EX_VAR(opline->result.var), exception);
+		}
 	} else {
 		OBJ_RELEASE(exception);
 	}
